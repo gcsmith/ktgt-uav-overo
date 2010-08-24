@@ -1,0 +1,225 @@
+--- a/Makefile	2010-07-31 17:14:15.841976753 -0400
++++ b/Makefile	2010-07-31 17:29:54.762462217 -0400
+@@ -13,7 +13,7 @@
+ DESTDIR = /usr/local
+ 
+ # set the compiler to use
+-CC = gcc
++
+ 
+ # general compile flags, enable all warnings to make compile more verbose
+ CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall
+@@ -22,7 +22,7 @@
+ # we are using the libraries "libpthread" and "libdl"
+ # libpthread is used to run several tasks (virtually) in parallel
+ # libdl is used to load the plugins (shared objects) at runtime
+-LFLAGS += -lpthread -ldl
++LFLAGS += -lpthread -ldl -Wl,--hash-style=gnu
+ 
+ # define the name of the program
+ APP_BINARY = mjpg_streamer
+--- a/plugins/input_control/Makefile	2010-07-31 17:14:14.825976646 -0400
++++ b/plugins/input_control/Makefile	2010-07-31 17:35:19.730997417 -0400
+@@ -7,12 +7,13 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+ CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ #CFLAGS += -DDEBUG
++LFLAGS += -Wl,--hash-style=gnu
+ 
+ all: input_control.so
+ 
+--- a/plugins/input_file/Makefile	2010-07-31 17:14:15.572976703 -0400
++++ b/plugins/input_file/Makefile	2010-07-31 17:34:00.165747431 -0400
+@@ -7,13 +7,13 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+ CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ #CFLAGS += -DDEBUG
+-LFLAGS += 
++LFLAGS += -Wl,--hash-style=gnu
+ 
+ all: input_file.so
+ 
+--- a/plugins/input_gspcav1/Makefile	2010-07-31 17:14:15.120976661 -0400
++++ b/plugins/input_gspcav1/Makefile	2010-07-31 17:34:39.785997423 -0400
+@@ -7,13 +7,13 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+ CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ #CFLAGS += -DDEBUG -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+-LFLAGS += -lpthread -ldl
++LFLAGS += -lpthread -ldl -Wl,--hash-style=gnu
+ 
+ all: input_gspcav1.so
+ 
+@@ -21,7 +21,7 @@
+ 	rm -f *.a *.o core *~ *.so *.lo
+ 
+ input_gspcav1.so: $(OTHER_HEADERS) input_gspcav1.c spcav4l.lo utils.lo encoder.lo huffman.lo marker.lo quant.lo
+-	$(CC) $(CFLAGS) -o $@ input_gspcav1.c spcav4l.lo utils.lo encoder.lo huffman.lo marker.lo quant.lo
++	$(CC) $(CFLAGS) $(LFLAGS) -o $@ input_gspcav1.c spcav4l.lo utils.lo encoder.lo huffman.lo marker.lo quant.lo
+ 
+ spcav4l.lo:	spcav4l.c spcav4l.h
+ 	$(CC) -c $(CFLAGS) -o $@ $<
+--- a/plugins/input_testpicture/Makefile	2010-07-31 17:14:15.443977137 -0400
++++ b/plugins/input_testpicture/Makefile	2010-07-31 17:31:10.730727301 -0400
+@@ -7,13 +7,13 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+ CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ #CFLAGS += -DDEBUG
+-LFLAGS += -lpthread -ldl
++LFLAGS += -lpthread -ldl --Wl,--hash-style=gnu
+ 
+ all: input_testpicture.so
+ 
+@@ -32,7 +32,7 @@
+ 	rm -f pictures/640x480_1.jpg pictures/640x480_2.jpg
+ 
+ input_testpicture.so: $(OTHER_HEADERS) input_testpicture.c testpictures.h
+-	$(CC) $(CFLAGS) -o $@ input_testpicture.c
++	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ input_testpicture.c
+ 
+ # converts multiple JPG files to a single C header file
+ testpictures.h: pictures/960x720_1.jpg pictures/640x480_1.jpg pictures/320x240_1.jpg pictures/160x120_1.jpg pictures/160x120_2.jpg pictures/320x240_2.jpg pictures/640x480_2.jpg pictures/960x720_2.jpg
+--- a/plugins/input_uvc/Makefile	2010-07-31 17:14:15.569976791 -0400
++++ b/plugins/input_uvc/Makefile	2010-07-31 17:34:14.484997437 -0400
+@@ -7,13 +7,13 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+ CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ #CFLAGS += -DDEBUG
+-LFLAGS += -ljpeg
++LFLAGS += -ljpeg -Wl,--hash-style=gnu
+ 
+ all: input_uvc.so
+ 
+--- a/plugins/output_autofocus/Makefile	2010-07-31 17:14:15.215976722 -0400
++++ b/plugins/output_autofocus/Makefile	2010-07-31 17:31:42.812072268 -0400
+@@ -7,13 +7,13 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+ #CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ CFLAGS += -DDEBUG -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+-LFLAGS += -lpthread -ldl
++LFLAGS += -lpthread -ldl -Wl,--hash-style=gnu
+ 
+ all: output_autofocus.so
+ 
+@@ -21,7 +21,7 @@
+ 	rm -f *.a *.o core *~ *.so *.lo
+ 
+ output_autofocus.so: $(OTHER_HEADERS) output_autofocus.c processJPEG_onlyCenter.lo
+-	$(CC) $(CFLAGS) -lm -o $@ output_autofocus.c processJPEG_onlyCenter.lo
++	$(CC) $(CFLAGS) $(LFLAGS) -lm -o $@ output_autofocus.c processJPEG_onlyCenter.lo
+ 
+ processJPEG_onlyCenter.lo: $(OTHER_HEADERS) processJPEG_onlyCenter.h
+ 	$(CC) -c $(CFLAGS) -o $@ processJPEG_onlyCenter.c
+--- a/plugins/output_file/Makefile	2010-07-31 17:14:14.937987242 -0400
++++ b/plugins/output_file/Makefile	2010-07-31 17:35:00.691747470 -0400
+@@ -7,13 +7,13 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+ CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ #CFLAGS += -DDEBUG
+-LFLAGS += -lpthread -ldl
++LFLAGS += -lpthread -ldl -Wl,--hash-style=gnu
+ 
+ all: output_file.so
+ 
+@@ -21,4 +21,4 @@
+ 	rm -f *.a *.o core *~ *.so *.lo
+ 
+ output_file.so: $(OTHER_HEADERS) output_file.c
+-	$(CC) $(CFLAGS) -o $@ output_file.c
++	$(CC) $(CFLAGS) $(LFLAGS) -o $@ output_file.c
+--- a/plugins/output_http/Makefile	2010-07-31 17:14:15.028976693 -0400
++++ b/plugins/output_http/Makefile	2010-07-31 17:35:42.162747488 -0400
+@@ -7,13 +7,13 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+ CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ #CFLAGS += -DDEBUG
+-LFLAGS += -lpthread -ldl
++LFLAGS += -lpthread -ldl -Wl,--hash-style=gnu
+ 
+ all: output_http.so
+ 
+@@ -21,7 +21,7 @@
+ 	rm -f *.a *.o core *~ *.so *.lo
+ 
+ output_http.so: $(OTHER_HEADERS) output_http.c httpd.lo
+-	$(CC) $(CFLAGS) -o $@ output_http.c httpd.lo
++	$(CC) $(CFLAGS) $(LFLAGS) -o $@ output_http.c httpd.lo
+ 
+ httpd.lo: $(OTHER_HEADERS) httpd.h httpd.c
+ 	$(CC) -c $(CFLAGS) -o $@ httpd.c
+--- a/plugins/output_viewer/Makefile	2010-07-31 17:14:15.031976792 -0400
++++ b/plugins/output_viewer/Makefile	2010-07-31 17:35:58.688997411 -0400
+@@ -7,7 +7,7 @@
+ #
+ ###############################################################
+ 
+-CC = gcc
++
+ 
+ OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
+ 
+@@ -15,7 +15,7 @@
+ CFLAGS += -DUSE_SDL -I/usr/include/SDL
+ #CFLAGS += -DDEBUG
+ 
+-LFLAGS += -ljpeg -lSDL
++LFLAGS += -ljpeg -lSDL -Wl,--hash-style=gnu
+ 
+ all: output_viewer.so
+ 
