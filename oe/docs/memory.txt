@@ -1,0 +1,29 @@
+--------------------------------------------------------------------------------
+
+lin_length = 200 MB
+dsp_length = 55 MB
+
+phys_start = 0x80000000 
+phys_end   = 0x8FFFFFFF
+
+--------------------------------------------------------------------------------
+
+0x80000000 - 0x8C7FFFFF    200 MB   LINUX
+0x8C800000 - 0x8D7FFFFF     16 MB   CMEM
+0x8D800000 - 0x8F9FFFFF     34 MB   DDRALGHEAP
+0x8FA00000 - 0x8FDFFFFF      4 MB   DDR2
+0x8FE00000 - 0x8FE04FFF     20 KB   SHARED MEM 0
+0x8FE05000 - 0x8FEFFFFF   1004 KB   SHARED MEM 1
+0x8FF00000 - 0x8FF00FFF      4 KB   RESET VECTOR
+0x8FF01000 - 0x8FFFFFFF   1020 KB   SMA POOL MEM 
+
+--------------------------------------------------------------------------------
+
+#define  RESETCTRLADDR      0x8C800000u     // phys_end - dsp_length
+#define  RESETCTRLSIZE      0x80u           // 128 bytes
+#define  CODEMEMORYSIZE     0x400000u       // 4 MB
+#define  SHAREDMEMORYSIZE0  0x5000u         // 20 KB
+#define  SHAREDMEMORYSIZE1  0x2B000u        // 172 KB
+
+--------------------------------------------------------------------------------
+

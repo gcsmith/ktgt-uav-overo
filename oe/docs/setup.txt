@@ -1,0 +1,69 @@
+--------------------------------------------------------------------------------
+Enable wireless with WPA (home). Edit /etc/network/interfaces:
+--------------------------------------------------------------------------------
+
+auto wlan0
+allow-hotplug wlan0
+iface wlan0 inet dhcp
+    pre-up wpa_supplicant -Dwext -iwlan0 -c/etc/wpa_supplicant.conf -B
+    down killall wpa_supplicant
+
+--------------------------------------------------------------------------------
+If using WPA, edit/create /etc/wpa_supplicant.conf:
+--------------------------------------------------------------------------------
+
+ctrl_interface=/var/run/wpa_supplicant
+ctrl_interface_group=0
+eapol_version=1
+ap_scan=1
+fast_reauth=1
+
+network={
+      ssid="access-point-name"
+      proto=WPA2
+      key_mgmt=WPA-PSK
+      pairwise=CCMP TKIP
+      group=CCMP TKIP
+      scan_ssid=1
+      psk="access-point-passphrase"
+      priority=10
+}
+
+--------------------------------------------------------------------------------
+Enable wireless without WPA (school). Edit /etc/network/interfaces:
+--------------------------------------------------------------------------------
+
+auto wlan0
+allow-hotplug wlan0
+iface wlan0 inet dhcp
+    wireless_mode managed
+ 	wireless_essid any
+
+--------------------------------------------------------------------------------
+Force de/configuration at startup. Edit /etc/init.d/networking,
+add --force to each ifup/ifdown invokation:
+--------------------------------------------------------------------------------
+
+76:     ifup -a --force
+98:     ifdown -a --force
+104:    ifdown -a --force
+105:    ifup -a --force
+
+--------------------------------------------------------------------------------
+Manually enable sourcing of > 100 mA through USB OTG port:
+--------------------------------------------------------------------------------
+
+echo -n "1" > /sys/bus/usb/devices/<usb_port>/bConfigurationValue
+
+--------------------------------------------------------------------------------
+Disable serial console on UART3 to free it up for the ultrasonic sensor
+Or use ADC instead and leave this free for serial debugging...
+--------------------------------------------------------------------------------
+
+Disable the serial console in u-boot:
+    setenv console none
+    saveenv
+
+Disable the daemon from respawning getty on ttyS2 through /etc/inittab:
+    S:2345:respawn:/sbin/getty 115200 ttyS1 ### or comment out completely
+
