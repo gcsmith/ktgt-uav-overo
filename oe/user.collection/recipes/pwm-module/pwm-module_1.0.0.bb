@@ -12,14 +12,11 @@ INITSCRIPT_NAME = "pwm"
 INITSCRIPT_PARAMS = "defaults 40"
 
 SRC_URI = " \
-    file://files/pwm.init \
-    file://files/pwm_module.c \
-    file://files/pwm_module.h \
-    file://files/pwm_interface.h \
-    file://files/Makefile \
+    svn://ktgt-uav-overo.googlecode.com/svn/trunk;module=pwm-module;proto=http \
 "
 
-S = "${WORKDIR}/files"
+S = "${WORKDIR}/pwm-module"
+SRCREV = "HEAD"
 
 inherit module update-rc.d
 

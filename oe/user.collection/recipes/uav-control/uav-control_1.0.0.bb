@@ -9,12 +9,11 @@ INITSCRIPT_NAME = "uav"
 INITSCRIPT_PARAMS = "defaults 40"
 
 SRC_URI = " \
-    file://uav.init \
-    file://uav_control.c \
-    file://Makefile \
+    svn://ktgt-uav-overo.googlecode.com/svn/trunk;module=uav-control;proto=http \
 "
 
-S = "${WORKDIR}"
+S = "${WORKDIR}/uav-control"
+SRCREV = "HEAD"
 
 inherit update-rc.d
 
