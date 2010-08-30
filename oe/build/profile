@@ -1,0 +1,23 @@
+#
+# Environment setup for oe
+#
+
+export OVEROTOP="${HOME}/dev-omap"
+export OVEROHOME="${HOME}/dev-omap"
+
+export OEBRANCH="${OVEROTOP}/org.openembedded.dev"
+export PIXBRANCH="${OVEROTOP}/pixhawk.collection"
+export USERBRANCH="${OVEROTOP}/user.collection"
+
+export PATH="${OVEROTOP}/bitbake/bin:$PATH"
+export BBPATH="${OVEROTOP}/build:${USERBRANCH}:${PIXBRANCH}:${OEBRANCH}"
+
+export BB_ENV_EXTRAWHITE="MACHINE DISTRO ANGSTROM_MODE OVEROTOP OEBRANCH USERBRANCH PIXBRANCH TITOOLSDIR"
+
+export TITOOLSDIR="${OVEROTOP}/ti"
+
+umask 0002
+
+#
+# end oe setup
+#
