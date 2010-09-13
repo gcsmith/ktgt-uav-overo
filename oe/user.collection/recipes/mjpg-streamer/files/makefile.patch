@@ -79,8 +79,8 @@
  spcav4l.lo:	spcav4l.c spcav4l.h
  	$(CC) -c $(CFLAGS) -o $@ $<
 --- a/plugins/input_testpicture/Makefile	2010-09-12 18:43:10.349000242 -0400
-+++ b/plugins/input_testpicture/Makefile	2010-09-12 18:32:54.778000260 -0400
-@@ -7,8 +7,6 @@
++++ b/plugins/input_testpicture/Makefile	2010-09-13 06:15:09.932000224 -0400
+@@ -7,13 +7,11 @@
  #
  ###############################################################
  
@@ -89,6 +89,12 @@
  OTHER_HEADERS = ../../mjpg_streamer.h ../../utils.h ../output.h ../input.h
  
  CFLAGS += -O2 -DLINUX -D_GNU_SOURCE -Wall -shared -fPIC
+ #CFLAGS += -DDEBUG
+-LFLAGS += -lpthread -ldl
++LFLAGS += -lpthread -ldl -Wl,--hash-style=gnu
+ 
+ all: input_testpicture.so
+ 
 @@ -32,7 +30,7 @@ clean_pictures:
  	rm -f pictures/640x480_1.jpg pictures/640x480_2.jpg
  
@@ -188,6 +194,18 @@
  
  httpd.lo: $(OTHER_HEADERS) httpd.h httpd.c
  	$(CC) -c $(CFLAGS) -o $@ httpd.c
+--- a/plugins/output_http/httpd.c	2010-09-12 18:43:09.840000243 -0400
++++ b/plugins/output_http/httpd.c	2010-09-13 06:08:13.984000245 -0400
+@@ -46,6 +46,9 @@
+ #define V4L2_CTRL_TYPE_STRING_SUPPORTED
+ #endif
+ 
++#ifndef V4L2_FMT_FLAG_EMULATED
++#define V4L2_FMT_FLAG_EMULATED 0x0002
++#endif
+ 
+ static globals *pglobal;
+ extern context servers[MAX_OUTPUT_PLUGINS];
 --- a/plugins/output_udp/Makefile	2010-09-12 18:43:10.114000243 -0400
 +++ b/plugins/output_udp/Makefile	2010-09-12 18:36:22.963000235 -0400
 @@ -9,13 +9,11 @@
