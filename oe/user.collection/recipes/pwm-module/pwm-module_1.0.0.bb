@@ -6,6 +6,7 @@ LICENSE = "GPL"
 RDEPENDS = "kernel (${KERNEL_VERSION})"
 DEPENDS = "virtual/kernel"
 
+PV="svn${SRCDATE}"
 PR = "r0"
 
 INITSCRIPT_NAME = "pwm"

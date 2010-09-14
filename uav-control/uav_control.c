@@ -27,16 +27,17 @@
 #define IDENT_MAGIC     0x09291988  // identification number
 #define IDENT_VERSION   0x00000001  // software version
 
-#define CLIENT_ACK_IDENT        0   // identify self to server
-#define CLIENT_REQ_TAKEOFF      1   // command the helicopter to take off
-#define CLIENT_REQ_LANDING      2   // command the helicopter to land
-#define CLIENT_REQ_TELEMETRY    3   // state, orientation, altitude, battery
-
 #define SERVER_REQ_IDENT        0   // request client to identify itself
 #define SERVER_ACK_IGNORED      1   // client request ignored (invalid state)
 #define SERVER_ACK_TAKEOFF      2   // acknowledge request to take off
 #define SERVER_ACK_LANDING      3   // acknowledge request to land
 #define SERVER_ACK_TELEMETRY    4   // acknowledge request for telemetry (+data)
+#define SERVER_MJPG_FRAME       5   // transmit a single frame of video
+
+#define CLIENT_ACK_IDENT        0   // identify self to server
+#define CLIENT_REQ_TAKEOFF      1   // command the helicopter to take off
+#define CLIENT_REQ_LANDING      2   // command the helicopter to land
+#define CLIENT_REQ_TELEMETRY    3   // state, orientation, altitude, battery
 
 typedef struct serial_data
 {

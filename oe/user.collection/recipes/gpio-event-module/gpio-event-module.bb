@@ -6,15 +6,17 @@ RDEPENDS = "kernel (${KERNEL_VERSION})"
 DEPENDS = "virtual/kernel"
 
 PV="svn${SRCDATE}"
-PR = "r3"
+PR = "r0"
 
 INITSCRIPT_NAME = "gpio-event"
 INITSCRIPT_PARAMS = "defaults 40"
 
-SVN_REPO_URI = "http://svn.hylands.org/linux/gpio-event/module"
-SRC_URI = "svn://svn.hylands.org/linux/gpio-event/;module=module;proto=http"
+SRC_URI = " \
+    svn://ktgt-uav-overo.googlecode.com/svn/trunk;module=gpio-event-module;proto=http \
+"
 
 S = "${WORKDIR}/module"
+SRCREV = "HEAD"
 
 inherit module update-rc.d
 
