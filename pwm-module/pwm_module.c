@@ -13,9 +13,29 @@
 #include <asm/io.h>
 #include "pwm_module.h"
 
+// user-specified module parameters
+static int pwm_en[4] = { 8, 9, 10, 11 };
+static int pwm_en_count = 0;
+static int pwm_freq[4] = { 50, 50, 50, 50 };
+static int pwm_freq_count = 0;
+static int pwm_duty[4] = { 50, 50, 50, 50 };
+static int pwm_duty_count = 0;
+
+module_param_array(pwm_en, int, &pwm_en_count, 0000);
+MODULE_PARM_DESC(pwm_en, "Specify PWM outputs to enable (8-11)");
+
+module_param_array(pwm_freq, int, &pwm_freq_count, 0000);
+MODULE_PARM_DESC(pwm_freq, "Specify frequency of each enabled PWM");
+
+module_param_array(pwm_duty, int, &pwm_duty_count, 0000);
+MODULE_PARM_DESC(pwm_duty, "Specify duty cycle of each enabled PWM");
+
 // holds per-device settings for each PWM
 struct pwm_dev {
     struct cdev cdev;               // character device info
+    int en;                         // is this pwm device enabled?
+    int freq;                       // pwm frequency
+    int duty;                       // pwm duty cycle
     int dev;                        // device number
     int maj;                        // major device number
     int min;                        // minor device number
@@ -191,6 +211,22 @@ static int pwm_dev_init(struct pwm_dev *dev, int index)
     iowrite32(0x00001843, base + GPT_TCLR); // start the timer
     iounmap(base);
 
+    // select 13 mhz clock for pwm10 and pwm11
+    if (index >= 2)
+    {
+        int value;
+        base = ioremap(CM_CORE_PBASE, CM_CORE_SIZE);
+        if (!base) {
+            printk(KERN_ALERT "failed to map CM CORE register space\n");
+            return -1;
+        }
+
+        value = ioread32(base + CM_CLKSEL_CORE);
+        value |= ((index == 2) ? CLKSEL_GPT10 : CLKSEL_GPT11);
+        iowrite32(value, base + CM_CLKSEL_CORE);
+        iounmap(base);
+    }
+
     return 1;
 }
 
@@ -213,12 +249,66 @@ static void pwm_dev_cleanup(struct pwm_dev *dev, int index)
 }
 
 // -----------------------------------------------------------------------------
+static void pwm_handle_args(void)
+{
+    int indices[PWM_COUNT] = { -1 };
+    int i;
+
+    // initialize structure and process user specified module arguments
+    memset(&pwm, 0, sizeof(pwm));
+
+    if (pwm_en_count >= PWM_COUNT) {
+        printk(KERN_ALERT "specified too many pwm indices. ignoring args\n");
+        return;
+    }
+    if (pwm_freq_count > pwm_en_count) {
+        printk(KERN_ALERT "inconsistent frequency count. ignoring args\n");
+        return;
+    }
+    if (pwm_duty_count > pwm_en_count) {
+        printk(KERN_ALERT "inconsistent duty cycle count. ignoring args\n");
+        return;
+    }
+
+    for (i = 0; i < pwm_en_count; i++) {
+        int index = pwm_en[i] - PWM_FIRST;
+        if (index < 0 || index >= PWM_COUNT) {
+            printk(KERN_ALERT "specified invalid pwm index %d\n", pwm_en[i]);
+            continue;
+        }
+        if (0 != pwm.dev[index].en) {
+            printk(KERN_ALERT "specified duplicate pwm index %d\n", pwm_en[i]);
+            continue;
+        }
+        pwm.dev[index].en = 1;
+        indices[i] = index;
+    }
+
+    // set user specified frequencies
+    for (i = 0; i < pwm_freq_count; i++) {
+        int index = indices[i];
+        if (index >= 0) {
+            pwm.dev[index].freq = pwm_freq[i];
+        }
+    }
+
+    // set user specified duty cycles
+    for (i = 0; i < pwm_duty_count; i++) {
+        int index = indices[i];
+        if (index >= 0) {
+            pwm.dev[index].duty = pwm_duty[i];
+        }
+    }
+
+}
+
+// -----------------------------------------------------------------------------
 static int __init pwm_init(void)
 {
     int rc, i;
-    uint32_t value;
-    void __iomem *base;
     printk("executing pwm_init...\n");
+
+    pwm_handle_args();
 
     // allocate the character device range (4 minor ids from pwm8 to pwm11 )
     if ((rc = alloc_chrdev_region(&pwm.chrdev, PWM_FIRST, PWM_COUNT, "pwm")) < 0) {
@@ -234,23 +324,11 @@ static int __init pwm_init(void)
 
     // allocate each individual pwm device
     for (i = 0; i < PWM_COUNT; ++i) {
-        if ((rc = pwm_dev_init(&pwm.dev[i], i)) < 0) {
+        if ((0 != pwm.dev[i].en) && (rc = pwm_dev_init(&pwm.dev[i], i)) < 0) {
             printk(KERN_ALERT "pwm_dev_init(%d) failed (rc = %d)\n", i, rc);
             return -1;
         }
     }
-
-    // select 13 mhz clock for pwm10 and pwm11
-    base = ioremap(CM_CORE_PBASE, CM_CORE_SIZE);
-    if (!base) {
-        printk(KERN_ALERT "failed to map CM CORE register space\n");
-        return -1;
-    }
-
-    value = ioread32(base + CM_CLKSEL_CORE);
-    value |= (CLKSEL_GPT10 | CLKSEL_GPT11);
-    iowrite32(value, base + CM_CLKSEL_CORE);
-    iounmap(base);
 
     return 0;
 }
@@ -262,8 +340,10 @@ static void __exit pwm_exit(void)
     printk("executing pwm_exit...\n");
 
     for (i = 0; i < PWM_COUNT; ++i) {
-        printk("destroying pwm device %d...\n", i + PWM_FIRST);
-        pwm_dev_cleanup(&pwm.dev[i], i);
+        if (0 != pwm.dev[i].en) {
+            printk("destroying pwm device %d...\n", i + PWM_FIRST);
+            pwm_dev_cleanup(&pwm.dev[i], i);
+        }
     }
 
     printk("destroying pwm class and device ids...\n");
@@ -275,7 +355,7 @@ module_init(pwm_init);
 module_exit(pwm_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Garrett Smith");
+MODULE_AUTHOR("Garrett Smith <smith.garrett.c@gmail.com>");
 MODULE_DESCRIPTION("PWM driver for OMAP3 devices");
 
 MODULE_SUPPORTED_DEVICE("pwm8");
