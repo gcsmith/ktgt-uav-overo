@@ -6,10 +6,10 @@
 APPNAME = uav_control
 OETMP = ${OVEROTOP}/tmp
 
-TOOLDIR 		?= ${OETMP}/sysroots/`uname -m`-linux/usr/armv7a/bin
-STAGEDIR 		?= ${OETMP}/sysroots/armv7a-angstrom-linux-gnueabi/usr
-CROSS_COMPILE	?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
-CC   			 = @${CROSS_COMPILE}gcc
+TOOLDIR       ?= ${OETMP}/sysroots/`uname -m`-linux/usr/armv7a/bin
+STAGEDIR      ?= ${OETMP}/sysroots/armv7a-angstrom-linux-gnueabi/usr
+CROSS_COMPILE ?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
+CC            = @${CROSS_COMPILE}gcc
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 OUTPUT_OPTION = -c
