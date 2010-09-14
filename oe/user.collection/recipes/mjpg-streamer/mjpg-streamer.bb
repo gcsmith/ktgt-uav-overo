@@ -1,7 +1,9 @@
 DESCRIPTION = "Streaming HTTP server for UVC webcam feeds"
 HOMEPAGE = "http://mjpg-streamer.sourceforge.net/"
-PR = "r0"
 DEPENDS = "jpeg"
+
+PV="svn${SRCDATE}"
+PR = "r0"
 
 SRC_URI = " \
     svn://mjpg-streamer.svn.sourceforge.net/svnroot/mjpg-streamer;module=mjpg-streamer;proto=https \

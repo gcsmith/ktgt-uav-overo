@@ -15,7 +15,7 @@ SRC_URI = " \
     svn://ktgt-uav-overo.googlecode.com/svn/trunk;module=gpio-event-module;proto=http \
 "
 
-S = "${WORKDIR}/module"
+S = "${WORKDIR}/gpio-event-module"
 SRCREV = "HEAD"
 
 inherit module update-rc.d
