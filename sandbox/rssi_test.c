@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// Test for measuring RSSI signal strength of wireless interface.
+// Garrett Smith 2010
+// -----------------------------------------------------------------------------
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>

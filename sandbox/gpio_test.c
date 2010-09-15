@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// Test for measuring PWM pulse width using gpio event driver.
+// Garrett Smith 2010
+// -----------------------------------------------------------------------------
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,7 +19,7 @@ int main(int argc, char *argv[])
     fd_set rdset;
     int fd = 0, rc = 0, last_usec = 0;
 
-    /* open the gpio-event device node */
+    // open the gpio-event device node
     fd = open("/dev/gpio-event", 0);
     if (fd < 0) {
         fprintf(stderr, "failed to open /dev/gpio-event\n");
@@ -22,10 +27,10 @@ int main(int argc, char *argv[])
     }
     printf("successfully opened /dev/gpio-event for reading\n");
 
-    /* set read mode to binary (default is ascii) */
+    // set read mode to binary (default is ascii)
     ioctl(fd, GPIO_EVENT_IOCTL_SET_READ_MODE, GPIO_EventReadModeBinary);
 
-    /* initialize monitor for gpio146, detect both rising/falling edges */
+    // initialize monitor for gpio146, detect both rising/falling edges
     monitor.gpio  = 146;
     monitor.onOff = 1;
     monitor.edgeType = GPIO_EventBothEdges;
@@ -37,9 +42,9 @@ int main(int argc, char *argv[])
     }
     printf("monitoring rising and falling edge for gpio%d\n", monitor.gpio);
 
-    /* sit in an infinite loop querying for gpio event status */
+    // sit in an infinite loop querying for gpio event status
     for (;;) {
-        /* wait for IO to become ready using select */
+        // wait for IO to become ready using select
         for (;;) {
             FD_ZERO(&rdset);
             FD_SET(fd, &rdset);
@@ -52,7 +57,7 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "select call failed\n");
             }
             else if (rc > 0) {
-                /* data is available */
+                // data is available
                 break;
             }
             else {
@@ -61,7 +66,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        /* read the GPIO event structure as a binary object */
+        // read the GPIO event structure as a binary object
         if (sizeof(event) != read(fd, &event, sizeof(event))) {
             fprintf(stderr, "read failed: unexpected number of bytes\n");
             continue;

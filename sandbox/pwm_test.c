@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// Test for outputting to PWM channel using ioctl interface.
+// Garrett Smith 2010
+// -----------------------------------------------------------------------------
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -16,7 +21,7 @@ int main(int argc, char *argv[])
     }
     printf("successfully opened pwm device\n");
 
-    /* test with low precision 'duty' command */
+    // test with low precision 'duty' command
     for (j = 0; j < 3; j++) {
         for (i = 2; i < 13; i++) {
             ioctl(fd, PWM_IOCT_DUTY, i);
@@ -28,7 +33,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    /*  test with high precision 'compare' command */
+    //  test with high precision 'compare' command
     lower = ioctl(fd, PWM_IOCQ_MINRANGE);
     upper = ioctl(fd, PWM_IOCQ_MAXRANGE);
     range = upper - lower;
