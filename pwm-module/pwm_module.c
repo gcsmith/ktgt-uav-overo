@@ -12,6 +12,7 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 #include "pwm_module.h"
+#include "pwm_interface.h"
 
 // user-specified module parameters
 static int pwm_en[4] = { 8, 9, 10, 11 };
@@ -145,7 +146,37 @@ static int pwm_release(struct inode *inode, struct file *fp)
 static int pwm_ioctl(struct inode *inode, struct file *fp,
                      unsigned int cmd, unsigned long arg)
 {
-    printk("executing pwm_ioctl()\n");
+    switch (cmd)
+    {
+    case PWM_IOC_ENABLE:
+        printk("pwm ioctl enable\n");
+        break;
+    case PWM_IOC_DISABLE:
+        printk("pwm ioctl disable\n");
+        break;
+    case PWM_IOCT_FREQ:
+        printk("pwm ioctl tell freq\n");
+        break;
+    case PWM_IOCQ_FREQ:
+        printk("pwm ioctl query freq\n");
+        break;
+    case PWM_IOCT_DUTY:
+        printk("pwm ioctl tell duty\n");
+        break;
+    case PWM_IOCQ_DUTY:
+        printk("pwm ioctl query duty\n");
+        break;
+    case PWM_IOCT_COMPARE:
+        printk("pwm ioctl tell compare\n");
+        break;
+    case PWM_IOCQ_MINRANGE:
+        printk("pwm ioctl query min range\n");
+        break;
+    case PWM_IOCQ_MAXRANGE:
+        printk("pwm ioctl query max range\n");
+        break;
+    }
+
     return 0;
 }
 
