@@ -36,6 +36,7 @@ struct pwm_dev {
     int en;                         // is this pwm device enabled?
     int freq;                       // pwm frequency
     int duty;                       // pwm duty cycle
+    int active;                     // started/stopped state
     int dev;                        // device number
     int maj;                        // major device number
     int min;                        // minor device number
@@ -43,6 +44,8 @@ struct pwm_dev {
     unsigned int gpt_base;
     unsigned int mux_base;
     uint16_t mux_restore;
+    uint32_t tldr;
+    uint32_t tmar;
 };
 
 // holds global data for this driver module
@@ -71,6 +74,58 @@ static const unsigned int padconf_offsets[] = {
 };
 
 // -----------------------------------------------------------------------------
+void pwm_set_active(struct pwm_dev *dev, int active)
+{
+    // enable or disable the timer
+    void __iomem *base = ioremap(dev->gpt_base, GPTIMER_SIZE);
+    if (!base) {
+        printk(KERN_ALERT "failed to map GPTIMER address range\n");
+        return;
+    }
+
+    iowrite32(active ? 0x00001843 : 0, base + GPT_TCLR);
+    iounmap(base);
+}
+
+// -----------------------------------------------------------------------------
+void pwm_set_freq(struct pwm_dev *dev, uint32_t freq)
+{
+    void __iomem *base = ioremap(dev->gpt_base, GPTIMER_SIZE);
+
+    if (!base) {
+        printk(KERN_ALERT "failed to map GPTIMER address range\n");
+        return;
+    }
+
+    dev->freq = MIN(freq, 1000);
+    printk("setting PWM%d frequency %d\n", dev->min, dev->freq);
+    dev->tldr = 0xFFFFFFFF - 13000000 / dev->freq + 1;
+
+    iowrite32(dev->tldr, base + GPT_TLDR); // timer load 20ms period
+    iounmap(base);
+}
+
+// -----------------------------------------------------------------------------
+void pwm_set_duty(struct pwm_dev *dev, uint32_t duty)
+{
+    void __iomem *base;
+
+    dev->duty = MIN(duty, 100);
+    dev->tmar = dev->tldr + (dev->duty * (0xFFFFFFFF - dev->tldr - 1)) / 100;
+
+    printk("setting PWM%d duty %d\n", dev->min, dev->duty);
+
+    base = ioremap(dev->gpt_base, GPTIMER_SIZE);
+    if (!base) {
+        printk(KERN_ALERT "failed to map GPTIMER address range\n");
+        return;
+    }
+
+    iowrite32(dev->tmar, base + GPT_TMAR);
+    iounmap(base);
+}
+
+// -----------------------------------------------------------------------------
 static int pwm_open(struct inode *inode, struct file *fp)
 {
     printk("executing pwm_open()\n");
@@ -87,14 +142,16 @@ static int pwm_release(struct inode *inode, struct file *fp)
 }
 
 // -----------------------------------------------------------------------------
-static int pwm_ioctl(struct inode *inode, struct file *fp, unsigned int cmd, unsigned long arg)
+static int pwm_ioctl(struct inode *inode, struct file *fp,
+                     unsigned int cmd, unsigned long arg)
 {
     printk("executing pwm_ioctl()\n");
     return 0;
 }
 
 // -----------------------------------------------------------------------------
-static ssize_t pwm_read(struct file *fp, char __user *buff, size_t count, loff_t *off)
+static ssize_t pwm_read(struct file *fp, char __user *buff,
+                        size_t count, loff_t *off)
 {
     struct pwm_dev *dev = fp->private_data;
     size_t len, copy_len;
@@ -104,7 +161,8 @@ static ssize_t pwm_read(struct file *fp, char __user *buff, size_t count, loff_t
     }
 
     printk("executing pwm_read()\n");
-    len = snprintf(dev->buff, 1024, "PWM%d freq=??? duty=???\n", dev->min) + 1;
+    len = snprintf(dev->buff, 1024, "PWM%d freq=%d duty=%d\n",
+                   dev->min, dev->freq, dev->duty) + 1;
 
     copy_len = MIN(len, count);
     if (copy_to_user(buff, dev->buff, copy_len)) {
@@ -117,12 +175,48 @@ static ssize_t pwm_read(struct file *fp, char __user *buff, size_t count, loff_t
 }
 
 // -----------------------------------------------------------------------------
-static ssize_t pwm_write(struct file *fp, const char __user *buff, size_t count, loff_t *off)
+int tokenize_str(char *ptr, char **ptok, char **pnext)
+{
+    if (!ptr || !ptok || !pnext)
+        return 0;
+
+    *ptok = NULL;
+    *pnext = NULL;
+
+    // seek to first non-delimeter character
+    for (;;) {
+        if (*ptr == '\0')
+            return 0;
+        if ((*ptr != ' ') && (*ptr != '\t') && (*ptr != '\n'))
+            break;
+        ptr++;
+    }
+
+    *ptok = ptr;
+
+    // seek to next delimeter or end of string
+    for (;;) {
+        if (*ptr == '\0')
+            return 1;
+        if ((*ptr == ' ') || (*ptr == '\t') || (*ptr == '\n'))
+            break;
+        ptr++;
+    }
+
+    // terminate the current token and point to the next
+    *ptr = '\0';
+    *pnext = ptr + 1;
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+static ssize_t pwm_write(struct file *fp, const char __user *buff,
+                         size_t count, loff_t *off)
 {
     struct pwm_dev *dev = fp->private_data;
-    unsigned int value = 0;
+    int freq = 0, duty = 0;
     size_t copy_len;
-    void __iomem *base;
+    char *ptok, *pstr;
     printk("executing pwm_write()\n");
 
     copy_len = MIN(1023, count);
@@ -132,17 +226,33 @@ static ssize_t pwm_write(struct file *fp, const char __user *buff, size_t count,
     }
     dev->buff[copy_len] = '\0';
 
-    value = simple_strtol(dev->buff, NULL, 10);
-    value = MIN(value, 0x4000);
-
-    base = ioremap(dev->gpt_base, GPTIMER_SIZE);
-    if (!base) {
-        printk(KERN_ALERT "failed to map GPTIMER address range\n");
-        return -1;
+    // fetch arguments in the format: name [parms] name [parms] ...
+    pstr = dev->buff;
+    while (pstr && tokenize_str(pstr, &ptok, &pstr)) {
+        // check the argument name
+        if (!strcmp(ptok, "start")) {
+            pwm_set_active(dev, 1);
+        }
+        else if (!strcmp(ptok, "stop")) {
+            pwm_set_active(dev, 0);
+        }
+        else if (!strcmp(ptok, "freq")) {
+            // require a frequency parameter
+            if (!tokenize_str(pstr, &ptok, &pstr)) {
+                break;
+            }
+            freq = simple_strtol(ptok, NULL, 10);
+            pwm_set_freq(dev, freq);
+        }
+        else if (!strcmp(ptok, "duty")) {
+            // require a duty cycle parameter
+            if (!tokenize_str(pstr, &ptok, &pstr)) {
+                break;
+            }
+            duty = simple_strtol(ptok, NULL, 10);
+            pwm_set_duty(dev, duty);
+        }
     }
-
-    iowrite32(0xfffC3400 + value, base + GPT_TMAR);
-    iounmap(base);
 
     *off += copy_len;
     return copy_len;
@@ -204,9 +314,12 @@ static int pwm_dev_init(struct pwm_dev *dev, int index)
         return -1;
     }
 
+    dev->tmar = 0xfffc3400;
+    dev->tldr = 0xfffc0860;
+
     iowrite32(0x00000000, base + GPT_TCLR); // stop the timer
-    iowrite32(0xfffc08F0, base + GPT_TLDR); // timer load 20ms period
-    iowrite32(0xfffC3400, base + GPT_TMAR); // set timer to low duty cycle
+    iowrite32(dev->tldr,  base + GPT_TLDR); // timer load 20ms period
+    iowrite32(dev->tmar,  base + GPT_TMAR); // set timer to low duty cycle
     iowrite32(0xffffffff, base + GPT_TCRR); // set the timer counter
     iowrite32(0x00001843, base + GPT_TCLR); // start the timer
     iounmap(base);
