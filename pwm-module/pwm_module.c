@@ -35,8 +35,6 @@ MODULE_PARM_DESC(pwm_duty, "Specify duty cycle of each enabled PWM");
 struct pwm_dev {
     struct cdev cdev;               // character device info
     int en;                         // is this pwm device enabled?
-    int freq;                       // pwm frequency
-    int duty;                       // pwm duty cycle
     int active;                     // started/stopped state
     int dev;                        // device number
     int maj;                        // major device number
@@ -47,6 +45,8 @@ struct pwm_dev {
     uint16_t mux_restore;
     uint32_t tldr;
     uint32_t tmar;
+    uint32_t tmar_min;
+    uint32_t tmar_max;
 };
 
 // holds global data for this driver module
@@ -98,12 +98,19 @@ void pwm_set_freq(struct pwm_dev *dev, uint32_t freq)
         return;
     }
 
-    dev->freq = MIN(freq, 1000);
-    printk("setting PWM%d frequency %d\n", dev->min, dev->freq);
-    dev->tldr = 0xFFFFFFFF - 13000000 / dev->freq + 1;
+    freq = MIN(freq, 1000);
+    dev->tldr = 0xFFFFFFFF - 13000000 / freq + 1;
+    dev->tmar_min = dev->tldr;
+    dev->tmar_max = (0xFFFFFFFF - dev->tldr) - 1;
 
     iowrite32(dev->tldr, base + GPT_TLDR); // timer load 20ms period
     iounmap(base);
+}
+
+// -----------------------------------------------------------------------------
+inline int pwm_get_freq(struct pwm_dev *dev)
+{
+    return 13000000 / (0xFFFFFFFF - dev->tldr + 1);
 }
 
 // -----------------------------------------------------------------------------
@@ -111,10 +118,8 @@ void pwm_set_duty(struct pwm_dev *dev, uint32_t duty)
 {
     void __iomem *base;
 
-    dev->duty = MIN(duty, 100);
-    dev->tmar = dev->tldr + (dev->duty * (0xFFFFFFFF - dev->tldr - 1)) / 100;
-
-    printk("setting PWM%d duty %d\n", dev->min, dev->duty);
+    duty = MIN(duty, 100);
+    dev->tmar = dev->tmar_min + (duty * dev->tmar_max) / 100;
 
     base = ioremap(dev->gpt_base, GPTIMER_SIZE);
     if (!base) {
@@ -124,6 +129,42 @@ void pwm_set_duty(struct pwm_dev *dev, uint32_t duty)
 
     iowrite32(dev->tmar, base + GPT_TMAR);
     iounmap(base);
+}
+
+// -----------------------------------------------------------------------------
+inline int pwm_get_duty(struct pwm_dev *dev)
+{
+    return 100 * (dev->tmar - dev->tldr) / (0xFFFFFFFF - dev->tldr - 1);
+}
+
+// -----------------------------------------------------------------------------
+void pwm_set_compare(struct pwm_dev *dev, uint32_t compare)
+{
+    void __iomem *base;
+
+    // compare = MAX(MIN(compare, dev->tmar_max), dev->tmar_min);
+    dev->tmar = compare;
+
+    base = ioremap(dev->gpt_base, GPTIMER_SIZE);
+    if (!base) {
+        printk(KERN_ALERT "failed to map GPTIMER address range\n");
+        return;
+    }
+
+    iowrite32(dev->tmar, base + GPT_TMAR);
+    iounmap(base);
+}
+
+// -----------------------------------------------------------------------------
+inline uint32_t pwm_get_minrange(struct pwm_dev *dev)
+{
+    return dev->tmar_min;
+}
+
+// -----------------------------------------------------------------------------
+inline uint32_t pwm_get_maxrange(struct pwm_dev *dev)
+{
+    return dev->tmar_min + dev->tmar_max;
 }
 
 // -----------------------------------------------------------------------------
@@ -146,38 +187,50 @@ static int pwm_release(struct inode *inode, struct file *fp)
 static int pwm_ioctl(struct inode *inode, struct file *fp,
                      unsigned int cmd, unsigned long arg)
 {
+    struct pwm_dev *dev = fp->private_data;
+    int retval = 0;
+
     switch (cmd)
     {
     case PWM_IOC_ENABLE:
-        printk("pwm ioctl enable\n");
+        // set pwm active state to on
+        pwm_set_active(dev, 1);
         break;
     case PWM_IOC_DISABLE:
-        printk("pwm ioctl disable\n");
+        // set pwm active state to off
+        pwm_set_active(dev, 0);
         break;
     case PWM_IOCT_FREQ:
-        printk("pwm ioctl tell freq\n");
+        // specify the pwm frequency
+        pwm_set_freq(dev, (uint32_t)arg);
         break;
     case PWM_IOCQ_FREQ:
-        printk("pwm ioctl query freq\n");
+        // return the pwm frequency
+        retval = pwm_get_freq(dev);
         break;
     case PWM_IOCT_DUTY:
-        printk("pwm ioctl tell duty\n");
+        // specify the pwm duty cycle
+        pwm_set_duty(dev, (uint32_t)arg);
         break;
     case PWM_IOCQ_DUTY:
-        printk("pwm ioctl query duty\n");
+        // return the pwm duty cycle
+        retval = pwm_get_duty(dev);
         break;
     case PWM_IOCT_COMPARE:
-        printk("pwm ioctl tell compare\n");
+        // set the compare value
+        pwm_set_compare(dev, arg);
         break;
     case PWM_IOCQ_MINRANGE:
-        printk("pwm ioctl query min range\n");
+        // return the pwm compare minimum value
+        retval = pwm_get_minrange(dev);
         break;
     case PWM_IOCQ_MAXRANGE:
-        printk("pwm ioctl query max range\n");
+        // return the pwm compare maximum value
+        retval = pwm_get_maxrange(dev);
         break;
     }
 
-    return 0;
+    return retval;
 }
 
 // -----------------------------------------------------------------------------
@@ -186,14 +239,18 @@ static ssize_t pwm_read(struct file *fp, char __user *buff,
 {
     struct pwm_dev *dev = fp->private_data;
     size_t len, copy_len;
+    int freq, duty;
 
     if (*off > 0) {
         return 0;
     }
 
+    freq = 13000000 / (0xFFFFFFFF - dev->tldr + 1);
+    duty = 100 * (dev->tmar - dev->tldr) / (0xFFFFFFFF - dev->tldr - 1);
+
     printk("executing pwm_read()\n");
     len = snprintf(dev->buff, 1024, "PWM%d freq=%d duty=%d\n",
-                   dev->min, dev->freq, dev->duty) + 1;
+                   dev->min, freq, duty) + 1;
 
     copy_len = MIN(len, count);
     if (copy_to_user(buff, dev->buff, copy_len)) {
@@ -355,6 +412,8 @@ static int pwm_dev_init(struct pwm_dev *dev, int index)
     iowrite32(0x00001843, base + GPT_TCLR); // start the timer
     iounmap(base);
 
+    pwm_set_freq(dev, 50);
+
     // select 13 mhz clock for pwm10 and pwm11
     if (index >= 2)
     {
@@ -432,7 +491,7 @@ static void pwm_handle_args(void)
     for (i = 0; i < pwm_freq_count; i++) {
         int index = indices[i];
         if (index >= 0) {
-            pwm.dev[index].freq = pwm_freq[i];
+            // pwm.dev[index].freq = pwm_freq[i];
         }
     }
 
@@ -440,7 +499,7 @@ static void pwm_handle_args(void)
     for (i = 0; i < pwm_duty_count; i++) {
         int index = indices[i];
         if (index >= 0) {
-            pwm.dev[index].duty = pwm_duty[i];
+            // pwm.dev[index].duty = pwm_duty[i];
         }
     }
 
