@@ -44,6 +44,7 @@ TOOLS_INSTALL = " \
     ksymoops \
     mkfs-jffs2 \
     mtd-utils \
+    networkmanager \
     ntp ntpdate \
     openssh-ssh \
     omap3-writeprom \

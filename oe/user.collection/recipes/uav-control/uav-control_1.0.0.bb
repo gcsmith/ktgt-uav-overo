@@ -3,6 +3,7 @@ HOMEPAGE = "http://www.ce.rit.edu"
 LICENSE = "GPL"
 DEPENDS = ""
 
+PV="svn${SRCDATE}"
 PR = "r0"
 
 INITSCRIPT_NAME = "uav"
