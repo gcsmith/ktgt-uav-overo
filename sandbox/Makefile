@@ -13,11 +13,12 @@ DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 OUTPUT_OPTION = -c
 CFLAGS += -Wall -Werror -O2
 
-APP_NAMES = gpio_test pwm_test rssi_test madc_test
+APP_NAMES = gpio_test pwm_test rssi_test madc_test gles_test
 GPIO_OBJS = gpio_test.o
 PWM_OBJS  = pwm_test.o
 RSSI_OBJS = rssi_test.o
 MADC_OBJS = madc_test.o
+GLES_OBJS = gles_test.o
 
 OBJ_FILES = ${GPIO_OBJS} ${PWM_OBJS} ${RSSI_OBJS}
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
@@ -39,6 +40,10 @@ rssi_test: ${RSSI_OBJS}
 madc_test: ${MADC_OBJS}
 	@echo "[LD] $@"
 	$(CC) $(LDFLAGS) -lpthread -o $@ $^
+
+gles_test: ${GLES_OBJS}
+	@echo "[LD] $@"
+	$(CC) $(LDFLAGS) -lpthread -lGLES_CM -lEGL -o $@ $^
 
 .PHONY: %.d
 %.d: ;
