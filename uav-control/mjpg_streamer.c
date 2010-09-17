@@ -103,6 +103,7 @@ Return Value:
 ******************************************************************************/
 int mjpg_streamer_start(char *input, char *device, char *output)
 {
+  fprintf(stderr, "mjpg_streamer started\n");
   size_t tmp=0;
 
   global.outcnt = 1;
@@ -126,10 +127,12 @@ int mjpg_streamer_start(char *input, char *device, char *output)
 
   /* this mutex and the conditional variable are used to synchronize access to the global picture buffer */
   if( pthread_mutex_init(&global.db, NULL) != 0 ) {
+    fprintf(stderr, "Unable to initialize mutex variablei.\nExiting prematurely.\n");
     return -1;
   }
   if( pthread_cond_init(&global.db_update, NULL) != 0 ) {
-    return -1;
+    fprintf(stderr, "Unable to initialize condition variable.\nExiting prematurely.\n");
+      return -1;
   }
 
   /* ignore SIGPIPE (send by OS if transmitting to closed TCP sockets) */
@@ -137,7 +140,8 @@ int mjpg_streamer_start(char *input, char *device, char *output)
 
   /* register signal handler for <CTRL>+C in order to clean up */
   if (signal(SIGINT, mjpg_signal_handler) == SIG_ERR) {
-    return -1;
+    fprintf(stderr, "Unable to register signal handler.\nExiting prematurely.\n");
+      return -1;
   }
 
   /* open input plugin */
@@ -172,6 +176,7 @@ int mjpg_streamer_start(char *input, char *device, char *output)
   global.in.param.global = &global;
 
   if ( /*global.in.init*/input_init(&global.in.param, device) ) {
+      fprintf(stderr, "Error occurred in input_init().\n");
     return -1;
   }
 
@@ -206,11 +211,13 @@ int mjpg_streamer_start(char *input, char *device, char *output)
 
   // Call specific input plugin fuctions
   if ( /*global.out[0].init*/output_init(&global.out[0].param) ) {
+      fprintf(stderr, "Error occurred in output_init().\n");
     return -1;
   }
 
   /* start to read the input, push pictures into global buffer */
   if ( /*global.in.run()*/input_run() ) {
+      fprintf(stderr, "Error occurred in input_run().\n");
     return -1;
   }
 

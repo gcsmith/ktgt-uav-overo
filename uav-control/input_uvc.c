@@ -101,7 +101,8 @@ int input_init(input_parameter *param, char *device) {
 
   /* initialize the mutes variable */
   if( pthread_mutex_init(&controls_mutex, NULL) != 0 ) {
-    // Failure
+    fprintf(stderr, "Unable to initialize mutex variable in input_init().\n");
+    return 1;
   }
 
   /* convert the single parameter-string to an array of strings */
@@ -120,6 +121,7 @@ int input_init(input_parameter *param, char *device) {
           argv[argc] = strdup(token);
           argc++;
           if (argc >= MAX_ARGUMENTS) {
+              fprintf(stderr, "More arguments were found than could be accepted.\n");
             return 1;
           }
         }
@@ -169,7 +171,7 @@ int input_init(input_parameter *param, char *device) {
 
     /* unrecognized option */
     if (c == '?'){
-      help();
+      //help();
       return 1;
     }
 
@@ -178,7 +180,7 @@ int input_init(input_parameter *param, char *device) {
       /* h, help */
       case 0:
       case 1:
-        help();
+        //help();
         return 1;
         break;
 
@@ -207,12 +209,15 @@ int input_init(input_parameter *param, char *device) {
         /* parse value as decimal value */
         width  = strtol(optarg, &s, 10);
         height = strtol(s+1, NULL, 10);
+
+        fprintf(stderr, "resolution found: %dx%d\n", width, height);
         break;
 
       /* f, fps */
       case 6:
       case 7:
         fps=atoi(optarg);
+        fprintf(stderr, "fps found: %d\n", fps);
         break;
 
       /* y, yuv */
@@ -256,12 +261,13 @@ int input_init(input_parameter *param, char *device) {
         break;
 
       default:
-        help();
+        //help();
         return 1;
     }
   }
 
   dev = strdup(device);
+  fprintf(stderr, "dev found: %s\n", dev);
 
   /* keep a pointer to the global variables */
   pglobal = param->global;
@@ -269,7 +275,8 @@ int input_init(input_parameter *param, char *device) {
   /* allocate webcam datastructure */
   videoIn = malloc(sizeof(struct vdIn));
   if ( videoIn == NULL ) {
-    // Failure exit(EXIT_FAILURE);
+    fprintf(stderr, "Unable to allocate webcam data structure\n");
+    return 1;
   }
   memset(videoIn, 0, sizeof(struct vdIn));
 
@@ -285,6 +292,8 @@ int input_init(input_parameter *param, char *device) {
     //closelog();
     //exit(EXIT_FAILURE);
     // Failure
+    fprintf(stderr, "Unable to open video device and prepare data structure.\n");
+    return 1;
   }
 
   /*
@@ -312,6 +321,7 @@ Return Value: always 0
 ******************************************************************************/
 int input_stop(void) {
   pthread_cancel(cam);
+  fprintf(stderr, "Input camera thread stopped.\n");
 
   return 0;
 }
@@ -331,6 +341,8 @@ int input_run(void) {
 
   pthread_create(&cam, 0, cam_thread, NULL);
   pthread_detach(cam);
+
+  fprintf(stderr, "Input camera thread started.\n");
 
   return 0;
 }
@@ -678,6 +690,7 @@ void *cam_thread( void *arg ) {
       //IPRINT("Error grabbing frames\n");
       //exit(EXIT_FAILURE);
       // Failure
+      fprintf(stderr, "Error grabbing frames.\n");
     }
 
 

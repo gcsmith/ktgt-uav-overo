@@ -130,9 +130,9 @@ void *worker_thread( void *arg ) {
     //bytes = recvfrom(sd, udpbuffer, sizeof(udpbuffer), 0, (struct sockaddr*)&addr, &addr_len);
     // ---------------------------------------------------------
 	
-    DBG("waiting for fresh frame\n");
+    fprintf(stderr, "waiting for fresh frame on port %d\n", port);
     pthread_cond_wait(&pglobal->db_update, &pglobal->db);
-
+    fprintf(stderr, "got frame\n");
     /* read buffer */
     frame_size = pglobal->size;
 
@@ -156,16 +156,17 @@ void *worker_thread( void *arg ) {
     /* allow others to access the global buffer again */
     pthread_mutex_unlock( &pglobal->db );
 
+    fprintf(stderr, "ready to send datagram\n");
     // send back client's message that came in udpbuffer
     // sendto(sd, udpbuffer, bytes, 0, (struct sockaddr*)&addr, sizeof(addr));
     sendto(sd, frame, frame_size, 0, (struct sockaddr*)&addr, sizeof(addr));
-   
+    fprintf(stderr, "datagram sent: %d bytes\n", frame_size);
   }
 
   // close UDP port
   if (port > 0)
 	close(sd);
-
+  fprintf(stderr, "port closed\n");
   /* cleanup now */
   pthread_cleanup_pop(1);
 
@@ -181,7 +182,7 @@ Return Value: 0 if everything is ok, non-zero otherwise
 ******************************************************************************/
 int output_init(output_parameter *param) {
   char *argv[MAX_ARGUMENTS]={NULL};
-  int argc=1, i;
+  int argc=1;
 
   delay = 0;
 
@@ -201,17 +202,12 @@ int output_init(output_parameter *param) {
           argv[argc] = strdup(token);
           argc++;
           if (argc >= MAX_ARGUMENTS) {
-            OPRINT("ERROR: too many arguments to output plugin\n");
+            fprintf(stderr, "ERROR: too many arguments to output plugin\n");
             return 1;
           }
         }
       }
     }
-  }
-
-  /* show all parameters for DBG purposes */
-  for (i=0; i<argc; i++) {
-    DBG("argv[%d]=%s\n", i, argv[i]);
   }
 
   reset_getopt();
@@ -306,6 +302,7 @@ Return Value: always 0
 int output_stop(int id) {
   DBG("will cancel worker thread\n");
   pthread_cancel(worker);
+  fprintf(stderr, "Output canceling worker thread.\n");
   return 0;
 }
 
@@ -318,6 +315,7 @@ int output_run(int id) {
   DBG("launching worker thread\n");
   pthread_create(&worker, 0, worker_thread, NULL);
   pthread_detach(worker);
+  fprintf(stderr, "Output starting worker thread.\n");
   return 0;
 }
 
