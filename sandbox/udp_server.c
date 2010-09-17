@@ -6,11 +6,11 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-void main()
+int main()
 {
     int ld;
     struct sockaddr_in skaddr;
-    int length;
+    socklen_t length;
     char *msg = "Datagram from server.";
 
     if ((ld = socket(PF_INET, SOCK_DGRAM, 0)) < 0)
@@ -46,4 +46,6 @@ void main()
             exit(1);
         }
     }
+
+    return 0;
 }
