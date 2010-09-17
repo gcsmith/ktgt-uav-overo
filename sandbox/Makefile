@@ -20,6 +20,7 @@ RSSI_OBJS = rssi_test.o
 MADC_OBJS = madc_test.o
 GLES_OBJS = gles_test.o
 MJPG_OBJS = jpeg_utils.o v4l2uvc.o input_uvc.o output_udp.o mjpg_streamer.o mjpg_test.o
+UDP_SERV  = udp_server.o
 
 OBJ_FILES = ${GPIO_OBJS} ${PWM_OBJS} ${RSSI_OBJS}
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
@@ -49,6 +50,10 @@ gles_test: ${GLES_OBJS}
 mjpg_test: ${MJPG_OBJS}
 	@echo "[LD] $@"
 	$(CC) $(LDFLAGS) -lpthread -ljpeg -o $@ $^
+
+udp_serv: $(UDP_SERV)
+	@echo "[LD] $@"
+	$(CC) $(LDFLAGS) -o $@ $^
 
 .PHONY: %.d
 %.d: ;
