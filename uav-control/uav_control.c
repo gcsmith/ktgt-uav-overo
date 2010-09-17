@@ -7,9 +7,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <pthread.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <linux/wireless.h>
 #include <netdb.h>
 #include <syslog.h>
 #include <unistd.h>
@@ -21,23 +23,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include "uav_protocol.h"
 
 #define MAX_LEN 64
-
-#define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x00000001  // software version
-
-#define SERVER_REQ_IDENT        0   // request client to identify itself
-#define SERVER_ACK_IGNORED      1   // client request ignored (invalid state)
-#define SERVER_ACK_TAKEOFF      2   // acknowledge request to take off
-#define SERVER_ACK_LANDING      3   // acknowledge request to land
-#define SERVER_ACK_TELEMETRY    4   // acknowledge request for telemetry (+data)
-#define SERVER_MJPG_FRAME       5   // transmit a single frame of video
-
-#define CLIENT_ACK_IDENT        0   // identify self to server
-#define CLIENT_REQ_TAKEOFF      1   // command the helicopter to take off
-#define CLIENT_REQ_LANDING      2   // command the helicopter to land
-#define CLIENT_REQ_TELEMETRY    3   // state, orientation, altitude, battery
 
 typedef struct serial_data
 {
@@ -47,7 +35,6 @@ typedef struct serial_data
     float angles[3];        // orientation angles from IMU
     unsigned long sample;
 } serial_data_t;
-
 
 // -----------------------------------------------------------------------------
 // Perform any necessary signal handling. Does nothing useful at the moment.
@@ -96,7 +83,38 @@ void daemonize()
 }
 
 // -----------------------------------------------------------------------------
-void *serial_consumer(void *thread_args)
+uint32_t read_wlan_rssi(int sock)
+{
+    int rssi;
+    struct iw_statistics stats;
+    struct iwreq req = {
+        .ifr_name = "wlan0",
+        .u.data = {
+            .length = sizeof(struct iw_statistics),
+            .pointer = &stats,
+            .flags = 1
+        }
+    };
+
+    if (0 > ioctl(sock, SIOCGIWSTATS, &req)) {
+        perror("error invoking SIOCGIWSTATS ioctl");
+        return EXIT_FAILURE;
+    }
+
+    rssi = stats.qual.level;
+    if (!(stats.qual.updated & IW_QUAL_DBM)) {
+        // convert to dBm
+        rssi += 0x100;
+    }
+
+#if 0
+    fprintf(stderr, "read wlan0 rssi = %d\n", rssi);
+#endif
+    return rssi;
+}
+
+// -----------------------------------------------------------------------------
+void *serial_thread(void *thread_args)
 {
     serial_data_t *data = (serial_data_t *)thread_args;
     char buff[128], num_buff[16], *ptr;
@@ -176,7 +194,7 @@ void initialize_serial(const char *device, int baud, serial_data_t *data)
     }
 
     void *arg = (void *)data;
-    if (0 != (rc = pthread_create(&data->hthrd, NULL, serial_consumer, arg))) {
+    if (0 != (rc = pthread_create(&data->hthrd, NULL, serial_thread, arg))) {
         syslog(LOG_ERR, "error creating serial thread (%d)", rc);
         exit(EXIT_FAILURE);
     }
@@ -190,7 +208,7 @@ void run_server(serial_data_t *data, const char *port)
     struct addrinfo info, *r;
     socklen_t addr_sz = sizeof(addr);
     int hsock, hclient, rc;
-    int cmd_buffer[32];
+    uint32_t cmd_buffer[32];
     char ip4[INET_ADDRSTRLEN];
 
     memset(&info, 0, sizeof(info));
@@ -268,15 +286,16 @@ void run_server(serial_data_t *data, const char *port)
                 break;
             case CLIENT_REQ_TELEMETRY:
                 // syslog(LOG_INFO, "user requested telemetry -- sending...\n");
-                cmd_buffer[0] = SERVER_ACK_TELEMETRY;
+                cmd_buffer[PKT_COMMAND] = SERVER_ACK_TELEMETRY;
                 pthread_mutex_lock(&data->lock);
-                cmd_buffer[1] = *(int *)&data->angles[0];
-                cmd_buffer[2] = *(int *)&data->angles[1];
-                cmd_buffer[3] = *(int *)&data->angles[2];
+                cmd_buffer[PKT_VTI_YAW]   = *(uint32_t *)&data->angles[0];
+                cmd_buffer[PKT_VTI_PITCH] = *(uint32_t *)&data->angles[1];
+                cmd_buffer[PKT_VTI_ROLL]  = *(uint32_t *)&data->angles[2];
                 pthread_mutex_unlock(&data->lock);
-                cmd_buffer[4] = 0;  // altitude
-                cmd_buffer[5] = 0;  // battery
-                send(hclient, (void *)cmd_buffer, sizeof(int) * 6, 0);
+                cmd_buffer[PKT_VTI_RSSI]  = read_wlan_rssi(hclient);
+                cmd_buffer[PKT_VTI_ALT]   = 0;  // altitude
+                cmd_buffer[PKT_VTI_BATT]  = 100;  // battery
+                send(hclient, (void *)cmd_buffer, PKT_VTI_SIZE, 0);
                 break;
             default:
                 syslog(LOG_ERR, "invalid client command (%d)", cmd_buffer[0]);
