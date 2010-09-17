@@ -110,9 +110,9 @@ void *worker_thread( void *arg ) {
   }
   struct sockaddr_in addr;
   int sd;
-  //int bytes;
-  //socklen_t addr_len=sizeof(addr);
-  //char udpbuffer[1024] = {0};
+  int bytes;
+  socklen_t addr_len=sizeof(addr);
+  char udpbuffer[1024] = {0};
   sd = socket(PF_INET, SOCK_DGRAM, 0);
   bzero(&addr, sizeof(addr));
   addr.sin_family = AF_INET;
@@ -122,14 +122,13 @@ void *worker_thread( void *arg ) {
 	perror("bind");
   // -----------------------------------------------------------
     
+  fprintf(stderr, "Waiting for client's message.\n");
+  // UDP receive ---------------------------------------------
+  memset(udpbuffer, 0, sizeof(udpbuffer));
+  bytes = recvfrom(sd, udpbuffer, sizeof(udpbuffer), 0, (struct sockaddr*)&addr, &addr_len);
+  // ---------------------------------------------------------
+  
   while ( ok >= 0 && !pglobal->stop ) {
-    //DBG("waiting for a UDP message\n");
-
-    // UDP receive ---------------------------------------------
-    //memset(udpbuffer, 0, sizeof(udpbuffer));
-    //bytes = recvfrom(sd, udpbuffer, sizeof(udpbuffer), 0, (struct sockaddr*)&addr, &addr_len);
-    // ---------------------------------------------------------
-	
     fprintf(stderr, "waiting for fresh frame on port %d\n", port);
     pthread_cond_wait(&pglobal->db_update, &pglobal->db);
     fprintf(stderr, "got frame\n");
@@ -151,7 +150,7 @@ void *worker_thread( void *arg ) {
     }
 
     /* copy frame to our local buffer now */
-    memcpy(frame, pglobal->buf, frame_size);
+    //memcpy(frame, pglobal->buf, frame_size);
 
     /* allow others to access the global buffer again */
     pthread_mutex_unlock( &pglobal->db );
