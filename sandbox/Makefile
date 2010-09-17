@@ -13,12 +13,13 @@ DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 OUTPUT_OPTION = -c
 CFLAGS += -Wall -Werror -O2
 
-APP_NAMES = gpio_test pwm_test rssi_test madc_test gles_test
+APP_NAMES = gpio_test pwm_test rssi_test madc_test gles_test mjpg_test
 GPIO_OBJS = gpio_test.o
 PWM_OBJS  = pwm_test.o
 RSSI_OBJS = rssi_test.o
 MADC_OBJS = madc_test.o
 GLES_OBJS = gles_test.o
+MJPG_OBJS = jpeg_utils.o v4l2uvc.o input_uvc.o output_udp.o mjpg_streamer.o mjpg_test.o
 
 OBJ_FILES = ${GPIO_OBJS} ${PWM_OBJS} ${RSSI_OBJS}
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
@@ -44,6 +45,10 @@ madc_test: ${MADC_OBJS}
 gles_test: ${GLES_OBJS}
 	@echo "[LD] $@"
 	$(CC) $(LDFLAGS) -lpthread -lGLES_CM -lEGL -o $@ $^
+
+mjpg_test: ${MJPG_OBJS}
+	@echo "[LD] $@"
+	$(CC) $(LDFLAGS) -lpthread -ljpeg -o $@ $^
 
 .PHONY: %.d
 %.d: ;
