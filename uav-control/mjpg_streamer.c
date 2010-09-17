@@ -101,7 +101,7 @@ Description.:
 Input Value.:
 Return Value:
 ******************************************************************************/
-int mjpg_streamer_start(char *input, char *output)
+int mjpg_streamer_start(char *input, char *device, char *output)
 {
   size_t tmp=0;
 
@@ -171,7 +171,7 @@ int mjpg_streamer_start(char *input, char *output)
   global.in.param.parameter_string = strchr(input, ' ');
   global.in.param.global = &global;
 
-  if ( /*global.in.init*/input_init(&global.in.param) ) {
+  if ( /*global.in.init*/input_init(&global.in.param, device) ) {
     return -1;
   }
 

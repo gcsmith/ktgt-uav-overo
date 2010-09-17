@@ -94,7 +94,7 @@ Return Value: 0 if everything is fine
               1 if "--help" was triggered, in this case the calling programm
               should stop running and leave.
 ******************************************************************************/
-int input_init(input_parameter *param) {
+int input_init(input_parameter *param, char *device) {
   char *argv[MAX_ARGUMENTS]={NULL}, *dev = "/dev/video0", *s;
   int argc=1, width=640, height=480, fps=5, format=V4L2_PIX_FMT_MJPEG, i;
   //in_cmd_type led = IN_CMD_LED_AUTO;
@@ -260,6 +260,8 @@ int input_init(input_parameter *param) {
         return 1;
     }
   }
+
+  dev = strdup(device);
 
   /* keep a pointer to the global variables */
   pglobal = param->global;

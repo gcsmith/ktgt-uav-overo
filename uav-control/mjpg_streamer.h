@@ -67,6 +67,6 @@ struct _globals {
   int (*control)(int command, char *details);
 };
 
-int mjpg_streamer_start(char *input, char *output);
+int mjpg_streamer_start(char *input, char *device, char *output);
 void mjpg_streamer_stop();
 

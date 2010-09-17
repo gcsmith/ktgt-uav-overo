@@ -28,14 +28,14 @@ void sig_handler(int id)
 
 int main (int argc, char **argv)
 {
-    char *input = "input_uvc.so --resolution 640x480 --fps 15 --device /dev/video0";
-    char *output = "output_udp.soi --port 2010";
+    char *input = "input_uvc.so --resolution 640x480 --fps 15 ";
+    char *output = "output_udp.so --port 2010";
 
     // register CTRL+C to exit
     signal(SIGINT, sig_handler);
 
     // Start mjpg-streamer
-    mjpg_streamer_start(input, output);
+    mjpg_streamer_start(input, argv[1], output);
 
     // Wait for signals
     pause();

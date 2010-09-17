@@ -92,7 +92,7 @@ struct _input {
     int (*cmd_new)(__u32, __s32);
 };
 
-int input_init(input_parameter *);
+int input_init(input_parameter *, char *);
 int input_stop(void);
 int input_run(void);
 
