@@ -3,7 +3,7 @@
 # Garrett Smith 2010
 ################################################################################
 
-APPNAME = uav_control
+APPNAME = mjpg_test 
 OETMP = ${OVEROTOP}/tmp
 
 TOOLDIR       ?= ${OETMP}/sysroots/`uname -m`-linux/usr/armv7a/bin
@@ -15,7 +15,7 @@ DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 OUTPUT_OPTION = -c
 CFLAGS += -Wall -Werror -O2
 
-OBJ_FILES = uav_control.o jpeg_utils.o v4l2uvc.o input_uvc.o output_udp.o mjpg_streamer.o
+OBJ_FILES = ../jpeg_utils.o ../v4l2uvc.o ../input_uvc.o ../output_udp.o ../mjpg_streamer.o mjpg_test.o
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
 $(APPNAME) : $(OBJ_FILES)
