@@ -5,12 +5,9 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/ioctl.h>
 #include <pthread.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <linux/wireless.h>
 #include <netdb.h>
 #include <syslog.h>
 #include <unistd.h>
@@ -21,9 +18,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "uav_protocol.h"
 #include "razor_imu.h"
+#include "server.h"
 #include "ultrasonic.h"
+#include "uav_protocol.h"
 
 #define MAX_LEN 64
 
@@ -71,37 +69,6 @@ void daemonize()
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
-}
-
-// -----------------------------------------------------------------------------
-uint32_t read_wlan_rssi(int sock)
-{
-    int rssi;
-    struct iw_statistics stats;
-    struct iwreq req = {
-        .ifr_name = "wlan0",
-        .u.data = {
-            .length = sizeof(struct iw_statistics),
-            .pointer = &stats,
-            .flags = 1
-        }
-    };
-
-    if (0 > ioctl(sock, SIOCGIWSTATS, &req)) {
-        perror("error invoking SIOCGIWSTATS ioctl");
-        return EXIT_FAILURE;
-    }
-
-    rssi = stats.qual.level;
-    if (!(stats.qual.updated & IW_QUAL_DBM)) {
-        // convert to dBm
-        rssi += 0x100;
-    }
-
-#if 0
-    fprintf(stderr, "read wlan0 rssi = %d\n", rssi);
-#endif
-    return rssi;
 }
 
 // -----------------------------------------------------------------------------
