@@ -1,26 +1,60 @@
-//pwm_lib.c
-// Timothy Miller 2010
-
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include "pwm_lib.h"
-#include "pwm_module.h"
 
-
-static int pwmFd = -1;
-
-//-------------------------------------------
-int pwm_init(void){
-    if(pwmFd < 0){
-        if( (pwmFd = open("/dev/pwm", O_RDWR)) < 0 ){
-	    return -1;
-	}
-    }
-    return 0;
+pwm_t pwm_open_device(int index)
+{
+    return open("/dev/pwm8", 0);
 }
 
+void pwm_close_device(pwm_t pwm)
+{
+    close(pwm);
+}
 
+int pwm_enable(pwm_t pwm)
+{
+    return ioctl(pwm, PWM_IOC_ENABLE);
+}
+
+int pwm_disable(pwm_t pwm)
+{
+    return ioctl(pwm, PWM_IOC_DISABLE);
+}
+
+int pwm_set_freq(pwm_t pwm, int freq)
+{
+    return ioctl(pwm, PWM_IOCT_FREQ, freq);
+}
+
+int pwm_get_freq(pwm_t pwm)
+{
+    return ioctl(pwm, PWM_IOCQ_FREQ);
+}
+
+int pwm_set_duty(pwm_t pwm, int duty)
+{
+    return ioctl(pwm, PWM_IOCT_DUTY, duty);
+}
+
+int pwm_get_duty(pwm_t pwm)
+{
+    return ioctl(pwm, PWM_IOCQ_DUTY);
+}
+
+int pwm_set_compare(pwm_t pwm, int compare)
+{
+    return ioctl(pwm, PWM_IOCT_COMPARE, compare);
+}
+
+int pwm_get_minrange(pwm_t pwm)
+{
+    return ioctl(pwm, PWM_IOCQ_MINRANGE);
+}
+
+int pwm_get_maxrange(pwm_t pwm)
+{
+    return ioctl(pwm, PWM_IOCQ_MAXRANGE);
+}
 
