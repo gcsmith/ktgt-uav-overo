@@ -44,7 +44,9 @@
 #include "v4l2uvc.h" // this header will includes the ../../mjpg_streamer.h
 #include "huffman.h"
 #include "jpeg_utils.h"
+#if 0
 #include "dynctrl.h"
+#endif
 
 #define INPUT_PLUGIN_NAME "UVC webcam grabber"
 #define MAX_ARGUMENTS 32
@@ -70,19 +72,28 @@ static const struct {
 
 /* private functions and variables to this plugin */
 pthread_t cam;
+
+#if 0
 pthread_mutex_t controls_mutex;
+#endif
+
 struct vdIn *videoIn;
 static globals *pglobal;
-static int gquality = 80;
 static unsigned int minimum_size = 0;
+
+#if 0
+static int gquality = 80;
 static int dynctrls = 1;
+#endif
 
 void *cam_thread( void *);
 void cam_cleanup(void *);
-void input_help(void);
-int input_cmd(in_cmd_type, int);
-int input_cmd_new(__u32 control, __s32 value, __u32 typecode);
 
+#if 0
+void help(void);
+int input_cmd(in_cmd_type, int);
+int input_cmd_new(__u32 control, __s32 value);
+#endif
 
 /*** plugin interface functions ***/
 /******************************************************************************
@@ -95,16 +106,24 @@ Return Value: 0 if everything is fine
               should stop running and leave.
 ******************************************************************************/
 int input_init(input_parameter *param) {
+#if 0
   char *argv[MAX_ARGUMENTS]={NULL}, *dev = "/dev/video0", *s;
   int argc=1, width=640, height=480, fps=5, format=V4L2_PIX_FMT_MJPEG, i;
   in_cmd_type led = IN_CMD_LED_AUTO;
+#endif
+
+  /* Define the video format to be MJPEG */
+  int format = V4L2_PIX_FMT_MJPEG;
 
   /* initialize the mutes variable */
+#if 0
   if( pthread_mutex_init(&controls_mutex, NULL) != 0 ) {
     IPRINT("could not initialize mutex variable\n");
     exit(EXIT_FAILURE);
   }
+#endif
 
+#if 0
   /* convert the single parameter-string to an array of strings */
   argv[0] = INPUT_PLUGIN_NAME;
   if ( param->parameter_string != NULL && strlen(param->parameter_string) != 0 ) {
@@ -128,13 +147,17 @@ int input_init(input_parameter *param) {
       }
     }
   }
+#endif
 
+#if 0
   /* show all parameters for DBG purposes */
   for (i=0; i<argc; i++) {
     DBG("argv[%d]=%s\n", i, argv[i]);
   }
+#endif
 
   /* parse the parameters */
+#if 0
   reset_getopt();
   while(1) {
     int option_index = 0, c=0;
@@ -169,7 +192,7 @@ int input_init(input_parameter *param) {
 
     /* unrecognized option */
     if (c == '?'){
-      input_help();
+      help();
       return 1;
     }
 
@@ -179,7 +202,7 @@ int input_init(input_parameter *param) {
       case 0:
       case 1:
         DBG("case 0,1\n");
-        input_help();
+        help();
         return 1;
         break;
 
@@ -265,10 +288,11 @@ int input_init(input_parameter *param) {
 
       default:
         DBG("default case\n");
-        input_help();
+        help();
         return 1;
     }
   }
+#endif
 
   /* keep a pointer to the global variables */
   pglobal = param->global;
@@ -277,23 +301,25 @@ int input_init(input_parameter *param) {
   videoIn = malloc(sizeof(struct vdIn));
   if ( videoIn == NULL ) {
     IPRINT("not enough memory for videoIn\n");
-    exit(EXIT_FAILURE);
+    return -1; //exit(EXIT_FAILURE);
   }
   memset(videoIn, 0, sizeof(struct vdIn));
 
   /* display the parsed values */
-  IPRINT("Using V4L2 device.: %s\n", dev);
-  IPRINT("Desired Resolution: %i x %i\n", width, height);
-  IPRINT("Frames Per Second.: %i\n", fps);
-  IPRINT("Format............: %s\n", (format==V4L2_PIX_FMT_YUYV)?"YUV":"MJPEG");
+  IPRINT("Using V4L2 device.: %s\n", param->dev);
+  IPRINT("Desired Resolution: %i x %i\n", param->res_width, param->res_height);
+  IPRINT("Frames Per Second.: %i\n", param->fps);
+  IPRINT("Format............: %s\n", "MJPEG");//(format==V4L2_PIX_FMT_YUYV)?"YUV":"MJPEG");
+#if 0
   if ( format == V4L2_PIX_FMT_YUYV )
     IPRINT("JPEG Quality......: %d\n", gquality);
-
+#endif
   /* open video device and prepare data structure */
-  if (init_videoIn(videoIn, dev, width, height, fps, format, 1, pglobal) < 0) {
+  if (init_videoIn(videoIn, param->dev, param->res_width, param->res_height, 
+              param->fps, format, 1, pglobal) < 0) {
     IPRINT("init_VideoIn failed\n");
-    closelog();
-    exit(EXIT_FAILURE);
+    //closelog();
+    return -1; //exit(EXIT_FAILURE);
   }
 
   /*
@@ -309,7 +335,9 @@ int input_init(input_parameter *param) {
   /*
    * switch the LED according to the command line parameters (if any)
    */
+#if 0
   input_cmd(led, 0);
+#endif
 
   return 0;
 }
@@ -334,8 +362,8 @@ Return Value: always 0
 int input_run(void) {
   pglobal->buf = malloc(videoIn->framesizeIn);
   if (pglobal->buf == NULL) {
-    fprintf(stderr, "could not allocate memory\n");
-    exit(EXIT_FAILURE);
+    fprintf(stderr, "could not allocate memory in input_run()\n");
+    return -1; //exit(EXIT_FAILURE);
   }
 
   pthread_create(&cam, 0, cam_thread, NULL);
@@ -353,8 +381,8 @@ Input Value.: * cmd specifies the command, a complete list is maintained in
 Return Value: depends in the command, for most cases 0 means no errors and
               -1 signals an error. This is just rule of thumb, not more!
 ******************************************************************************/
-int input_cmd(in_cmd_type cmd, int value) {
 #if 0
+int input_cmd(in_cmd_type cmd, int value) {
   int res=0;
   static int pan=0, tilt=0, pan_tilt_valid=-1;
   static int focus=-1;
@@ -621,7 +649,7 @@ int input_cmd(in_cmd_type cmd, int value) {
       /*{ struct v4l2_control control;
       control.id    =V4L2_CID_EXPOSURE_AUTO_PRIORITY;
 					control.value =0;
-					if ((value = IOCTL_VIDEO(videoIn->fd, VIDIOC_S_CTRL, &control)) < 0)
+					if ((value = ioctl(videoIn->fd, VIDIOC_S_CTRL, &control)) < 0)
 						printf("Set Auto Exposure off error\n");
 					else
 						printf("11Auto Exposure set to %d\n", control.value);
@@ -636,7 +664,7 @@ int input_cmd(in_cmd_type cmd, int value) {
     /*  { struct v4l2_control control;
       control.id    =V4L2_CID_EXPOSURE_AUTO;
 					control.value =1;
-					if ((value = IOCTL_VIDEO(videoIn->fd, VIDIOC_S_CTRL, &control)) < 0)
+					if ((value = ioctl(videoIn->fd, VIDIOC_S_CTRL, &control)) < 0)
 						printf("Set Auto Exposure on error\n");
 					else
 						printf("22Auto Exposure set to %d\n", control.value);
@@ -661,9 +689,8 @@ int input_cmd(in_cmd_type cmd, int value) {
     pthread_mutex_unlock( &controls_mutex );
 
   return res;
-#endif
-  return 0;
 }
+#endif
 
 /*** private functions for this plugin below ***/
 /******************************************************************************
@@ -671,7 +698,8 @@ Description.: print a help message to stderr
 Input Value.: -
 Return Value: -
 ******************************************************************************/
-void input_help(void) {
+#if 0
+void help(void) {
   int i;
 
   fprintf(stderr, " ---------------------------------------------------------------\n" \
@@ -703,6 +731,7 @@ void input_help(void) {
                   "                          it up to the driver using the value \"auto\"\n" \
                   " ---------------------------------------------------------------\n\n");
 }
+#endif
 
 /******************************************************************************
 Description.: this thread worker grabs a frame and copies it to the global buffer
@@ -714,10 +743,6 @@ void *cam_thread( void *arg ) {
   pthread_cleanup_push(cam_cleanup, NULL);
 
   while( !pglobal->stop ) {
-
-    while (videoIn->streamingState == STREAMING_PAUSED) {
-        usleep(1); // maybe not the best and FIXME
-    }
 
     /* grab a frame */
     if( uvcGrab(videoIn) < 0 ) {
@@ -748,14 +773,18 @@ void *cam_thread( void *arg ) {
      * Getting JPEGs straight from the webcam, is one of the major advantages of
      * Linux-UVC compatible devices.
      */
+#if 0
     if (videoIn->formatIn == V4L2_PIX_FMT_YUYV) {
       DBG("compressing frame\n");
       pglobal->size = compress_yuyv_to_jpeg(videoIn, pglobal->buf, videoIn->framesizeIn, gquality);
     }
     else {
+#endif
       DBG("copying frame\n");
       pglobal->size = memcpy_picture(pglobal->buf, videoIn->tmpbuffer, videoIn->buf.bytesused);
+#if 0
     }
+#endif
 
 #if 0
     /* motion detection can be done just by comparing the picture size, but it is not very accurate!! */
@@ -800,7 +829,9 @@ void cam_cleanup(void *arg) {
   IPRINT("cleaning up ressources allocated by input thread\n");
 
   /* restore behaviour of the LED to auto */
+#if 0
   input_cmd(IN_CMD_LED_AUTO, 0);
+#endif
 
   close_v4l2(videoIn);
   if (videoIn->tmpbuffer != NULL) free(videoIn->tmpbuffer);
@@ -816,40 +847,23 @@ Input Value.: * control specifies the selected v4l2 control's id
 Return Value: depends in the command, for most cases 0 means no errors and
               -1 signals an error. This is just rule of thumb, not more!
 ******************************************************************************/
-int input_cmd_new(__u32 control, __s32 value, __u32 typecode)
+#if 0
+int input_cmd_new(__u32 control, __s32 value)
 {
     int ret = -1;
     int i = 0;
-    DBG("Requested cmd: %d, type: %d value: %d\n", control, typecode, value);
-    switch (typecode) {
-        case IN_CMD_V4l2: {
-            for (i = 0; i<pglobal->in.parametercount; i++) {
-                if (pglobal->in.in_parameters[i].ctrl.id == control) {
-                    DBG("Found the requested control: %s\n", pglobal->in.in_parameters[i].ctrl.name);
-                    ret = v4l2SetControl(videoIn, control, value);
-                    if (ret == 0) {
-                        pglobal->in.in_parameters[i].value = value;
-                    }
-                    return ret;
-                    break;
-                }
+    for (i = 0; i<pglobal->in.parametercount; i++) {
+        if (pglobal->in.in_parameters[i].ctrl.id == control) {
+            DBG(stderr, "found the requested control: %s\n", pglobal->in.in_parameters[i].ctrl.name);
+            ret = v4l2SetControl(videoIn, control, value);
+            if (ret != -1) {
+                pglobal->in.in_parameters[i].value = value;
+                return ret;
             }
-        } break;
-        case IN_CMD_RESOLUTION: {
-            // the value points to the current formats nth resolution
-            if (value > (pglobal->in.in_formats[pglobal->in.currentFormat].resolutionCount -1)) {
-                DBG("The value is out of range");
-                return -1;
-            }
-            int height = pglobal->in.in_formats[pglobal->in.currentFormat].supportedResolutions[value].height;
-            int width = pglobal->in.in_formats[pglobal->in.currentFormat].supportedResolutions[value].width;
-            ret = setResolution(videoIn, width, height);
-            if (ret == 0) {
-                pglobal->in.in_formats[pglobal->in.currentFormat].currentResolution = value;
-            }
-            return ret;
-        } break;
+            break;
+        }
     }
     return ret;
 }
+#endif
 

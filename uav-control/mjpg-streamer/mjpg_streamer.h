@@ -30,7 +30,7 @@
 #define DBG(...)
 #endif
 
-#define LOG(...) { char _bf[1024] = {0}; snprintf(_bf, sizeof(_bf)-1, __VA_ARGS__); fprintf(stderr, "%s", _bf); syslog(LOG_INFO, "%s", _bf); }
+#define LOG(...) { char _bf[1024] = {0}; snprintf(_bf, sizeof(_bf)-1, __VA_ARGS__); fprintf(stderr, "%s", _bf); }
 
 #include "input.h"
 #include "output.h"
@@ -39,11 +39,13 @@
 typedef struct _globals globals;
 
 /* commands which can be send to mjpg-streamer */
+#if 0
 typedef enum _control_cmd_type control_cmd_type;
 enum _control_cmd_type {
   CONTROL_CMD_UNKNOWN = 0,
   CONTROL_CMD_RECONFIGURE_INPUT
 };
+#endif
 
 struct _globals {
   int stop;
@@ -56,6 +58,13 @@ struct _globals {
   unsigned char *buf;
   int size;
 
+  /* input parameters */
+  input_parameter in_param;
+
+  /* output parameters */
+  output_parameter o_param;
+
+#if 0
   /* input plugin */
   input in;
 
@@ -65,4 +74,8 @@ struct _globals {
 
   /* pointer to control functions */
   int (*control)(int command, char *details);
+#endif
 };
+
+int mjpg_streamer_main(input_parameter *, int);
+

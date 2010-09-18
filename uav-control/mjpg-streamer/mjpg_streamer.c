@@ -34,9 +34,9 @@
 #include <sys/stat.h>
 #include <getopt.h>
 #include <pthread.h>
-// #include <dlfcn.h>
+#include <dlfcn.h>
 #include <fcntl.h>
-// #include <syslog.h>
+#include <syslog.h>
 
 #include "utils.h"
 #include "mjpg_streamer.h"
@@ -44,15 +44,12 @@
 /* globals */
 static globals global;
 
-int input_init(input_parameter *param);
-int input_stop(void);
-int input_run(void);
-
 /******************************************************************************
 Description.: Display a help message
 Input Value.: argv[0] is the program name and the parameter progname
 Return Value: -
 ******************************************************************************/
+#if 0
 void help(char *progname)
 {
   fprintf(stderr, "-----------------------------------------------------------------------\n");
@@ -84,6 +81,7 @@ void help(char *progname)
                   "   %s -i \"/path/to/modules/input_uvc.so\"\n", progname);
   fprintf(stderr, "-----------------------------------------------------------------------\n");
 }
+#endif
 
 /******************************************************************************
 Description.: pressing CTRL+C sends signals to this process instead of just
@@ -93,10 +91,11 @@ Description.: pressing CTRL+C sends signals to this process instead of just
 Input Value.: sig tells us which signal was received
 Return Value: -
 ******************************************************************************/
-#if 0
-void signal_handler(int sig)
+void mjpg_shutdown(int sig)
 {
+#if 0
   int i;
+#endif
 
   /* signal "stop" to threads */
   LOG("setting signal to stop\n");
@@ -105,10 +104,16 @@ void signal_handler(int sig)
 
   /* clean up threads */
   LOG("force cancelation of threads and cleanup ressources\n");
+#if 0
+  global.in.stop();
+#endif
   input_stop();
+
+#if 0
   for(i=0; i<global.outcnt; i++) {
     global.out[i].stop(global.out[i].param.id);
   }
+#endif
   usleep(1000*1000);
 
 #if 0
@@ -132,8 +137,10 @@ void signal_handler(int sig)
     */
     dlclose(global.out[i].handle);
   }
-  DBG("all plugin handles closed\n");
 #endif
+
+  output_stop();
+  DBG("all plugin handles closed\n");
 
   pthread_cond_destroy(&global.db_update);
   pthread_mutex_destroy(&global.db);
@@ -141,8 +148,28 @@ void signal_handler(int sig)
   LOG("done\n");
 
   closelog();
+#if 0
   exit(0);
+#endif
   return;
+}
+
+/******************************************************************************
+Description.:
+Input Value.:
+Return Value:
+******************************************************************************/
+#if 0
+int control(int command, char *details) {
+
+  switch(command) {
+    case CONTROL_CMD_RECONFIGURE_INPUT:
+      printf("will reload input plugin: %s\n", details);
+      break;
+    default:
+      LOG("unknown control command received\n");
+  }
+  return 0;
 }
 #endif
 
@@ -151,37 +178,44 @@ Description.:
 Input Value.:
 Return Value:
 ******************************************************************************/
-int control(int command, char *details) {
-
-  switch(command) {
-    case CONTROL_CMD_RECONFIGURE_INPUT:
-      printf("will reload input plugin: %s\n", details);
-      break;
-    default:
-      // LOG("unknown control command received\n");
-      break;
-  }
-  return 0;
-}
-
-
-/******************************************************************************
-Description.:
-Input Value.:
-Return Value:
-******************************************************************************/
-int mjpg_streamer_main(int argc, char *argv[])
+int mjpg_streamer_main(input_parameter *in_param, int out_port)
 {
-  char *input  = "input_uvc.so --resolution 320x240 --fps 10 --device /dev/video0";
-  char *output[MAX_OUTPUT_PLUGINS];
-  int i;
-  // int daemon=0, i;
-  // size_t tmp=0;
+  /* Check input paramters */
+  if (in_param->dev == NULL || strcmp(in_param->dev, ""))
+  {
+      IPRINT("invalid device given to input plugin\n");
+      return -1;
+  }
+  
+  if (in_param->res_width <= 0 || in_param->res_height <= 0)
+  {
+      IPRINT("invalid resolution dimensions\n");
+      return -1;
+  }
 
-  output[0] = "output_http.so --port 9010";
+  if (in_param->fps < 0)
+  {
+      IPRINT("fps must be greater than zero\n");
+      return -1;
+  }
+
+  if (out_port <= 0)
+  {
+      IPRINT("port must be greater than zero");
+      return -1;
+  }
+
+#if 0
+  char *input  = "input_uvc.so --resolution 640x480 --fps 5 --device /dev/video0";
+  char *output[MAX_OUTPUT_PLUGINS];
+  int daemon=0, i;
+  size_t tmp=0;
+
+  output[0] = "output_http.so --port 8080";
   global.outcnt = 0;
 
   global.control = control;
+#endif
 
 #if 0
   /* parameter parsing */
@@ -250,11 +284,13 @@ int mjpg_streamer_main(int argc, char *argv[])
         return 0;
     }
   }
+#endif
 
   openlog("MJPG-streamer ", LOG_PID|LOG_CONS, LOG_USER);
   //openlog("MJPG-streamer ", LOG_PID|LOG_CONS|LOG_PERROR, LOG_USER);
   syslog(LOG_INFO, "starting application");
 
+#if 0
   /* fork to the background */
   if ( daemon ) {
     LOG("enabling daemon mode");
@@ -266,43 +302,45 @@ int mjpg_streamer_main(int argc, char *argv[])
   global.stop      = 0;
   global.buf       = NULL;
   global.size      = 0;
+#if 0
   global.in.plugin = NULL;
+#endif
 
   /* this mutex and the conditional variable are used to synchronize access to the global picture buffer */
   if( pthread_mutex_init(&global.db, NULL) != 0 ) {
-    // LOG("could not initialize mutex variable\n");
-    // closelog();
-    exit(EXIT_FAILURE);
+    LOG("could not initialize mutex variable\n");
+    closelog();
+    return -1;//exit(EXIT_FAILURE);
   }
   if( pthread_cond_init(&global.db_update, NULL) != 0 ) {
-    // LOG("could not initialize condition variable\n");
-    // closelog();
-    exit(EXIT_FAILURE);
+    LOG("could not initialize condition variable\n");
+    closelog();
+    return -1;//exit(EXIT_FAILURE);
   }
 
   /* ignore SIGPIPE (send by OS if transmitting to closed TCP sockets) */
   signal(SIGPIPE, SIG_IGN);
 
   /* register signal handler for <CTRL>+C in order to clean up */
-#if 0
-  if (signal(SIGINT, signal_handler) == SIG_ERR) {
+  if (signal(SIGINT, mjpg_shutdown) == SIG_ERR) {
     LOG("could not register signal handler\n");
     closelog();
-    exit(EXIT_FAILURE);
+    return -1;//exit(EXIT_FAILURE);
   }
-#endif
 
   /*
    * messages like the following will only be visible on your terminal
    * if not running in daemon mode
    */
-  // LOG("MJPG Streamer Version.: %s\n", SOURCE_VERSION);
+  LOG("MJPG Streamer Version.: %s\n", SOURCE_VERSION);
 
+#if 0
   /* check if at least one output plugin was selected */
   if ( global.outcnt == 0 ) {
     /* no? Then use the default plugin instead */
     global.outcnt = 1;
   }
+#endif
 
 #if 0
   /* open input plugin */
@@ -335,20 +373,35 @@ int mjpg_streamer_main(int argc, char *argv[])
   /* try to find optional command */
   global.in.cmd = dlsym(global.in.handle, "input_cmd");
   global.in.cmd_new = dlsym(global.in.handle, "input_cmd_new");
-#endif
 
   global.in.param.parameter_string = strchr(input, ' ');
   global.in.param.global = &global;
+#endif
 
-  if ( input_init(&global.in.param) ) {
-    // LOG("input_init() return value signals to exit");
-    // closelog();
+  /* Copy over input parameters */
+  strcpy(global.in_param.dev, in_param->dev);
+  global.in_param.res_width = in_param->res_width;
+  global.in_param.res_height = in_param->res_height;
+  global.in_param.fps = in_param->fps;
+
+  global.in_param.global = &global;
+#if 0
+  if ( global.in.init(&global.in.param) ) {
+    LOG("input_init() return value signals to exit");
+    closelog();
     exit(0);
   }
+#endif
 
+  if (input_init(&global.in_param) < 0)
+  {
+      fprintf(stderr, "Error initializing input plugin\n");
+      return -1;
+  }
+
+#if 0
   /* open output plugin */
   for (i=0; i<global.outcnt; i++) {
-#if 0
     tmp = (size_t)(strchr(output[i], ' ')-output[i]);
     global.out[i].plugin = (tmp > 0)?strndup(output[i], tmp):strdup(output[i]);
     global.out[i].handle = dlopen(global.out[i].plugin, RTLD_LAZY);
@@ -377,35 +430,62 @@ int mjpg_streamer_main(int argc, char *argv[])
     }
     /* try to find optional command */
     global.out[i].cmd = dlsym(global.out[i].handle, "output_cmd");
-#endif
 
     global.out[i].param.parameter_string = strchr(output[i], ' ');
     global.out[i].param.global = &global;
     global.out[i].param.id = i;
-    if ( output_init(&global.out[i].param) ) {
-      // LOG("output_init() return value signals to exit");
-      // closelog();
+    if ( global.out[i].init(&global.out[i].param) ) {
+      LOG("output_init() return value signals to exit");
+      closelog();
       exit(0);
     }
   }
+#endif
 
+  global.o_param.portnum = out_port;
+  global.o_param.global = &global;
+
+  if (output_init(&global.o_param) < 0)
+  {
+      fprintf(stderr, "Error initializing output plugin\n");
+      return -1;
+  }
+
+#if 0
   /* start to read the input, push pictures into global buffer */
   DBG("starting input plugin\n");
-  // syslog(LOG_INFO, "starting input plugin");
-  if ( input_run() ) {
-    // LOG("can not run input plugin\n");
-    // closelog();
+  syslog(LOG_INFO, "starting input plugin");
+  if ( global.in.run() ) {
+    LOG("can not run input plugin\n");
+    closelog();
     return 1;
   }
+#endif
 
-  DBG("starting %d output plugin(s)\n", global.outcnt);
-  for(i=0; i<global.outcnt; i++) {
-    // syslog(LOG_INFO, "starting output plugin: %s (ID: %02d)", global.out[i].plugin, global.out[i].param.id);
-    output_run(global.out[i].param.id);
+  if (input_run() < 0)
+  {
+      fprintf(stderr, "Error starting input plugin\n");
+      return -1;
   }
 
+#if 0
+  DBG("starting %d output plugin(s)\n", global.outcnt);
+  for(i=0; i<global.outcnt; i++) {
+    syslog(LOG_INFO, "starting output plugin: %s (ID: %02d)", global.out[i].plugin, global.out[i].param.id);
+    global.out[i].run(global.out[i].param.id);
+  }
+#endif
+
+  if (output_run() < 0)
+  {
+      fprintf(stderr, "Error starting output plugin\n");
+      return -1;
+  }
+
+#if 0
   /* wait for signals */
   pause();
+#endif
 
   return 0;
 }

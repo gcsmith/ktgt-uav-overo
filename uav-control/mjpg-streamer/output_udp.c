@@ -54,15 +54,25 @@
 #include "utils.h"
 #include "mjpg_streamer.h"
 
+#if 0
 #define OUTPUT_PLUGIN_NAME "UDP output plugin"
 #define MAX_ARGUMENTS 32
+#endif
 
 static pthread_t worker;
 static globals *pglobal;
-static int fd, delay; //, max_frame_size;
+
+#if 0
+static int fd, delay, max_frame_size;
 static char *folder = "/tmp";
+#endif
+
+static int max_frame_size;
 static unsigned char *frame=NULL;
+
+#if 0
 static char *command = NULL;
+#endif
 
 // UDP port
 static int port = 0;
@@ -72,7 +82,8 @@ Description.: print a help message
 Input Value.: -
 Return Value: -
 ******************************************************************************/
-void output_help(void) {
+#if 0
+void help(void) {
   fprintf(stderr, " ---------------------------------------------------------------\n" \
                   " Help for output plugin..: "OUTPUT_PLUGIN_NAME"\n" \
                   " ---------------------------------------------------------------\n" \
@@ -83,6 +94,7 @@ void output_help(void) {
                   " [-p | --port ]..........: UDP port to listen for picture requests. UDP message is the filename to save\n\n" \
                   " ---------------------------------------------------------------\n");
 }
+#endif
 
 /******************************************************************************
 Description.: clean up allocated ressources
@@ -103,7 +115,9 @@ void worker_cleanup(void *arg) {
   if (frame != NULL) {
     free(frame);
   }
+#if 0
   close(fd);
+#endif
 }
 
 /******************************************************************************
@@ -113,11 +127,11 @@ Input Value.:
 Return Value: 
 ******************************************************************************/
 void *worker_thread( void *arg ) {
-  int ok = 1, frame_size=0; //, rc = 0;
+  int ok = 1, frame_size=0;//, rc = 0;
 #if 0
   char buffer1[1024] = {0};
-  unsigned char *tmp_framebuffer=NULL;
 #endif
+  unsigned char *tmp_framebuffer=NULL;
 
   /* set cleanup handler to cleanup allocated ressources */
   pthread_cleanup_push(worker_cleanup, NULL);
@@ -129,7 +143,7 @@ void *worker_thread( void *arg ) {
   }
   struct sockaddr_in addr;
   int sd;
-  unsigned int bytes, addr_len=sizeof(addr);
+  int bytes, addr_len=sizeof(addr);
   char udpbuffer[1024] = {0};
   sd = socket(PF_INET, SOCK_DGRAM, 0);
   bzero(&addr, sizeof(addr));
@@ -145,9 +159,7 @@ void *worker_thread( void *arg ) {
 
     // UDP receive ---------------------------------------------
     memset(udpbuffer, 0, sizeof(udpbuffer));
-    fprintf(stderr, "waiting for request\n");
-    bytes = recvfrom(sd, udpbuffer, sizeof(udpbuffer), 0, (struct sockaddr*)&addr, &addr_len);
-    fprintf(stderr, "received from client\n");
+    bytes = recvfrom(sd, udpbuffer, sizeof(udpbuffer), 0, (struct sockaddr*)&addr, (socklen_t *)&addr_len);
     // ---------------------------------------------------------
 	
     DBG("waiting for fresh frame\n");
@@ -156,7 +168,6 @@ void *worker_thread( void *arg ) {
     /* read buffer */
     frame_size = pglobal->size;
 
-#if 0
     /* check if buffer for frame is large enough, increase it if necessary */
     if ( frame_size > max_frame_size ) {
       DBG("increasing buffer size to %d\n", frame_size);
@@ -171,6 +182,7 @@ void *worker_thread( void *arg ) {
       frame = tmp_framebuffer;
     }
 
+#if 0
     /* copy frame to our local buffer now */
     memcpy(frame, pglobal->buf, frame_size);
 #endif
@@ -202,8 +214,7 @@ void *worker_thread( void *arg ) {
 #endif
 
     // send back client's message that came in udpbuffer
-    sendto(sd, pglobal->buf, frame_size, 0, (struct sockaddr*)&addr, sizeof(addr));
-    fprintf(stderr, "transmitted %d bytes\n", frame_size);
+    sendto(sd, /*udpbuffer*/frame, /*bytes*/frame_size, 0, (struct sockaddr*)&addr, sizeof(addr));
 
 #if 0
     /* call the command if user specified one, pass current filename as argument */
@@ -224,12 +235,12 @@ void *worker_thread( void *arg ) {
 	    LOG("command failed (return value %d)\n", rc);
       }
     }
-#endif
 
     /* if specified, wait now */
     if (delay > 0) {
       usleep(1000*delay);
     }
+#endif
   }
 
   // close UDP port
@@ -249,12 +260,18 @@ Description.: this function is called first, in order to initialise
 Input Value.: parameters
 Return Value: 0 if everything is ok, non-zero otherwise
 ******************************************************************************/
-int output_init(output_parameter *param) {
+int output_init(output_parameter *o_param) {
+#if 0
   char *argv[MAX_ARGUMENTS]={NULL};
   int argc=1, i;
+#endif
 
+#if 0
   delay = 0;
+#endif
 
+
+#if 0
   /* convert the single parameter-string to an array of strings */
   argv[0] = OUTPUT_PLUGIN_NAME;
   if ( param->parameter_string != NULL && strlen(param->parameter_string) != 0 ) {
@@ -278,12 +295,16 @@ int output_init(output_parameter *param) {
       }
     }
   }
+#endif
 
+#if 0
   /* show all parameters for DBG purposes */
   for (i=0; i<argc; i++) {
     DBG("argv[%d]=%s\n", i, argv[i]);
   }
+#endif
 
+#if 0
   reset_getopt();
   while(1) {
     int option_index = 0, c=0;
@@ -309,7 +330,7 @@ int output_init(output_parameter *param) {
 
     /* unrecognized option */
     if (c == '?'){
-      output_help();
+      help();
       return 1;
     }
 
@@ -318,7 +339,7 @@ int output_init(output_parameter *param) {
       case 0:
       case 1:
         DBG("case 0,1\n");
-        output_help();
+        help();
         return 1;
         break;
 
@@ -353,12 +374,18 @@ int output_init(output_parameter *param) {
 		break;
 	}
   }
-  
-  pglobal = param->global;
+#endif
 
+  /* Set UDP port */
+  port = o_param->portnum;
+  
+  pglobal = o_param->global;
+
+#if 0
   OPRINT("output folder.....: %s\n", folder);
   OPRINT("delay after save..: %d\n", delay);
    OPRINT("command...........: %s\n", (command==NULL)?"disabled":command);
+#endif
   if (port > 0) {
 	OPRINT("UDP port..........: %d\n", port);
   }
@@ -373,7 +400,7 @@ Description.: calling this function stops the worker thread
 Input Value.: -
 Return Value: always 0
 ******************************************************************************/
-int output_stop(int id) {
+int output_stop(void) {
   DBG("will cancel worker thread\n");
   pthread_cancel(worker);
   return 0;
@@ -384,7 +411,7 @@ Description.: calling this function creates and starts the worker thread
 Input Value.: -
 Return Value: always 0
 ******************************************************************************/
-int output_run(int id) {
+int output_run(void) {
   DBG("launching worker thread\n");
   pthread_create(&worker, 0, worker_thread, NULL);
   pthread_detach(worker);

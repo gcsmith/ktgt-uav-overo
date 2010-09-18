@@ -23,22 +23,25 @@
 #include <linux/types.h>          /* for videodev2.h */
 #include <linux/videodev2.h>
 #define INPUT_PLUGIN_PREFIX " i: "
-#define IPRINT(...) { char _bf[1024] = {0}; snprintf(_bf, sizeof(_bf)-1, __VA_ARGS__); fprintf(stderr, "%s", INPUT_PLUGIN_PREFIX); fprintf(stderr, "%s", _bf); syslog(LOG_INFO, "%s", _bf); }
+#define IPRINT(...) { char _bf[1024] = {0}; snprintf(_bf, sizeof(_bf)-1, __VA_ARGS__); fprintf(stderr, "%s", INPUT_PLUGIN_PREFIX); fprintf(stderr, "%s", _bf); /*syslog(LOG_INFO, "%s", _bf);*/ }
 
 /* parameters for input plugin */
 typedef struct _input_parameter input_parameter;
 struct _input_parameter {
+#if 0
   char *parameter_string;
+#endif
+  char dev[64];
+  int res_width, res_height;
+  int fps;
   struct _globals *global;
 };
 
-
+#if 0
 /* commands which can be send to the input plugin */
 typedef enum _in_cmd_type in_cmd_type;
 enum _in_cmd_type {
-    IN_CMD_V4l2 = 0,
-    IN_CMD_RESOLUTION = 1,
-  IN_CMD_UNKNOWN,
+  IN_CMD_UNKNOWN = 0,
   IN_CMD_HELLO,
   IN_CMD_RESET,
   IN_CMD_RESET_PAN_TILT,
@@ -69,45 +72,37 @@ enum _in_cmd_type {
   IN_CMD_EXPOSURE_SHUTTER_PRIO,
   IN_CMD_EXPOSURE_APERTURE_PRIO
 };
+#endif
 
-typedef struct _input_control input_control;
-struct _input_control {
+#if 0
+//typedef struct _input_control input_control;
+struct input_control{
     struct v4l2_queryctrl ctrl;
     int value;
     struct v4l2_querymenu *menuitems;
     struct v4l2_capability cap;
 };
+#endif
 
-typedef struct _input_resolution input_resolution;
-struct _input_resolution {
-    unsigned int width;
-    unsigned int height;
-};
-
-typedef struct _input_format input_format;
-struct _input_format {
-    struct v4l2_fmtdesc format;
-    input_resolution *supportedResolutions;
-    int resolutionCount;
-    char currentResolution;
-};
-
+#if 0
 /* structure to store variables/functions for input plugin */
 typedef struct _input input;
 struct _input {
   char *plugin;
   void *handle;
   input_parameter param;
-  input_control *in_parameters;
+  struct input_control *in_parameters;
   int parametercount;
-
-  input_format *in_formats;
-  int formatCount;
-  int currentFormat; // holds the current format number
 
     int (*init)(input_parameter *);
     int (*stop)(void);
     int (*run)(void);
     int (*cmd)(int , int);
-    int (*cmd_new)(__u32, __s32, __u32);
+    int (*cmd_new)(__u32, __s32);
 };
+#endif
+
+int input_init(input_parameter *);
+int input_stop(void);
+int input_run(void);
+

@@ -24,10 +24,11 @@
 *******************************************************************************/
 
 #include <stdlib.h>
-#include <errno.h>
 #include "v4l2uvc.h"
 #include "huffman.h"
+#if 0
 #include "dynctrl.h"
+#endif
 
 static int debug = 0;
 static int init_v4l2(struct vdIn *vd);
@@ -60,16 +61,19 @@ int init_videoIn(struct vdIn *vd, char *device, int width,
         fprintf (stderr, " Init v4L2 failed !! exit fatal \n");
         goto error;;
     }
-
-    // enumerating v4l2 controls
+#if 0
     struct v4l2_queryctrl ctrl;
+#endif
+
+#if 0
     pglobal->in.parametercount = 0;
-    pglobal->in.in_parameters = malloc(0 * sizeof(input_control));
-    /* Enumerate the v4l2 controls
-     Try the extended control API first */
+#endif
+
+#if 0
+    /* Try the extended control API first */
     #ifdef V4L2_CTRL_FLAG_NEXT_CTRL
     ctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL;
-    if(0 == IOCTL_VIDEO(vd->fd, VIDIOC_QUERYCTRL, &ctrl)) {
+    if(0 == ioctl(vd->fd, VIDIOC_QUERYCTRL, &ctrl)) {
         do {
             control_readed(vd, &ctrl, pglobal);
             ctrl.id |= V4L2_CTRL_FLAG_NEXT_CTRL;
@@ -82,7 +86,7 @@ int init_videoIn(struct vdIn *vd, char *device, int width,
         int i;
         for(i = V4L2_CID_BASE; i<V4L2_CID_LASTP1; i++) {
             ctrl.id = i;
-            if(IOCTL_VIDEO(vd->fd, VIDIOC_QUERYCTRL, &ctrl) == 0) {
+            if(ioctl(vd->fd, VIDIOC_QUERYCTRL, &ctrl) == 0) {
                 control_readed(vd, &ctrl, pglobal);
             }
         }
@@ -90,67 +94,14 @@ int init_videoIn(struct vdIn *vd, char *device, int width,
         /* Check any custom controls */
         for(i=V4L2_CID_PRIVATE_BASE; ; i++) {
             ctrl.id = i;
-            if(IOCTL_VIDEO(vd->fd, VIDIOC_QUERYCTRL, &ctrl) == 0) {
+            if(ioctl(vd->fd, VIDIOC_QUERYCTRL, &ctrl) == 0) {
                 control_readed(vd, &ctrl, pglobal);
             } else {
                 break;
             }
         }
     }
-
-    // enumerating formats
-    int currentWidth, currentHeight = 0;
-    struct v4l2_format currentFormat;
-    currentFormat.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (IOCTL_VIDEO(vd->fd, VIDIOC_G_FMT, &currentFormat) == 0) {
-        currentWidth = currentFormat.fmt.pix.width;
-        currentHeight = currentFormat.fmt.pix.height;
-        DBG("%Current size: dx%d\n", currentWidth, currentHeight);
-    }
-
-    pglobal->in.in_formats = malloc(0 * sizeof(struct v4l2_fmtdesc));
-    for (pglobal->in.formatCount = 0; 1; pglobal->in.formatCount++) {
-         struct v4l2_fmtdesc fmtdesc;
-         fmtdesc.index = pglobal->in.formatCount;
-         fmtdesc.type  = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-         if (IOCTL_VIDEO(vd->fd, VIDIOC_ENUM_FMT, &fmtdesc) < 0) {
-             break;
-         }
-         pglobal->in.in_formats =
-            (input_format*)realloc(pglobal->in.in_formats, (pglobal->in.formatCount + 1) * sizeof(input_format));
-        memcpy(&pglobal->in.in_formats[pglobal->in.formatCount], &fmtdesc, sizeof(input_format));
-
-        if (fmtdesc.pixelformat == format)
-            pglobal->in.currentFormat = pglobal->in.formatCount;
-
-        DBG("Supported format: %s\n", fmtdesc.description);
-        struct v4l2_frmsizeenum fsenum;
-        fsenum.index = pglobal->in.formatCount;
-        fsenum.pixel_format = fmtdesc.pixelformat;
-        int j = 0;
-        pglobal->in.in_formats[pglobal->in.formatCount].supportedResolutions = malloc(0);
-        pglobal->in.in_formats[pglobal->in.formatCount].resolutionCount = 0;
-        pglobal->in.in_formats[pglobal->in.formatCount].currentResolution = -1;
-        while (1) {
-            fsenum.index = j;
-            j++;
-            if(IOCTL_VIDEO(vd->fd, VIDIOC_ENUM_FRAMESIZES, &fsenum) == 0) {
-                pglobal->in.in_formats[pglobal->in.formatCount].resolutionCount++;
-                pglobal->in.in_formats[pglobal->in.formatCount].supportedResolutions = (input_resolution*)
-                realloc(pglobal->in.in_formats[pglobal->in.formatCount].supportedResolutions, j * sizeof(input_resolution));
-                pglobal->in.in_formats[pglobal->in.formatCount].supportedResolutions[j-1].width = fsenum.discrete.width;
-                pglobal->in.in_formats[pglobal->in.formatCount].supportedResolutions[j-1].height = fsenum.discrete.height;
-                if (format == fmtdesc.pixelformat) {
-                    pglobal->in.in_formats[pglobal->in.formatCount].currentResolution = (j-1);
-                    DBG("\tSupported size with the current format: %dx%d\n", fsenum.discrete.width, fsenum.discrete.height);
-                } else {
-                    DBG("\tSupported size: %dx%d\n", fsenum.discrete.width, fsenum.discrete.height);
-                }
-            } else {
-                break;
-            }
-        }
-     }
+#endif
 
   /* alloc a temp buffer to reconstruct the pict */
   vd->framesizeIn = (vd->width * vd->height << 1);
@@ -177,7 +128,9 @@ int init_videoIn(struct vdIn *vd, char *device, int width,
     goto error;
   return 0;
 error:
+#if 0
   free(pglobal->in.in_parameters);
+#endif
   free(vd->videodevice);
   free(vd->status);
   free(vd->pictName);
@@ -190,13 +143,13 @@ static int init_v4l2(struct vdIn *vd)
   int i;
   int ret = 0;
 
-  if ((vd->fd = OPEN_VIDEO(vd->videodevice, O_RDWR)) == -1) {
+  if ((vd->fd = open(vd->videodevice, O_RDWR)) == -1) {
     perror("ERROR opening V4L interface");
     return -1;
   }
 
   memset(&vd->cap, 0, sizeof(struct v4l2_capability));
-  ret = IOCTL_VIDEO(vd->fd, VIDIOC_QUERYCAP, &vd->cap);
+  ret = ioctl(vd->fd, VIDIOC_QUERYCAP, &vd->cap);
   if (ret < 0) {
     fprintf(stderr, "Error opening device %s: unable to query device.\n", vd->videodevice);
     goto fatal;
@@ -229,7 +182,7 @@ static int init_v4l2(struct vdIn *vd)
   vd->fmt.fmt.pix.height = vd->height;
   vd->fmt.fmt.pix.pixelformat = vd->formatIn;
   vd->fmt.fmt.pix.field = V4L2_FIELD_ANY;
-  ret = IOCTL_VIDEO(vd->fd, VIDIOC_S_FMT, &vd->fmt);
+  ret = ioctl(vd->fd, VIDIOC_S_FMT, &vd->fmt);
   if (ret < 0) {
     fprintf(stderr, "Unable to set format: %d res: %dx%d", vd->formatIn, vd->width, vd->height);
     goto fatal;
@@ -245,7 +198,7 @@ static int init_v4l2(struct vdIn *vd)
      */
     if (vd->formatIn != vd->fmt.fmt.pix.pixelformat) {
         if (vd->formatIn == V4L2_PIX_FMT_MJPEG) {
-            fprintf(stderr, "The inpout device does not supports MJPEG mode\nYou may also try the YUV mode (-yuv option), but it requires a much more CPU power\n");
+            fprintf(stderr, "The inpout device does not supports MJPEG mode\nYou may also try the YUV mode (-yuv option), but it requireses a lot of CPU power\n");
             goto fatal;
         } else if (vd->formatIn == V4L2_PIX_FMT_YUYV) {
             fprintf(stderr, "The input device does not supports YUV mode\n");
@@ -265,7 +218,7 @@ static int init_v4l2(struct vdIn *vd)
   setfps->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   setfps->parm.capture.timeperframe.numerator = 1;
   setfps->parm.capture.timeperframe.denominator = vd->fps;
-  ret = IOCTL_VIDEO(vd->fd, VIDIOC_S_PARM, setfps);
+  ret = ioctl(vd->fd, VIDIOC_S_PARM, setfps);
 
   /*
    * request buffers
@@ -275,7 +228,7 @@ static int init_v4l2(struct vdIn *vd)
   vd->rb.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   vd->rb.memory = V4L2_MEMORY_MMAP;
 
-  ret = IOCTL_VIDEO(vd->fd, VIDIOC_REQBUFS, &vd->rb);
+  ret = ioctl(vd->fd, VIDIOC_REQBUFS, &vd->rb);
   if (ret < 0) {
     perror("Unable to allocate buffers");
     goto fatal;
@@ -289,7 +242,7 @@ static int init_v4l2(struct vdIn *vd)
     vd->buf.index = i;
     vd->buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     vd->buf.memory = V4L2_MEMORY_MMAP;
-    ret = IOCTL_VIDEO(vd->fd, VIDIOC_QUERYBUF, &vd->buf);
+    ret = ioctl(vd->fd, VIDIOC_QUERYBUF, &vd->buf);
     if (ret < 0) {
       perror("Unable to query buffer");
       goto fatal;
@@ -317,7 +270,7 @@ static int init_v4l2(struct vdIn *vd)
     vd->buf.index = i;
     vd->buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     vd->buf.memory = V4L2_MEMORY_MMAP;
-    ret = IOCTL_VIDEO(vd->fd, VIDIOC_QBUF, &vd->buf);
+    ret = ioctl(vd->fd, VIDIOC_QBUF, &vd->buf);
     if (ret < 0) {
       perror("Unable to queue buffer");
       goto fatal;;
@@ -334,27 +287,26 @@ static int video_enable(struct vdIn *vd)
   int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   int ret;
 
-  ret = IOCTL_VIDEO(vd->fd, VIDIOC_STREAMON, &type);
+  ret = ioctl(vd->fd, VIDIOC_STREAMON, &type);
   if (ret < 0) {
     perror("Unable to start capture");
     return ret;
   }
-  vd->streamingState = STREAMING_ON;
+  vd->isstreaming = 1;
   return 0;
 }
 
-static int video_disable(struct vdIn *vd, streaming_state disabledState)
+static int video_disable(struct vdIn *vd)
 {
   int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   int ret;
-  DBG("STopping capture\n");
-  ret = IOCTL_VIDEO(vd->fd, VIDIOC_STREAMOFF, &type);
-  if (ret != 0) {
+
+  ret = ioctl(vd->fd, VIDIOC_STREAMOFF, &type);
+  if (ret < 0) {
     perror("Unable to stop capture");
     return ret;
   }
-  DBG("STopping capture done\n");
-  vd->streamingState = disabledState;
+  vd->isstreaming = 0;
   return 0;
 }
 
@@ -411,15 +363,15 @@ int uvcGrab(struct vdIn *vd)
 #define HEADERFRAME1 0xaf
   int ret;
 
-  if (vd->streamingState == STREAMING_OFF) {
+  if (!vd->isstreaming)
     if (video_enable(vd))
       goto err;
-  }
+
   memset(&vd->buf, 0, sizeof(struct v4l2_buffer));
   vd->buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   vd->buf.memory = V4L2_MEMORY_MMAP;
 
-  ret = IOCTL_VIDEO(vd->fd, VIDIOC_DQBUF, &vd->buf);
+  ret = ioctl(vd->fd, VIDIOC_DQBUF, &vd->buf);
   if (ret < 0) {
     perror("Unable to dequeue buffer");
     goto err;
@@ -458,7 +410,7 @@ int uvcGrab(struct vdIn *vd)
     break;
   }
 
-  ret = IOCTL_VIDEO(vd->fd, VIDIOC_QBUF, &vd->buf);
+  ret = ioctl(vd->fd, VIDIOC_QBUF, &vd->buf);
   if (ret < 0) {
     perror("Unable to requeue buffer");
     goto err;
@@ -473,8 +425,8 @@ err:
 
 int close_v4l2(struct vdIn *vd)
 {
-  if (vd->streamingState == STREAMING_ON)
-    video_disable(vd, STREAMING_OFF);
+  if (vd->isstreaming)
+    video_disable(vd);
   if (vd->tmpbuffer)
     free(vd->tmpbuffer);
   vd->tmpbuffer = NULL;
@@ -490,12 +442,13 @@ int close_v4l2(struct vdIn *vd)
   return 0;
 }
 
+#if 0
 /* return >= 0 ok otherwhise -1 */
 static int isv4l2Control(struct vdIn *vd, int control, struct v4l2_queryctrl *queryctrl) {
   int err =0;
 
   queryctrl->id = control;
-  if ((err= IOCTL_VIDEO(vd->fd, VIDIOC_QUERYCTRL, queryctrl)) < 0) {
+  if ((err= ioctl(vd->fd, VIDIOC_QUERYCTRL, queryctrl)) < 0) {
     //fprintf(stderr, "ioctl querycontrol error %d \n",errno);
     return -1;
   }
@@ -516,7 +469,9 @@ static int isv4l2Control(struct vdIn *vd, int control, struct v4l2_queryctrl *qu
   fprintf(stderr, "contol %s unsupported  \n", (char *) queryctrl->name);
   return -1;
 }
+#endif
 
+#if 0
 int v4l2GetControl(struct vdIn *vd, int control) {
   struct v4l2_queryctrl queryctrl;
   struct v4l2_control control_s;
@@ -527,13 +482,15 @@ int v4l2GetControl(struct vdIn *vd, int control) {
   }
 
   control_s.id = control;
-  if ((err = IOCTL_VIDEO(vd->fd, VIDIOC_G_CTRL, &control_s)) < 0) {
+  if ((err = ioctl(vd->fd, VIDIOC_G_CTRL, &control_s)) < 0) {
     return -1;
   }
 
   return control_s.value;
 }
+#endif
 
+#if 0
 int v4l2SetControl(struct vdIn *vd, int control, int value) {
   struct v4l2_control control_s;
   struct v4l2_queryctrl queryctrl;
@@ -551,14 +508,113 @@ int v4l2SetControl(struct vdIn *vd, int control, int value) {
   if ((value >= min) && (value <= max)) {
     control_s.id = control;
     control_s.value = value;
-    if ((err = IOCTL_VIDEO(vd->fd, VIDIOC_S_CTRL, &control_s)) < 0) {
+    if ((err = ioctl(vd->fd, VIDIOC_S_CTRL, &control_s)) < 0) {
       return -1;
     }
   }
 
   return 0;
 }
+#endif
 
+#if 0
+int v4l2UpControl(struct vdIn *vd, int control) {
+  struct v4l2_control control_s;
+  struct v4l2_queryctrl queryctrl;
+  int min, max, current, step, val_def;
+  int err;
+
+  if (isv4l2Control(vd, control, &queryctrl) < 0)
+    return -1;
+
+  min = queryctrl.minimum;
+  max = queryctrl.maximum;
+  step = queryctrl.step;
+  val_def = queryctrl.default_value;
+  if ( (current = v4l2GetControl(vd, control)) == -1 )
+    return -1;
+
+  current += step;
+
+  //fprintf(stderr, "max %d, min %d, step %d, default %d ,current %d \n",max,min,step,val_def,current);
+  if (current <= max) {
+    control_s.id = control;
+    control_s.value = current;
+    if ((err = ioctl(vd->fd, VIDIOC_S_CTRL, &control_s)) < 0) {
+      return -1;
+    }
+    //fprintf(stderr, "Control name:%s set to value:%d\n", queryctrl.name, control_s.value);
+  } else {
+    //fprintf(stderr, "Control name:%s already has max value:%d \n", queryctrl.name, max);
+    return -1;
+  }
+
+  return 0;
+}
+#endif
+
+#if 0
+int v4l2DownControl(struct vdIn *vd, int control) {
+  struct v4l2_control control_s;
+  struct v4l2_queryctrl queryctrl;
+  int min, max, current, step, val_def;
+  int err;
+
+  if (isv4l2Control(vd, control, &queryctrl) < 0)
+    return -1;
+
+  min = queryctrl.minimum;
+  max = queryctrl.maximum;
+  step = queryctrl.step;
+  val_def = queryctrl.default_value;
+  if ( (current = v4l2GetControl(vd, control)) == -1 )
+    return -1;
+
+  current -= step;
+  //fprintf(stderr, "max %d, min %d, step %d, default %d ,current %d \n",max,min,step,val_def,current);
+
+  if (current >= min) {
+    control_s.id = control;
+    control_s.value = current;
+    if ((err = ioctl(vd->fd, VIDIOC_S_CTRL, &control_s)) < 0) {
+      return -1;
+    }
+    //fprintf(stderr, "Control name:%s set to value:%d\n", queryctrl.name, control_s.value);
+  }
+  else {
+    return -1;
+    //fprintf(stderr, "Control name:%s already has min value:%d \n", queryctrl.name, min);
+  }
+
+  return 0;
+}
+#endif
+
+#if 0
+int v4l2ToggleControl(struct vdIn *vd, int control) {
+  struct v4l2_control control_s;
+  struct v4l2_queryctrl queryctrl;
+  int current;
+  int err;
+
+  if (isv4l2Control(vd, control, &queryctrl) != 1)
+    return -1;
+
+  if ( (current = v4l2GetControl(vd, control)) == -1 )
+    return -1;
+
+  control_s.id = control;
+  control_s.value = !current;
+
+  if ((err = ioctl(vd->fd, VIDIOC_S_CTRL, &control_s)) < 0) {
+    return -1;
+  }
+
+  return 0;
+}
+#endif
+
+#if 0
 int v4l2ResetControl(struct vdIn *vd, int control) {
   struct v4l2_control control_s;
   struct v4l2_queryctrl queryctrl;
@@ -572,22 +628,24 @@ int v4l2ResetControl(struct vdIn *vd, int control) {
   control_s.id = control;
   control_s.value = val_def;
 
-  if ((err = IOCTL_VIDEO(vd->fd, VIDIOC_S_CTRL, &control_s)) < 0) {
+  if ((err = ioctl(vd->fd, VIDIOC_S_CTRL, &control_s)) < 0) {
     return -1;
   }
 
   return 0;
 };
+#endif
 
+#if 0
 void control_readed(struct vdIn *vd,struct v4l2_queryctrl *ctrl, globals *pglobal)
 {
     struct v4l2_control c;
     c.id = ctrl->id;
-    if(IOCTL_VIDEO(vd->fd, VIDIOC_G_CTRL, &c) != -1) {
+    if(ioctl(vd->fd, VIDIOC_G_CTRL, &c) != -1) {
         pglobal->in.in_parameters =
-            (input_control*)realloc(
+            (struct input_control*)realloc(
                                            pglobal->in.in_parameters,
-                                           (pglobal->in.parametercount + 1) * sizeof(input_control));
+                                           (pglobal->in.parametercount + 1) * sizeof(struct input_control));
             memcpy(&pglobal->in.in_parameters[pglobal->in.parametercount].ctrl, ctrl, sizeof(struct v4l2_queryctrl));
             pglobal->in.in_parameters[pglobal->in.parametercount].value = c.value;
             if (ctrl->type == V4L2_CTRL_TYPE_MENU) {
@@ -598,9 +656,9 @@ void control_readed(struct vdIn *vd,struct v4l2_queryctrl *ctrl, globals *pgloba
                     struct v4l2_querymenu qm;
                     qm.id = ctrl->id;
                     qm.index = i;
-                    if(IOCTL_VIDEO(vd->fd, VIDIOC_QUERYMENU, &qm) == 0) {
+                    if(ioctl(vd->fd, VIDIOC_QUERYMENU, &qm) == 0) {
                         memcpy(&pglobal->in.in_parameters[pglobal->in.parametercount].menuitems[i], &qm, sizeof(struct v4l2_querymenu));
-                        DBG("Menu item %d: %s\n", qm.index, qm.name);
+                        DBG("Menu item found for %d: %s %d %d\n", qm.index, qm.name, ctrl->minimum, ctrl->maximum);
                     } else {
                         DBG("Unable to get menu item for %s, index=%d\n", ctrl->name, qm.index);
                     }
@@ -608,59 +666,11 @@ void control_readed(struct vdIn *vd,struct v4l2_queryctrl *ctrl, globals *pgloba
             } else {
                 pglobal->in.in_parameters[pglobal->in.parametercount].menuitems = NULL;
             }
-            DBG("V4L2 parameter found: %s value %d \n", ctrl->name, c.value);
+            DBG("v4l2 parameter found: %s\ value %d %d th \n", ctrl->name, c.value, pglobal->in.parametercount);
             pglobal->in.parametercount++;
     } else {
         DBG("Unable to get the value of %s", ctrl->name);
     }
 };
+#endif
 
-
-int setResolution(struct vdIn *vd, int width, int height)
-{
-    int ret;
-    DBG("setResolution(%d, %d)\n", width, height);
-
-    vd->streamingState = STREAMING_PAUSED;
-    if (video_disable(vd, STREAMING_PAUSED) == 0) {
-        ret = IOCTL_VIDEO(vd->fd, VIDIOC_G_FMT, &vd->fmt);
-        if (ret != 0) {
-            DBG("Unable to get current format\n");
-            return ret;
-        } else {
-            DBG("Current size: %d, %d)\n", vd->fmt.fmt.pix.width, vd->fmt.fmt.pix.height);
-        }
-
-        vd->fmt.fmt.pix.width = width;
-        vd->fmt.fmt.pix.height = height;
-        ret = IOCTL_VIDEO(vd->fd, VIDIOC_S_FMT, &vd->fmt);
-
-        if (ret != 0) {
-            DBG("Unable to set the new format code: %d errno: %d\n", ret, errno);
-            if (errno == EBUSY)
-                DBG("EBUSY: IO is in progress\n");
-        } else {
-            DBG("New resolution is successfully applied\n");
-        }
-
-        if (video_enable(vd) == 0) {
-            DBG("Streaming on again\n");
-            memset(&vd->rb, 0, sizeof(struct v4l2_requestbuffers));
-            vd->rb.count = NB_BUFFER;
-            vd->rb.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            vd->rb.memory = V4L2_MEMORY_MMAP;
-
-            ret = IOCTL_VIDEO(vd->fd, VIDIOC_REQBUFS, &vd->rb);
-            if (ret < 0) {
-                perror("Unable to reallocate buffers");
-            }
-        } else {
-            DBG("Unable to reenable streaming\n");
-            return -1;
-        }
-    } else {
-        DBG("Unable to disable streaming\n");
-        return -1;
-    }
-    return ret;
-}

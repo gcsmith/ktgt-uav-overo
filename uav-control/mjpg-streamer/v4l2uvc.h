@@ -37,13 +37,6 @@
 #include "mjpg_streamer.h"
 #define NB_BUFFER 4
 
-typedef enum _streaming_state streaming_state;
-enum _streaming_state {
-    STREAMING_OFF = 0,
-    STREAMING_ON = 1,
-    STREAMING_PAUSED = 2,
-};
-
 struct vdIn {
     int fd;
     char *videodevice;
@@ -56,7 +49,7 @@ struct vdIn {
     void *mem[NB_BUFFER];
     unsigned char *tmpbuffer;
     unsigned char *framebuffer;
-    streaming_state streamingState;
+    int isstreaming;
     int grabmethod;
     int width;
     int height;
@@ -84,7 +77,9 @@ struct vdIn {
 
 int init_videoIn(struct vdIn *vd, char *device, int width, int height, int fps, int format, int grabmethod, globals *pglobal);
 void control_readed(struct vdIn *vd, struct v4l2_queryctrl *ctrl, globals *pglobal);
-int setResolution(struct vdIn *vd, int width, int height);
+int enum_controls(int vd);
+int save_controls(int vd);
+int load_controls(int vd);
 
 int memcpy_picture(unsigned char *out, unsigned char *buf, int size);
 int uvcGrab(struct vdIn *vd);

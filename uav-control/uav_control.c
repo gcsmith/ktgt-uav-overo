@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include "mjpg-streamer/mjpg_streamer.h"
 #include "razor_imu.h"
 #include "server.h"
 #include "ultrasonic.h"
@@ -208,7 +209,6 @@ void print_usage()
            "  -h [ --help ]         : display this usage message\n");
 }
 
-int mjpg_streamer_main(int argc, char *argv[]); // XXX: remove me!!
 
 // -----------------------------------------------------------------------------
 // Program entry point -- process command line arguments and initialize daemon.
@@ -216,9 +216,13 @@ int main(int argc, char *argv[])
 {
     int index, opt, log_opt, baud = B57600, ret = EXIT_SUCCESS;
     int flag_verbose = 0, flag_daemonize = 0, flag_device = 0, flag_port = 0;
+    int portnum = 0;
     char device[MAX_LEN], port[MAX_LEN];
     imu_data_t imu;
     ultrasonic_data_t ultrasonic;
+
+    /* Input parameters for mjpg-streamer */
+    input_parameter in_param;
 
     static struct option long_options[] = {
         { "daemonize", no_argument,       NULL, 'D' },
@@ -242,13 +246,17 @@ int main(int argc, char *argv[])
             break;
         case 'p':
             strncpy(port, optarg, MAX_LEN);
+            portnum = atoi(port);
             flag_port = 1;
             break;
         case 'v':
             flag_verbose = 1;
             break;
         case 'T':
-            mjpg_streamer_main(argc, argv);
+            in_param.res_width = 320;
+            in_param.res_height = 240;
+            in_param.fps = 20;
+            mjpg_streamer_main(&in_param, portnum);
             break;
         case 'h': // fall through
         case '?':

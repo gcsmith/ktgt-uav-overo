@@ -21,16 +21,20 @@
 *******************************************************************************/
 
 #define OUTPUT_PLUGIN_PREFIX " o: "
-#define OPRINT(...) { char _bf[1024] = {0}; snprintf(_bf, sizeof(_bf)-1, __VA_ARGS__); fprintf(stderr, "%s", OUTPUT_PLUGIN_PREFIX); fprintf(stderr, "%s", _bf); syslog(LOG_INFO, "%s", _bf); }
+#define OPRINT(...) { char _bf[1024] = {0}; snprintf(_bf, sizeof(_bf)-1, __VA_ARGS__); fprintf(stderr, "%s", OUTPUT_PLUGIN_PREFIX); fprintf(stderr, "%s", _bf); /*syslog(LOG_INFO, "%s", _bf);*/ }
 
 /* parameters for output plugin */
 typedef struct _output_parameter output_parameter;
 struct _output_parameter {
+#if 0
   int id;
   char *parameter_string;
+#endif
+  int portnum;
   struct _globals *global;
 };
 
+#if 0
 /* commands which can be send to the input plugin */
 typedef enum _out_cmd_type out_cmd_type;
 enum _out_cmd_type {
@@ -38,21 +42,25 @@ enum _out_cmd_type {
   OUT_CMD_HELLO,
   OUT_CMD_STORE
 };
+#endif
 
+#if 0
 /* structure to store variables/functions for output plugin */
 typedef struct _output output;
 struct _output {
   char *plugin;
   void *handle;
   output_parameter param;
-
   int (*init)(output_parameter *);
   int (*stop)(int);
   int (*run)(int);
   int (*cmd)(int, out_cmd_type, int);
 };
+#endif
 
 int output_init(output_parameter *);
-int output_stop(int id);
-int output_run(int id);
+int output_stop(void);
+int output_run(void);
+#if 0
 int output_cmd(int id, out_cmd_type cmd, int value);
+#endif
