@@ -67,9 +67,6 @@ static int fd, delay, max_frame_size;
 static char *folder = "/tmp";
 #endif
 
-static int max_frame_size;
-static unsigned char *frame=NULL;
-
 #if 0
 static char *command = NULL;
 #endif
@@ -112,9 +109,6 @@ void worker_cleanup(void *arg) {
   first_run = 0;
   OPRINT("cleaning up ressources allocated by worker thread\n");
 
-  if (frame != NULL) {
-    free(frame);
-  }
 #if 0
   close(fd);
 #endif
@@ -127,11 +121,10 @@ Input Value.:
 Return Value: 
 ******************************************************************************/
 void *worker_thread( void *arg ) {
-  int ok = 1, frame_size=0;//, rc = 0;
+  int ok = 1;
 #if 0
   char buffer1[1024] = {0};
 #endif
-  unsigned char *tmp_framebuffer=NULL;
 
   /* set cleanup handler to cleanup allocated ressources */
   pthread_cleanup_push(worker_cleanup, NULL);
@@ -158,13 +151,16 @@ void *worker_thread( void *arg ) {
     DBG("waiting for a UDP message\n");
 
     // UDP receive ---------------------------------------------
+    fprintf(stderr, "waiting for packet\n");
     memset(udpbuffer, 0, sizeof(udpbuffer));
     bytes = recvfrom(sd, udpbuffer, sizeof(udpbuffer), 0, (struct sockaddr*)&addr, (socklen_t *)&addr_len);
+    fprintf(stderr, "received packet\n");
     // ---------------------------------------------------------
 	
     DBG("waiting for fresh frame\n");
     pthread_cond_wait(&pglobal->db_update, &pglobal->db);
 
+#if 0
     /* read buffer */
     frame_size = pglobal->size;
 
@@ -181,6 +177,7 @@ void *worker_thread( void *arg ) {
 
       frame = tmp_framebuffer;
     }
+#endif
 
 #if 0
     /* copy frame to our local buffer now */
@@ -214,7 +211,7 @@ void *worker_thread( void *arg ) {
 #endif
 
     // send back client's message that came in udpbuffer
-    sendto(sd, /*udpbuffer*/frame, /*bytes*/frame_size, 0, (struct sockaddr*)&addr, sizeof(addr));
+    sendto(sd, /*udpbuffer*/pglobal->buf, /*bytes*/pglobal->size, 0, (struct sockaddr*)&addr, sizeof(addr));
 
 #if 0
     /* call the command if user specified one, pass current filename as argument */

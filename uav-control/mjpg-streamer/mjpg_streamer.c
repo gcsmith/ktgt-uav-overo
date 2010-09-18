@@ -181,7 +181,8 @@ Return Value:
 int mjpg_streamer_main(input_parameter *in_param, int out_port)
 {
   /* Check input paramters */
-  if (in_param->dev == NULL || strcmp(in_param->dev, ""))
+    fprintf(stderr, "got device %s\n", in_param->dev);
+  if (in_param->dev == NULL || !strcmp(in_param->dev, ""))
   {
       IPRINT("invalid device given to input plugin\n");
       return -1;

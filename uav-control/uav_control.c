@@ -216,17 +216,20 @@ int main(int argc, char *argv[])
 {
     int index, opt, log_opt, baud = B57600, ret = EXIT_SUCCESS;
     int flag_verbose = 0, flag_daemonize = 0, flag_device = 0, flag_port = 0;
-    int portnum = 0;
+    int flag_vtest = 0;
+    int portnum = 8090;
     char device[MAX_LEN], port[MAX_LEN];
     imu_data_t imu;
     ultrasonic_data_t ultrasonic;
 
     /* Input parameters for mjpg-streamer */
     input_parameter in_param;
+    memset(&in_param, 0, sizeof(in_param));
 
     static struct option long_options[] = {
         { "daemonize", no_argument,       NULL, 'D' },
         { "device",    required_argument, NULL, 'd' },
+        { "port",      required_argument, NULL, 'p' },
         { "verbose",   no_argument,       NULL, 'v' },
         { "vid-test",  no_argument,       NULL, 'T' }, // XXX: remove me!!
         { "help",      no_argument,       NULL, 'h' },
@@ -253,10 +256,7 @@ int main(int argc, char *argv[])
             flag_verbose = 1;
             break;
         case 'T':
-            in_param.res_width = 320;
-            in_param.res_height = 240;
-            in_param.fps = 20;
-            mjpg_streamer_main(&in_param, portnum);
+            flag_vtest = 1;
             break;
         case 'h': // fall through
         case '?':
@@ -268,6 +268,15 @@ int main(int argc, char *argv[])
             assert(!"unhandled case in option handling -- this is an error");
             break;
         }
+    }
+
+    if (flag_vtest) {
+        in_param.res_width = 320;
+        in_param.res_height = 240;
+        in_param.fps = 20;
+        strcpy(in_param.dev, "/dev/video0");
+        fprintf(stderr, "passing %s\n", in_param.dev);
+        mjpg_streamer_main(&in_param, portnum);
     }
 
     if (flag_daemonize) {
