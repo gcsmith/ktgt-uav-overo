@@ -16,26 +16,26 @@
 #include <fcntl.h>
 #include <syslog.h>
 
-#include "../uav-control/mjpg_streamer.h"
-
 void sig_handler(int id)
 {
     // Stop mjpg-streamer
-    mjpg_streamer_stop(0);
+    // mjpg_streamer_stop(0);
 
     exit(0);
 }
 
+int mjpg_streamer_main(int, char *[]);
+
 int main (int argc, char **argv)
 {
-    char *input = "input_uvc.so --resolution 640x480 --fps 15 ";
-    char *output = "output_udp.so --port 2010";
+    // char *input = "input_uvc.so --resolution 640x480 --fps 15 ";
+    // char *output = "output_udp.so --port 2010";
 
     // register CTRL+C to exit
     signal(SIGINT, sig_handler);
 
     // Start mjpg-streamer
-    mjpg_streamer_start(input, argv[1], output);
+    mjpg_streamer_main(argc, argv);
 
     // Wait for signals
     pause();
