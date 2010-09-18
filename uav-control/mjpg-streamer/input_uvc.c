@@ -39,7 +39,7 @@
 #include <pthread.h>
 #include <syslog.h>
 
-#include "utils.h"
+//#include "utils.h"
 //#include "../../mjpg_streamer.h"
 #include "v4l2uvc.h" // this header will includes the ../../mjpg_streamer.h
 #include "huffman.h"

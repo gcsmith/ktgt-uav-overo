@@ -38,7 +38,7 @@
 #include <fcntl.h>
 #include <syslog.h>
 
-#include "utils.h"
+//#include "utils.h"
 #include "mjpg_streamer.h"
 
 /* globals */

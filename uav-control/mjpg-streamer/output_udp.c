@@ -51,7 +51,7 @@
 
 #include <dirent.h>
 
-#include "utils.h"
+//#include "utils.h"
 #include "mjpg_streamer.h"
 
 #if 0
