@@ -12,10 +12,14 @@ CROSS_COMPILE ?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
 CC            = @${CROSS_COMPILE}gcc
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
-OUTPUT_OPTION = -c
 CFLAGS += -Wall -Werror -O2
 
-OBJ_FILES = uav_control.o jpeg_utils.o v4l2uvc.o input_uvc.o output_udp.o mjpg_streamer.o
+OBJ_FILES = uav_control.o \
+			mjpg-streamer/jpeg_utils.o \
+			mjpg-streamer/v4l2uvc.o \
+			mjpg-streamer/input_uvc.o \
+			mjpg-streamer/output_udp.o \
+			mjpg-streamer/mjpg_streamer.o
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
 $(APPNAME) : $(OBJ_FILES)
@@ -27,10 +31,10 @@ $(APPNAME) : $(OBJ_FILES)
 
 %.o : %.c %.d
 	@echo "[CC] $<"
-	$(CC) $(CFLAGS) $(DEP_OUTPUT_OPTION) $(OUTPUT_OPTION) $<
+	$(CC) $(CFLAGS) $(DEP_OUTPUT_OPTION) -c -o $@ $<
 
 clean:
-	@rm -rf $(APPNAME) *.o *.d
+	@rm -rf $(APPNAME) *.o *.d mjpg-streamer/*.o mjpg-streamer/*.d
 
 ifneq ($(DEP_FILES),)
 ifeq ($(strip $(filter clean%, $(MAKECMDGOALS))),)
