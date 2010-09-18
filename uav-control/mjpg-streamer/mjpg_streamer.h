@@ -66,7 +66,3 @@ struct _globals {
   /* pointer to control functions */
   int (*control)(int command, char *details);
 };
-
-int mjpg_streamer_start(char *input, char *device, char *output);
-void mjpg_streamer_stop();
-

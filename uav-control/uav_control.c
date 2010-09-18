@@ -211,6 +211,11 @@ void run_server(serial_data_t *data, const char *port)
     uint32_t cmd_buffer[32];
     char ip4[INET_ADDRSTRLEN];
 
+    union {
+        float f;
+        uint32_t i;
+    } temp;
+
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;
     info.ai_socktype = SOCK_STREAM;
@@ -288,9 +293,9 @@ void run_server(serial_data_t *data, const char *port)
                 // syslog(LOG_INFO, "user requested telemetry -- sending...\n");
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TELEMETRY;
                 pthread_mutex_lock(&data->lock);
-                cmd_buffer[PKT_VTI_YAW]   = *(uint32_t *)&data->angles[0];
-                cmd_buffer[PKT_VTI_PITCH] = *(uint32_t *)&data->angles[1];
-                cmd_buffer[PKT_VTI_ROLL]  = *(uint32_t *)&data->angles[2];
+                temp.f = data->angles[0]; cmd_buffer[PKT_VTI_YAW]   = temp.i;
+                temp.f = data->angles[1]; cmd_buffer[PKT_VTI_PITCH] = temp.i;
+                temp.f = data->angles[2]; cmd_buffer[PKT_VTI_ROLL]  = temp.i;
                 pthread_mutex_unlock(&data->lock);
                 cmd_buffer[PKT_VTI_RSSI]  = read_wlan_rssi(hclient);
                 cmd_buffer[PKT_VTI_ALT]   = 0;  // altitude
@@ -326,6 +331,8 @@ void print_usage()
            "  -h [ --help ]         : display this usage message\n");
 }
 
+int mjpg_streamer_main(int argc, char *argv[]); // XXX: remove me!!
+
 // -----------------------------------------------------------------------------
 // Program entry point -- process command line arguments and initialize daemon.
 int main(int argc, char *argv[])
@@ -339,11 +346,12 @@ int main(int argc, char *argv[])
         { "daemonize", no_argument,       NULL, 'D' },
         { "device",    required_argument, NULL, 'd' },
         { "verbose",   no_argument,       NULL, 'v' },
+        { "vid-test",  no_argument,       NULL, 'T' }, // XXX: remove me!!
         { "help",      no_argument,       NULL, 'h' },
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "Dd:p:vh?";
+    static const char *str = "Dd:p:vTh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
@@ -360,6 +368,9 @@ int main(int argc, char *argv[])
             break;
         case 'v':
             flag_verbose = 1;
+            break;
+        case 'T':
+            mjpg_streamer_main(argc, argv);
             break;
         case 'h': // fall through
         case '?':

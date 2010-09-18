@@ -59,13 +59,30 @@
 
 static pthread_t worker;
 static globals *pglobal;
-static int fd, delay, max_frame_size;
+static int fd, delay; //, max_frame_size;
 static char *folder = "/tmp";
 static unsigned char *frame=NULL;
 static char *command = NULL;
 
 // UDP port
-static int port = 2010;
+static int port = 0;
+
+/******************************************************************************
+Description.: print a help message
+Input Value.: -
+Return Value: -
+******************************************************************************/
+void output_help(void) {
+  fprintf(stderr, " ---------------------------------------------------------------\n" \
+                  " Help for output plugin..: "OUTPUT_PLUGIN_NAME"\n" \
+                  " ---------------------------------------------------------------\n" \
+                  " The following parameters can be passed to this plugin:\n\n" \
+                  " [-f | --folder ]........: folder to save pictures\n" \
+                  " [-d | --delay ].........: delay after saving pictures in ms\n" \
+                  " [-c | --command ].......: execute command after saveing picture\n" \
+                  " [-p | --port ]..........: UDP port to listen for picture requests. UDP message is the filename to save\n\n" \
+                  " ---------------------------------------------------------------\n");
+}
 
 /******************************************************************************
 Description.: clean up allocated ressources
@@ -97,8 +114,10 @@ Return Value:
 ******************************************************************************/
 void *worker_thread( void *arg ) {
   int ok = 1, frame_size=0; //, rc = 0;
-  //char buffer1[1024] = {0};
+#if 0
+  char buffer1[1024] = {0};
   unsigned char *tmp_framebuffer=NULL;
+#endif
 
   /* set cleanup handler to cleanup allocated ressources */
   pthread_cleanup_push(worker_cleanup, NULL);
@@ -110,9 +129,8 @@ void *worker_thread( void *arg ) {
   }
   struct sockaddr_in addr;
   int sd;
-  //int bytes;
-  //socklen_t addr_len=sizeof(addr);
-  //char udpbuffer[1024] = {0};
+  unsigned int bytes, addr_len=sizeof(addr);
+  char udpbuffer[1024] = {0};
   sd = socket(PF_INET, SOCK_DGRAM, 0);
   bzero(&addr, sizeof(addr));
   addr.sin_family = AF_INET;
@@ -123,19 +141,22 @@ void *worker_thread( void *arg ) {
   // -----------------------------------------------------------
     
   while ( ok >= 0 && !pglobal->stop ) {
-    //DBG("waiting for a UDP message\n");
+    DBG("waiting for a UDP message\n");
 
     // UDP receive ---------------------------------------------
-    //memset(udpbuffer, 0, sizeof(udpbuffer));
-    //bytes = recvfrom(sd, udpbuffer, sizeof(udpbuffer), 0, (struct sockaddr*)&addr, &addr_len);
+    memset(udpbuffer, 0, sizeof(udpbuffer));
+    fprintf(stderr, "waiting for request\n");
+    bytes = recvfrom(sd, udpbuffer, sizeof(udpbuffer), 0, (struct sockaddr*)&addr, &addr_len);
+    fprintf(stderr, "received from client\n");
     // ---------------------------------------------------------
 	
-    fprintf(stderr, "waiting for fresh frame on port %d\n", port);
+    DBG("waiting for fresh frame\n");
     pthread_cond_wait(&pglobal->db_update, &pglobal->db);
-    fprintf(stderr, "got frame\n");
+
     /* read buffer */
     frame_size = pglobal->size;
 
+#if 0
     /* check if buffer for frame is large enough, increase it if necessary */
     if ( frame_size > max_frame_size ) {
       DBG("increasing buffer size to %d\n", frame_size);
@@ -152,21 +173,69 @@ void *worker_thread( void *arg ) {
 
     /* copy frame to our local buffer now */
     memcpy(frame, pglobal->buf, frame_size);
+#endif
 
     /* allow others to access the global buffer again */
     pthread_mutex_unlock( &pglobal->db );
 
-    fprintf(stderr, "ready to send datagram\n");
+#if 0
+    /* only save a file if a name came in with the UDP message */
+    if (strlen(udpbuffer) > 0) { 
+      DBG("writing file: %s\n", udpbuffer);
+
+      /* open file for write. Path must pre-exist */
+      if( (fd = open(udpbuffer, O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0 ) {
+	OPRINT("could not open the file %s\n", udpbuffer);
+	return NULL;
+      }
+
+      /* save picture to file */
+      if( write(fd, frame, frame_size) < 0 ) {
+	OPRINT("could not write to file %s\n", udpbuffer);
+	perror("write()");
+	close(fd);
+	return NULL;
+      }
+
+      close(fd);
+    }
+#endif
+
     // send back client's message that came in udpbuffer
-    // sendto(sd, udpbuffer, bytes, 0, (struct sockaddr*)&addr, sizeof(addr));
-    sendto(sd, frame, frame_size, 0, (struct sockaddr*)&addr, sizeof(addr));
-    fprintf(stderr, "datagram sent: %d bytes\n", frame_size);
+    sendto(sd, pglobal->buf, frame_size, 0, (struct sockaddr*)&addr, sizeof(addr));
+    fprintf(stderr, "transmitted %d bytes\n", frame_size);
+
+#if 0
+    /* call the command if user specified one, pass current filename as argument */
+    if ( command != NULL ) {
+      memset(buffer1, 0, sizeof(buffer1));
+
+      /* udpbuffer still contains the filename, pass it to the command as parameter */
+      snprintf(buffer1, sizeof(buffer1), "%s \"%s\"", command, udpbuffer);
+      DBG("calling command %s", buffer1);
+
+      /* in addition provide the filename as environment variable */
+      if ( (rc = setenv("MJPG_FILE", udpbuffer, 1)) != 0) {
+	    LOG("setenv failed (return value %d)\n", rc);
+      }
+
+      /* execute the command now */
+      if ( (rc = system(buffer1)) != 0) {
+	    LOG("command failed (return value %d)\n", rc);
+      }
+    }
+#endif
+
+    /* if specified, wait now */
+    if (delay > 0) {
+      usleep(1000*delay);
+    }
   }
 
   // close UDP port
   if (port > 0)
 	close(sd);
-  fprintf(stderr, "port closed\n");
+
   /* cleanup now */
   pthread_cleanup_pop(1);
 
@@ -182,7 +251,7 @@ Return Value: 0 if everything is ok, non-zero otherwise
 ******************************************************************************/
 int output_init(output_parameter *param) {
   char *argv[MAX_ARGUMENTS]={NULL};
-  int argc=1;
+  int argc=1, i;
 
   delay = 0;
 
@@ -202,12 +271,17 @@ int output_init(output_parameter *param) {
           argv[argc] = strdup(token);
           argc++;
           if (argc >= MAX_ARGUMENTS) {
-            fprintf(stderr, "ERROR: too many arguments to output plugin\n");
+            OPRINT("ERROR: too many arguments to output plugin\n");
             return 1;
           }
         }
       }
     }
+  }
+
+  /* show all parameters for DBG purposes */
+  for (i=0; i<argc; i++) {
+    DBG("argv[%d]=%s\n", i, argv[i]);
   }
 
   reset_getopt();
@@ -235,7 +309,7 @@ int output_init(output_parameter *param) {
 
     /* unrecognized option */
     if (c == '?'){
-      //help();
+      output_help();
       return 1;
     }
 
@@ -244,7 +318,7 @@ int output_init(output_parameter *param) {
       case 0:
       case 1:
         DBG("case 0,1\n");
-        //help();
+        output_help();
         return 1;
         break;
 
@@ -302,7 +376,6 @@ Return Value: always 0
 int output_stop(int id) {
   DBG("will cancel worker thread\n");
   pthread_cancel(worker);
-  fprintf(stderr, "Output canceling worker thread.\n");
   return 0;
 }
 
@@ -315,7 +388,6 @@ int output_run(int id) {
   DBG("launching worker thread\n");
   pthread_create(&worker, 0, worker_thread, NULL);
   pthread_detach(worker);
-  fprintf(stderr, "Output starting worker thread.\n");
   return 0;
 }
 
