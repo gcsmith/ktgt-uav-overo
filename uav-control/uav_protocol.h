@@ -3,8 +3,8 @@
 // Garrett Smith 2010
 // -----------------------------------------------------------------------------
 
-#ifndef UAV_PROTOCOL__H_
-#define UAV_PROTOCOL__H_
+#ifndef _UAV_PROTOCOL__H_
+#define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
 #define IDENT_VERSION   0x00000001  // software version
@@ -39,5 +39,5 @@
 #define PKT_VTI_BATT    6   // battery percentage remaining
 #define PKT_VTI_SIZE    sizeof(uint32_t) * 7
 
-#endif // UAV_PROTOCOL__H_
+#endif // _UAV_PROTOCOL__H_
 

@@ -3,7 +3,6 @@
 // Garrett Smith 2010
 // -----------------------------------------------------------------------------
 
-#define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -18,23 +17,15 @@
 #include <getopt.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <termios.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include "uav_protocol.h"
+#include "razor_imu.h"
+#include "ultrasonic.h"
 
 #define MAX_LEN 64
-
-typedef struct serial_data
-{
-    int hdev;               // file descriptor for serial device
-    pthread_t hthrd;        // serial thread object
-    pthread_mutex_t lock;   // critical section for serial data
-    float angles[3];        // orientation angles from IMU
-    unsigned long sample;
-} serial_data_t;
 
 // -----------------------------------------------------------------------------
 // Perform any necessary signal handling. Does nothing useful at the moment.
@@ -114,94 +105,7 @@ uint32_t read_wlan_rssi(int sock)
 }
 
 // -----------------------------------------------------------------------------
-void *serial_thread(void *thread_args)
-{
-    serial_data_t *data = (serial_data_t *)thread_args;
-    char buff[128], num_buff[16], *ptr;
-    int nb, i, data_idx = 0, num_idx = 0;
-    float temp_data[3];
-
-    // XXX: rewrite me -- I can barely make sense of what I wrote here
-    for (;;) {
-        ptr = buff;
-        while (0 < (nb = read(data->hdev, ptr, buff + sizeof(buff) - ptr))) {
-            // process characters as they arrive
-            for (i = 0; i < nb; i++) {
-                switch (ptr[i]) {
-                case '\n':
-                    num_buff[num_idx++] = '\0';
-                    temp_data[data_idx++] = strtof(num_buff, NULL);
-                    if (data_idx == 3) {
-                        pthread_mutex_lock(&data->lock);
-                        data->angles[0] = temp_data[0];
-                        data->angles[1] = temp_data[1];
-                        data->angles[2] = temp_data[2];
-                        data->sample++;
-                        pthread_mutex_unlock(&data->lock);
-                        data_idx = 0;
-                    }
-                    num_idx = 0;
-                    break;
-                case '!': case 'A': case 'N': case 'G': case ':':
-                    data_idx = 0;
-                    num_idx = 0;
-                    break;
-                case ',':
-                    num_buff[num_idx++] = '\0';
-                    temp_data[data_idx++] = strtof(num_buff, NULL);
-                    num_idx = 0;
-                    break;
-                default:
-                    // number or prefix, keep going...
-                    num_buff[num_idx++] = ptr[i];
-                    break;
-                }
-            }
-            ptr += nb;
-        }
-    }
-
-    pthread_exit(NULL);
-}
-
-// -----------------------------------------------------------------------------
-void initialize_serial(const char *device, int baud, serial_data_t *data)
-{
-    int rc;
-    struct termios term_opt;
-
-    memset((char *)data, 0, sizeof(serial_data_t));
-
-    // attempt to open the specified serial device for binary RW
-    if (0 > (data->hdev = open(device, O_RDWR | O_NOCTTY | O_NDELAY))) {
-        syslog(LOG_ERR, "unable to open IMU UART");
-        exit(EXIT_FAILURE);
-    }
-
-    // clear flags and get current attributes
-    fcntl(data->hdev, F_SETFL, 0);
-    tcgetattr(data->hdev, &term_opt);
-
-    // set the baud rate, local line ownership, and enable receiver
-    cfsetispeed(&term_opt, baud);
-    cfsetospeed(&term_opt, baud);
-    term_opt.c_cflag |= (CLOCAL | CREAD);
-    tcsetattr(data->hdev, TCSANOW, &term_opt);
-
-    if (0 != (rc = pthread_mutex_init(&data->lock, NULL))) {
-        syslog(LOG_ERR, "error creating serial mutex (%d)", rc);
-        exit(EXIT_FAILURE);
-    }
-
-    void *arg = (void *)data;
-    if (0 != (rc = pthread_create(&data->hthrd, NULL, serial_thread, arg))) {
-        syslog(LOG_ERR, "error creating serial thread (%d)", rc);
-        exit(EXIT_FAILURE);
-    }
-}
-
-// -----------------------------------------------------------------------------
-void run_server(serial_data_t *data, const char *port)
+void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
 {
     struct sockaddr_storage addr;
     struct sockaddr_in *sa;
@@ -292,13 +196,19 @@ void run_server(serial_data_t *data, const char *port)
             case CLIENT_REQ_TELEMETRY:
                 // syslog(LOG_INFO, "user requested telemetry -- sending...\n");
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TELEMETRY;
-                pthread_mutex_lock(&data->lock);
-                temp.f = data->angles[0]; cmd_buffer[PKT_VTI_YAW]   = temp.i;
-                temp.f = data->angles[1]; cmd_buffer[PKT_VTI_PITCH] = temp.i;
-                temp.f = data->angles[2]; cmd_buffer[PKT_VTI_ROLL]  = temp.i;
-                pthread_mutex_unlock(&data->lock);
+
+                pthread_mutex_lock(&imu->lock);
+                temp.f = imu->angles[0]; cmd_buffer[PKT_VTI_YAW]   = temp.i;
+                temp.f = imu->angles[1]; cmd_buffer[PKT_VTI_PITCH] = temp.i;
+                temp.f = imu->angles[2]; cmd_buffer[PKT_VTI_ROLL]  = temp.i;
+                pthread_mutex_unlock(&imu->lock);
+
                 cmd_buffer[PKT_VTI_RSSI]  = read_wlan_rssi(hclient);
-                cmd_buffer[PKT_VTI_ALT]   = 0;  // altitude
+
+                pthread_mutex_unlock(&us->lock);
+                cmd_buffer[PKT_VTI_ALT] = us->height;
+                pthread_mutex_unlock(&us->lock);
+
                 cmd_buffer[PKT_VTI_BATT]  = 100;  // battery
                 send(hclient, (void *)cmd_buffer, PKT_VTI_SIZE, 0);
                 break;
@@ -337,10 +247,11 @@ int mjpg_streamer_main(int argc, char *argv[]); // XXX: remove me!!
 // Program entry point -- process command line arguments and initialize daemon.
 int main(int argc, char *argv[])
 {
-    int index, opt, log_opt, baud = B57600;
+    int index, opt, log_opt, baud = B57600, ret = EXIT_SUCCESS;
     int flag_verbose = 0, flag_daemonize = 0, flag_device = 0, flag_port = 0;
     char device[MAX_LEN], port[MAX_LEN];
-    serial_data_t serial;
+    imu_data_t imu;
+    ultrasonic_data_t ultrasonic;
 
     static struct option long_options[] = {
         { "daemonize", no_argument,       NULL, 'D' },
@@ -399,7 +310,6 @@ int main(int argc, char *argv[])
         strncpy(device, "/dev/ttyS0", MAX_LEN);
     }
     syslog(LOG_INFO, "opening and configuring device '%s'\n", device);
-    initialize_serial(device, baud, &serial);
 
     if (!flag_port) {
         // set default port number if unspecified
@@ -407,13 +317,29 @@ int main(int argc, char *argv[])
     }
     syslog(LOG_INFO, "opening network socket on port %s\n", port);
 
+    // attempt to initialize imu communication
+    if (!imu_init(device, baud, &imu)) {
+        syslog(LOG_ERR, "failed to initialize IMU");
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
+
+    // attempt to initialize ultrasonic communication
+    if (!ultrasonic_init(146, &ultrasonic)) {
+        syslog(LOG_ERR, "failed to initialize ultrasonic");
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
+
     // server entry point
-    run_server(&serial, port);
+    run_server(&imu, &ultrasonic, port);
 
     // perform cleanup
+cleanup:
     pthread_exit(NULL);
-    pthread_mutex_destroy(&serial.lock);
-    close(serial.hdev);
+    ultrasonic_shutdown(&ultrasonic);
+    imu_shutdown(&imu);
+    close(ultrasonic.fd);
     syslog(LOG_INFO, "process terminating");
     closelog();
     return EXIT_SUCCESS;

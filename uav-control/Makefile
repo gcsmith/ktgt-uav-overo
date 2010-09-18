@@ -12,9 +12,11 @@ CROSS_COMPILE ?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
 CC            = @${CROSS_COMPILE}gcc
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
-CFLAGS += -Wall -Werror -O2
+CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE
 
 OBJ_FILES = uav_control.o \
+			razor_imu.o \
+			ultrasonic.o \
 			mjpg-streamer/jpeg_utils.o \
 			mjpg-streamer/v4l2uvc.o \
 			mjpg-streamer/input_uvc.o \
