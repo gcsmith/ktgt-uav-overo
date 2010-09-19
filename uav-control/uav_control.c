@@ -83,6 +83,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
     int hsock, hclient, rc;
     uint32_t cmd_buffer[32];
     uint32_t *big_buffer = NULL;
+    uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
     unsigned long buff_sz = 0, cam_size = 0;
     char ip4[INET_ADDRSTRLEN];
     const char *cam_data;
@@ -167,6 +168,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_LANDING;
+                cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 break;
             case CLIENT_REQ_TELEMETRY:
@@ -210,6 +212,39 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 send(hclient, (void *)big_buffer, cam_size + PKT_BASE_LENGTH, 0);
                 fprintf(stderr, "send frame size %lu, pkt size %lu\n",
                         cam_size, cam_size + PKT_BASE_LENGTH);
+                break;
+            case CLIENT_REQ_SET_CTL_MODE:
+                // interpret client's request for input mode change
+                switch (cmd_buffer[PKT_VCM_TYPE])
+                {
+                case VCM_TYPE_RADIO:
+                    fprintf(stderr, "switching to radio control\n");
+                    vcm_type = VCM_TYPE_RADIO;
+                    vcm_axes = VCM_AXIS_ALL; // all axes radio controlled
+                    break;
+                case VCM_TYPE_AUTO:
+                    fprintf(stderr, "switching to autonomous control\n");
+                    vcm_type = VCM_TYPE_AUTO;
+                    vcm_axes = VCM_AXIS_ALL; // all axes autonomously controlled
+                    break;
+                case VCM_TYPE_MIXED:
+                    fprintf(stderr, "switching to remote control mode\n");
+                    vcm_type = VCM_TYPE_MIXED;
+                    vcm_axes = cmd_buffer[PKT_VCM_AXES] & VCM_AXIS_ALL;
+                    break;
+                default:
+                    fprintf(stderr, "bad control mode requested. ignoring\n");
+                    cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
+                    cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
+                    send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
+                    continue;
+                }
+
+                cmd_buffer[PKT_COMMAND]  = SERVER_ACK_SET_CTL_MODE;
+                cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
+                cmd_buffer[PKT_VCM_TYPE] = vcm_type;
+                cmd_buffer[PKT_VCM_AXES] = vcm_axes;
+                send(hclient, (void *)cmd_buffer, PKT_VCM_LENGTH, 0);
                 break;
             default:
                 syslog(LOG_ERR, "invalid client command (%d)",
