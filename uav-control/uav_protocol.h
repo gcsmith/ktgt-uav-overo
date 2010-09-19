@@ -16,7 +16,7 @@
 #define SERVER_ACK_TAKEOFF      2   // acknowledge request to take off
 #define SERVER_ACK_LANDING      3   // acknowledge request to land
 #define SERVER_ACK_TELEMETRY    4   // acknowledge request for telemetry (+data)
-#define SERVER_MJPG_FRAME       5   // transmit a single frame of video
+#define SERVER_ACK_MJPG_FRAME   5   // transmit a single frame of video
 
 // Packet commands from client to server
 
@@ -24,20 +24,30 @@
 #define CLIENT_REQ_TAKEOFF      1   // command the helicopter to take off
 #define CLIENT_REQ_LANDING      2   // command the helicopter to land
 #define CLIENT_REQ_TELEMETRY    3   // state, orientation, altitude, battery
+#define CLIENT_REQ_MJPG_FRAME   4
 
 // General packet offsets
 
-#define PKT_COMMAND     0
+#define PKT_COMMAND         0
+#define PKT_LENGTH          1
+#define PKT_BASE            2
+#define PKT_BASE_LENGTH     (sizeof(uint32_t) * PKT_BASE)
+
+// Remote Client Identification packet offsets
+
+#define PKT_RCI_MAGIC       PKT_BASE + 0
+#define PKT_RCI_VERSION     PKT_BASE + 1
+#define PKT_RCI_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 2))
 
 // Vehicle Telemetry Info packet offsets
 
-#define PKT_VTI_YAW     1   // yaw angle in degrees
-#define PKT_VTI_PITCH   2   // pitch angle in degrees
-#define PKT_VTI_ROLL    3   // roll angle in degrees
-#define PKT_VTI_RSSI    4   // single strength in dBm
-#define PKT_VTI_ALT     5   // altitude in inches
-#define PKT_VTI_BATT    6   // battery percentage remaining
-#define PKT_VTI_SIZE    sizeof(uint32_t) * 7
+#define PKT_VTI_YAW         PKT_BASE + 0   // yaw angle in degrees
+#define PKT_VTI_PITCH       PKT_BASE + 1   // pitch angle in degrees
+#define PKT_VTI_ROLL        PKT_BASE + 2   // roll angle in degrees
+#define PKT_VTI_RSSI        PKT_BASE + 3   // single strength in dBm
+#define PKT_VTI_ALT         PKT_BASE + 4   // altitude in inches
+#define PKT_VTI_BATT        PKT_BASE + 5   // battery percentage remaining
+#define PKT_VTI_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 6))
 
 #endif // _UAV_PROTOCOL__H_
 

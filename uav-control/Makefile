@@ -18,6 +18,7 @@ OBJ_FILES = uav_control.o \
 			razor_imu.o \
 			server.o \
 			ultrasonic.o \
+			video_uvc.o \
 			mjpg-streamer/jpeg_utils.o \
 			mjpg-streamer/v4l2uvc.o \
 			mjpg-streamer/input_uvc.o \

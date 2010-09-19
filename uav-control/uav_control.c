@@ -18,11 +18,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "mjpg-streamer/mjpg_streamer.h"
+
 #include "razor_imu.h"
 #include "server.h"
 #include "ultrasonic.h"
 #include "uav_protocol.h"
+#include "video_uvc.h"
 
 #define MAX_LEN 64
 
@@ -81,7 +82,10 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
     socklen_t addr_sz = sizeof(addr);
     int hsock, hclient, rc;
     uint32_t cmd_buffer[32];
+    uint32_t *big_buffer = NULL;
+    unsigned long buff_sz = 0, cam_size = 0;
     char ip4[INET_ADDRSTRLEN];
+    const char *cam_data;
 
     union {
         float f;
@@ -126,19 +130,21 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
         syslog(LOG_INFO, "established connection to client (%s)", ip4);
 
         // send request for client identification
-        cmd_buffer[0] = SERVER_REQ_IDENT;
-        send(hclient, (void *)cmd_buffer, sizeof(int) * 1, 0);
+        cmd_buffer[PKT_COMMAND] = SERVER_REQ_IDENT;
+        cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
+        send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
 
         if (1 > recv(hclient, (void *)cmd_buffer, 32, 0)) {
             syslog(LOG_INFO, "read failed -- client disconnected?");
             goto client_disconnect;
         }
 
-        if ((cmd_buffer[0] != CLIENT_ACK_IDENT) ||
-            (cmd_buffer[1] != IDENT_MAGIC) ||
-            (cmd_buffer[2] != IDENT_VERSION)) {
-            syslog(LOG_INFO, "unexpected client response (c:%x, m:%x, v:%x)",
-                   cmd_buffer[0], cmd_buffer[1], cmd_buffer[2]);
+        if ((cmd_buffer[PKT_COMMAND] != CLIENT_ACK_IDENT) ||
+            (cmd_buffer[PKT_LENGTH] != PKT_RCI_LENGTH) ||
+            (cmd_buffer[PKT_RCI_MAGIC] != IDENT_MAGIC) ||
+            (cmd_buffer[PKT_RCI_VERSION] != IDENT_VERSION)) {
+            syslog(LOG_INFO, "unexpected client response (c:%x s:%x m:%x v:%x)",
+                   cmd_buffer[0], cmd_buffer[1], cmd_buffer[2], cmd_buffer[3]);
             goto client_disconnect;
         }
         syslog(LOG_INFO, "client provided valid identification");
@@ -149,21 +155,24 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 syslog(LOG_INFO, "read failed -- client disconnected?");
                 goto client_disconnect;
             }
+            fprintf(stderr, "packet received\n");
 
-            switch (cmd_buffer[0]) {
+            switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
-                cmd_buffer[0] = SERVER_ACK_TAKEOFF;
-                send(hclient, (void *)cmd_buffer, sizeof(int) * 1, 0);
+                cmd_buffer[PKT_COMMAND] = SERVER_ACK_TAKEOFF;
+                cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
+                send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 break;
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
-                cmd_buffer[0] = SERVER_ACK_LANDING;
-                send(hclient, (void *)cmd_buffer, sizeof(int) * 1, 0);
+                cmd_buffer[PKT_COMMAND] = SERVER_ACK_LANDING;
+                send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 break;
             case CLIENT_REQ_TELEMETRY:
                 // syslog(LOG_INFO, "user requested telemetry -- sending...\n");
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TELEMETRY;
+                cmd_buffer[PKT_LENGTH]  = PKT_VTI_LENGTH;
 
                 pthread_mutex_lock(&imu->lock);
                 temp.f = imu->angles[0]; cmd_buffer[PKT_VTI_YAW]   = temp.i;
@@ -178,12 +187,36 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 pthread_mutex_unlock(&us->lock);
 
                 cmd_buffer[PKT_VTI_BATT]  = 100;  // battery
-                send(hclient, (void *)cmd_buffer, PKT_VTI_SIZE, 0);
+                send(hclient, (void *)cmd_buffer, PKT_VTI_LENGTH, 0);
+                break;
+            case CLIENT_REQ_MJPG_FRAME:
+                fprintf(stderr, "client requested frame... waiting\n");
+
+                // safely lock and copy the jpeg image to our output buffer
+                video_lock(&cam_data, &cam_size);
+                if (buff_sz < (cam_size + PKT_BASE_LENGTH))
+                {
+                    free(big_buffer);
+                    buff_sz = cam_size + PKT_BASE_LENGTH;
+                    big_buffer = (uint32_t *)malloc(buff_sz);
+                }
+
+                memcpy(&big_buffer[PKT_BASE], cam_data, cam_size);
+                video_unlock();
+
+                // now send out the entire jpeg frame
+                big_buffer[PKT_COMMAND] = SERVER_ACK_MJPG_FRAME;
+                big_buffer[PKT_LENGTH]  = cam_size + PKT_BASE_LENGTH;
+                send(hclient, (void *)big_buffer, cam_size + PKT_BASE_LENGTH, 0);
+                fprintf(stderr, "send frame size %lu, pkt size %lu\n",
+                        cam_size, cam_size + PKT_BASE_LENGTH);
                 break;
             default:
-                syslog(LOG_ERR, "invalid client command (%d)", cmd_buffer[0]);
-                cmd_buffer[0] = SERVER_ACK_IGNORED;
-                send(hclient, (void *)cmd_buffer, sizeof(int) * 1, 0);
+                syslog(LOG_ERR, "invalid client command (%d)",
+                       cmd_buffer[PKT_COMMAND]);
+                cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
+                cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
+                send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 goto client_disconnect;
             }
         }
@@ -215,44 +248,46 @@ void print_usage()
 int main(int argc, char *argv[])
 {
     int index, opt, log_opt, baud = B57600, ret = EXIT_SUCCESS;
-    int flag_verbose = 0, flag_daemonize = 0, flag_device = 0, flag_port = 0;
+    int flag_verbose = 0, flag_daemonize = 0;
+    int flag_v4l = 0, flag_stty = 0, flag_port = 0;
     int flag_vtest = 0;
     int portnum = 8090;
-    char device[MAX_LEN], port[MAX_LEN];
+    char stty_dev[MAX_LEN], v4l_dev[MAX_LEN], port[MAX_LEN];
     imu_data_t imu;
     ultrasonic_data_t ultrasonic;
 
-    /* Input parameters for mjpg-streamer */
-    input_parameter in_param;
-    memset(&in_param, 0, sizeof(in_param));
-
     static struct option long_options[] = {
-        { "daemonize", no_argument,       NULL, 'D' },
-        { "device",    required_argument, NULL, 'd' },
-        { "port",      required_argument, NULL, 'p' },
-        { "verbose",   no_argument,       NULL, 'v' },
-        { "vid-test",  no_argument,       NULL, 'T' }, // XXX: remove me!!
-        { "help",      no_argument,       NULL, 'h' },
+        { "daemonize",  no_argument,       NULL, 'D' },
+        { "stty_dev",   required_argument, NULL, 's' },
+        { "v4l_dev",    required_argument, NULL, 'v' },
+        { "port",       required_argument, NULL, 'p' },
+        { "vid-test",   no_argument,       NULL, 'T' }, // XXX: remove me!!
+        { "verbose",    no_argument,       NULL, 'V' },
+        { "help",       no_argument,       NULL, 'h' },
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "Dd:p:vTh?";
+    static const char *str = "DVs:v:p:vTh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
         case 'D':
             flag_daemonize = 1;
             break;
-        case 'd':
-            strncpy(device, optarg, MAX_LEN);
-            flag_device = 1;
+        case 's':
+            strncpy(stty_dev, optarg, MAX_LEN);
+            flag_stty = 1;
+            break;
+        case 'v':
+            strncpy(v4l_dev, optarg, MAX_LEN);
+            flag_v4l = 1;
             break;
         case 'p':
             strncpy(port, optarg, MAX_LEN);
             portnum = atoi(port);
             flag_port = 1;
             break;
-        case 'v':
+        case 'V':
             flag_verbose = 1;
             break;
         case 'T':
@@ -270,15 +305,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (flag_vtest) {
-        in_param.res_width = 320;
-        in_param.res_height = 240;
-        in_param.fps = 20;
-        strcpy(in_param.dev, "/dev/video0");
-        fprintf(stderr, "passing %s\n", in_param.dev);
-        mjpg_streamer_main(&in_param, portnum);
-    }
-
     if (flag_daemonize) {
         // run as a background process
         daemonize();
@@ -289,11 +315,17 @@ int main(int argc, char *argv[])
     openlog("uav", log_opt, LOG_DAEMON);
     syslog(LOG_INFO, "uav-control initialized");
 
-    if (!flag_device) {
+    if (!flag_stty) {
         // set default device to UART1 if unspecified
-        strncpy(device, "/dev/ttyS0", MAX_LEN);
+        strncpy(stty_dev, "/dev/ttyS0", MAX_LEN);
     }
-    syslog(LOG_INFO, "opening and configuring device '%s'\n", device);
+    syslog(LOG_INFO, "opening and configuring stty device '%s'\n", stty_dev);
+
+    if (!flag_v4l) {
+        // set default device to video0 if unspecified
+        strncpy(v4l_dev, "/dev/video0", MAX_LEN);
+    }
+    syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
 
     if (!flag_port) {
         // set default port number if unspecified
@@ -302,7 +334,7 @@ int main(int argc, char *argv[])
     syslog(LOG_INFO, "opening network socket on port %s\n", port);
 
     // attempt to initialize imu communication
-    if (!imu_init(device, baud, &imu)) {
+    if (!imu_init(stty_dev, baud, &imu)) {
         syslog(LOG_ERR, "failed to initialize IMU");
         ret = EXIT_FAILURE;
         goto cleanup;
@@ -313,6 +345,10 @@ int main(int argc, char *argv[])
         syslog(LOG_ERR, "failed to initialize ultrasonic");
         ret = EXIT_FAILURE;
         goto cleanup;
+    }
+
+    if (flag_vtest) {
+        video_init(v4l_dev, 320, 240, 15);
     }
 
     // server entry point
