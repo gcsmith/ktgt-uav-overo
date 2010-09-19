@@ -235,23 +235,26 @@ void print_usage()
 {
     printf("usage: uav_control [options]\n\n"
            "Program options:\n"
-           "  -D [ --daemonize ]    : run as a background process\n"
-           "  -d [ --device ] arg   : specify serial device for IMU\n"
-           "  -p [ --port ] arg     : specify port for network socket\n"
-           "  -v [ --verbose ]      : enable verbose logging\n"
-           "  -h [ --help ]         : display this usage message\n");
+           "  -D [ --daemonize ]      : run as a background process\n"
+           "  -s [ --stty_dev ] arg   : specify serial device for IMU\n"
+           "  -v [ --v4l_dev ] arg    : specify video device for webcam\n"
+           "  -p [ --port ] arg       : specify port for network socket\n"
+           "  -x [ --width ] arg      : specify resolution width for webcam\n"
+           "  -y [ --height ] arg     : specify resolution height for webcam\n"
+           "  -f [ --framerate ] arg  : specify capture framerate for webcam\n"
+           "  -N [ --null-video ] arg : do not capture video from webcam\n"
+           "  -v [ --verbose ]        : enable verbose logging\n"
+           "  -h [ --help ]           : display this usage message\n");
 }
-
 
 // -----------------------------------------------------------------------------
 // Program entry point -- process command line arguments and initialize daemon.
 int main(int argc, char *argv[])
 {
     int index, opt, log_opt, baud = B57600, ret = EXIT_SUCCESS;
-    int flag_verbose = 0, flag_daemonize = 0;
+    int flag_verbose = 0, flag_daemonize = 0, flag_nullvideo = 0;
     int flag_v4l = 0, flag_stty = 0, flag_port = 0;
-    int flag_vtest = 0;
-    int portnum = 8090;
+    int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
     char stty_dev[MAX_LEN], v4l_dev[MAX_LEN], port[MAX_LEN];
     imu_data_t imu;
     ultrasonic_data_t ultrasonic;
@@ -261,13 +264,16 @@ int main(int argc, char *argv[])
         { "stty_dev",   required_argument, NULL, 's' },
         { "v4l_dev",    required_argument, NULL, 'v' },
         { "port",       required_argument, NULL, 'p' },
-        { "vid-test",   no_argument,       NULL, 'T' }, // XXX: remove me!!
+        { "width",      required_argument, NULL, 'x' },
+        { "height",     required_argument, NULL, 'y' },
+        { "framerate",  required_argument, NULL, 'f' },
+        { "null-video", no_argument,       NULL, 'N' },
         { "verbose",    no_argument,       NULL, 'V' },
         { "help",       no_argument,       NULL, 'h' },
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "DVs:v:p:vTh?";
+    static const char *str = "Ds:v:p:x:y:f:NVh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
@@ -284,14 +290,23 @@ int main(int argc, char *argv[])
             break;
         case 'p':
             strncpy(port, optarg, MAX_LEN);
-            portnum = atoi(port);
+            arg_port = atoi(port);
             flag_port = 1;
+            break;
+        case 'x':
+            arg_width = atoi(optarg);
+            break;
+        case 'y':
+            arg_height = atoi(optarg);
+            break;
+        case 'f':
+            arg_fps = atoi(optarg);
             break;
         case 'V':
             flag_verbose = 1;
             break;
-        case 'T':
-            flag_vtest = 1;
+        case 'N':
+            flag_nullvideo = 1;
             break;
         case 'h': // fall through
         case '?':
@@ -347,8 +362,8 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    if (flag_vtest) {
-        video_init(v4l_dev, 320, 240, 15);
+    if (!flag_nullvideo) {
+        video_init(v4l_dev, arg_width, arg_height, arg_fps);
     }
 
     // server entry point
