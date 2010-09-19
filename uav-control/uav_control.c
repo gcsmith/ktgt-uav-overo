@@ -83,10 +83,10 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
     int hsock, hclient, rc;
     uint32_t cmd_buffer[32];
     uint32_t *big_buffer = NULL;
+    unsigned long buff_sz = 0;
     uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
-    unsigned long buff_sz = 0, cam_size = 0;
     char ip4[INET_ADDRSTRLEN];
-    const char *cam_data;
+    video_data vid_data;
 
     union {
         float f;
@@ -195,23 +195,27 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 fprintf(stderr, "client requested frame... waiting\n");
 
                 // safely lock and copy the jpeg image to our output buffer
-                video_lock(&cam_data, &cam_size);
-                if (buff_sz < (cam_size + PKT_BASE_LENGTH))
+                video_lock(&vid_data);
+                if (buff_sz < (vid_data.length + PKT_MJPG_LENGTH))
                 {
                     free(big_buffer);
-                    buff_sz = cam_size + PKT_BASE_LENGTH;
+                    buff_sz = vid_data.length + PKT_MJPG_LENGTH;
                     big_buffer = (uint32_t *)malloc(buff_sz);
                 }
 
-                memcpy(&big_buffer[PKT_BASE], cam_data, cam_size);
+                memcpy(&big_buffer[PKT_MJPG_IMG], vid_data.data, vid_data.length);
                 video_unlock();
 
                 // now send out the entire jpeg frame
                 big_buffer[PKT_COMMAND] = SERVER_ACK_MJPG_FRAME;
-                big_buffer[PKT_LENGTH]  = cam_size + PKT_BASE_LENGTH;
-                send(hclient, (void *)big_buffer, cam_size + PKT_BASE_LENGTH, 0);
+                big_buffer[PKT_LENGTH]  = vid_data.length + PKT_MJPG_LENGTH;
+                big_buffer[PKT_MJPG_WIDTH] = vid_data.width;
+                big_buffer[PKT_MJPG_HEIGHT] = vid_data.height;
+                big_buffer[PKT_MJPG_FPS] = vid_data.fps;
+                
+                send(hclient, (void *)big_buffer, vid_data.length + PKT_MJPG_LENGTH, 0);
                 fprintf(stderr, "send frame size %lu, pkt size %lu\n",
-                        cam_size, cam_size + PKT_BASE_LENGTH);
+                        vid_data.length, vid_data.length + PKT_BASE_LENGTH);
                 break;
             case CLIENT_REQ_SET_CTL_MODE:
                 // interpret client's request for input mode change

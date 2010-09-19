@@ -154,13 +154,18 @@ int video_init(const char *dev, int width, int height, int fps)
   return 1;
 }
 
-void video_lock(const char **data, unsigned long *length)
+void video_lock(video_data *vdata)
 {
     // pthread_cond_wait(&global.db_update, &global.db);
     pthread_mutex_lock(&global.db);
 
-    *length = (unsigned long)global.size;
-    *data = (const char *)global.buf;
+    vdata->length = (unsigned long)global.size;
+    vdata->data = (const char *)global.buf;
+
+    vdata->width = global.in_param.res_width;
+    vdata->height = global.in_param.res_height;
+
+    vdata->fps = global.in_param.fps;
 }
 
 void video_unlock()

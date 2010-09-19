@@ -51,6 +51,14 @@
 #define PKT_VTI_BATT        PKT_BASE + 5   // battery percentage remaining
 #define PKT_VTI_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 6))
 
+// MJPG Frame Info packet offsets
+
+#define PKT_MJPG_WIDTH      PKT_BASE + 0   // frame width
+#define PKT_MJPG_HEIGHT     PKT_BASE + 1   // frame height
+#define PKT_MJPG_FPS        PKT_BASE + 2   // frame rate
+#define PKT_MJPG_IMG        PKT_BASE + 3   // frame
+#define PKT_MJPG_LENGTH     (sizeof(uint32_t) * (PKT_BASE + 3))
+
 // Vehicle Control Mode packet offsets
 
 #define VCM_TYPE_RADIO      0x00000000      // fully radio controlled
