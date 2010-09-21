@@ -11,8 +11,9 @@
 
 typedef struct imu_data
 {
+    int running;
     int fd;                 // file descriptor for serial device
-    pthread_t hthrd;        // serial thread object
+    pthread_t thread;       // serial thread object
     pthread_mutex_t lock;   // critical section for serial data
     float angles[3];        // orientation angles from IMU
     unsigned long sample;

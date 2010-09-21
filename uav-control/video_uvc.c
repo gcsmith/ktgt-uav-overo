@@ -4,8 +4,8 @@
 #include "video_uvc.h"
 
 globals global;
-static struct vdIn *videoIn;
-static pthread_t cam;
+static struct vdIn *g_videoin;
+static pthread_t g_camthrd;
 
 void *cam_input_thread( void *arg ) {
   /* set cleanup handler to cleanup allocated ressources */
@@ -15,12 +15,12 @@ void *cam_input_thread( void *arg ) {
   while( !pglobal->stop ) {
 
     /* grab a frame */
-    if( uvcGrab(videoIn) < 0 ) {
+    if( uvcGrab(g_videoin) < 0 ) {
       IPRINT("Error grabbing frames\n");
       exit(EXIT_FAILURE);
     }
 
-    DBG("received frame of size: %d\n", videoIn->buf.bytesused);
+    DBG("received frame of size: %d\n", g_videoin->buf.bytesused);
 
     /*
      * Workaround for broken, corrupted frames:
@@ -30,7 +30,7 @@ void *cam_input_thread( void *arg ) {
      * corrupted frames are smaller.
      */
 #if 0
-    if ( videoIn->buf.bytesused < minimum_size ) {
+    if ( g_videoin->buf.bytesused < minimum_size ) {
       DBG("dropping too small frame, assuming it as broken\n");
       continue;
     }
@@ -46,14 +46,14 @@ void *cam_input_thread( void *arg ) {
      * Linux-UVC compatible devices.
      */
 #if 0
-    if (videoIn->formatIn == V4L2_PIX_FMT_YUYV) {
+    if (g_videoin->formatIn == V4L2_PIX_FMT_YUYV) {
       DBG("compressing frame\n");
-      pglobal->size = compress_yuyv_to_jpeg(videoIn, pglobal->buf, videoIn->framesizeIn, gquality);
+      pglobal->size = compress_yuyv_to_jpeg(g_videoin, pglobal->buf, g_videoin->framesizeIn, gquality);
     }
     else {
 #endif
       DBG("copying frame\n");
-      pglobal->size = memcpy_picture(pglobal->buf, videoIn->tmpbuffer, videoIn->buf.bytesused);
+      pglobal->size = memcpy_picture(pglobal->buf, g_videoin->tmpbuffer, g_videoin->buf.bytesused);
 #if 0
     }
 #endif
@@ -73,8 +73,8 @@ void *cam_input_thread( void *arg ) {
     DBG("waiting for next frame\n");
 
     /* only use usleep if the fps is below 5, otherwise the overhead is too long */
-    if ( videoIn->fps < 5 ) {
-      usleep(1000*1000/videoIn->fps);
+    if ( g_videoin->fps < 5 ) {
+      usleep(1000*1000/g_videoin->fps);
     }
   }
 
@@ -82,6 +82,25 @@ void *cam_input_thread( void *arg ) {
   // pthread_cleanup_pop(1);
 
   return NULL;
+}
+
+void video_lock(video_data *vdata)
+{
+    pthread_cond_wait(&global.db_update, &global.db);
+
+    vdata->length = (unsigned long)global.size;
+    vdata->data = (const char *)global.buf;
+
+    vdata->width = global.in_param.res_width;
+    vdata->height = global.in_param.res_height;
+
+    vdata->fps = global.in_param.fps;
+}
+
+void video_unlock()
+{
+    // allow others to access the global buffer again
+    pthread_mutex_unlock(&global.db);
 }
 
 int video_init(const char *dev, int width, int height, int fps)
@@ -118,12 +137,12 @@ int video_init(const char *dev, int width, int height, int fps)
   pglobal = &global;
 
   /* allocate webcam datastructure */
-  videoIn = malloc(sizeof(struct vdIn));
-  if ( videoIn == NULL ) {
-    IPRINT("not enough memory for videoIn\n");
+  g_videoin = malloc(sizeof(struct vdIn));
+  if ( g_videoin == NULL ) {
+    IPRINT("not enough memory for g_videoin\n");
     return -1; //exit(EXIT_FAILURE);
   }
-  memset(videoIn, 0, sizeof(struct vdIn));
+  memset(g_videoin, 0, sizeof(struct vdIn));
 
   /* display the parsed values */
   IPRINT("Using V4L2 device.: %s\n", dev);
@@ -136,41 +155,39 @@ int video_init(const char *dev, int width, int height, int fps)
     IPRINT("JPEG Quality......: %d\n", gquality);
 #endif
   /* open video device and prepare data structure */
-  if (init_videoIn(videoIn, (char *)dev, width, height, fps, format, 1, pglobal) < 0) {
+  if (init_videoIn(g_videoin, (char *)dev, width, height, fps, format, 1, pglobal) < 0) {
     IPRINT("init_VideoIn failed\n");
     //closelog();
     return -1; //exit(EXIT_FAILURE);
   }
 
-  pglobal->buf = malloc(videoIn->framesizeIn);
+  pglobal->buf = malloc(g_videoin->framesizeIn);
   if (pglobal->buf == NULL) {
     fprintf(stderr, "could not allocate memory in input_run()\n");
     return -1; //exit(EXIT_FAILURE);
   }
 
-  pthread_create(&cam, 0, cam_input_thread, pglobal);
-  pthread_detach(cam);
+  pthread_create(&g_camthrd, 0, cam_input_thread, pglobal);
+  pthread_detach(g_camthrd);
 
   return 1;
 }
 
-void video_lock(video_data *vdata)
+void video_shutdown(void)
 {
-    // pthread_cond_wait(&global.db_update, &global.db);
-    pthread_mutex_lock(&global.db);
+    global.stop = 1;
+    pthread_cancel(g_camthrd);
 
-    vdata->length = (unsigned long)global.size;
-    vdata->data = (const char *)global.buf;
+    pthread_cond_destroy(&global.db_update);
+    pthread_mutex_destroy(&global.db);
 
-    vdata->width = global.in_param.res_width;
-    vdata->height = global.in_param.res_height;
+    close_v4l2(g_videoin);
 
-    vdata->fps = global.in_param.fps;
-}
-
-void video_unlock()
-{
-    // allow others to access the global buffer again
-    pthread_mutex_unlock(&global.db);
+    if (NULL != g_videoin->tmpbuffer)
+        free(g_videoin->tmpbuffer);
+    if (NULL != g_videoin)
+        free(g_videoin);
+    if (NULL != global.buf)
+        free(global.buf);
 }
 

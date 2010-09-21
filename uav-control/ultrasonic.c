@@ -23,7 +23,7 @@ static void *gpio_rd_thread(void *thread_args)
     fd_set rdset;
     int rc = 0, last_sec = 0, last_usec = 0;
 
-    for (;;) {
+    while (data->running) {
         // wait for IO to become ready using select
         for (;;) {
             FD_ZERO(&rdset);
@@ -92,6 +92,9 @@ int ultrasonic_init(int gpio, ultrasonic_data_t *data)
     void *arg;
     int rc;
 
+    memset(data, 0, sizeof(ultrasonic_data_t));
+    data->running = 1;
+
     // open the gpio-event device node
     data->fd = open("/dev/gpio-event", 0);
     if (data->fd < 0) {
@@ -121,7 +124,7 @@ int ultrasonic_init(int gpio, ultrasonic_data_t *data)
     }
 
     arg = (void *)data;
-    if (0 != (rc = pthread_create(&data->hthrd, NULL, gpio_rd_thread, arg))) {
+    if (0 != (rc = pthread_create(&data->thread, NULL, gpio_rd_thread, arg))) {
         syslog(LOG_ERR, "error creating serial thread (%d)", rc);
         return 0;
     }
@@ -132,6 +135,8 @@ int ultrasonic_init(int gpio, ultrasonic_data_t *data)
 // -----------------------------------------------------------------------------
 void ultrasonic_shutdown(ultrasonic_data_t *data)
 {
+    data->running = 0;
+    pthread_cancel(data->thread);
     pthread_mutex_destroy(&data->lock);
     close(data->fd);
 }

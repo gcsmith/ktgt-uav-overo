@@ -20,7 +20,7 @@ static void *imu_rd_thread(void *thread_args)
     float temp_data[3];
 
     // XXX: rewrite me -- I can barely make sense of what I wrote here
-    for (;;) {
+    while (data->running) {
         ptr = buff;
         while (0 < (nb = read(data->fd, ptr, buff + sizeof(buff) - ptr))) {
             // process characters as they arrive
@@ -70,6 +70,7 @@ int imu_init(const char *device, int baud, imu_data_t *data)
     struct termios term_opt;
 
     memset((char *)data, 0, sizeof(imu_data_t));
+    data->running = 1;
 
     // attempt to open the specified serial device for binary RW
     if (0 > (data->fd = open(device, O_RDWR | O_NOCTTY | O_NDELAY))) {
@@ -93,7 +94,7 @@ int imu_init(const char *device, int baud, imu_data_t *data)
     }
 
     arg = (void *)data;
-    if (0 != (rc = pthread_create(&data->hthrd, NULL, imu_rd_thread, arg))) {
+    if (0 != (rc = pthread_create(&data->thread, NULL, imu_rd_thread, arg))) {
         syslog(LOG_ERR, "error creating serial thread (%d)", rc);
         return 0;
     }
@@ -104,6 +105,7 @@ int imu_init(const char *device, int baud, imu_data_t *data)
 // -----------------------------------------------------------------------------
 void imu_shutdown(imu_data_t *data)
 {
+    pthread_cancel(data->thread);
     pthread_mutex_destroy(&data->lock);
     close(data->fd);
 }

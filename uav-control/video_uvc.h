@@ -20,6 +20,7 @@ struct _video_data
 };
 
 int video_init(const char *dev, int width, int height, int fps);
+void video_shutdown(void);
 void video_lock(video_data *vdata);
 void video_unlock();
 

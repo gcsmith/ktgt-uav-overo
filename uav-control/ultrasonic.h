@@ -10,8 +10,9 @@
 
 typedef struct ultrasonic_data
 {
+    int running;
     int fd;
-    pthread_t hthrd;
+    pthread_t thread;
     pthread_mutex_t lock;
     unsigned int height;
     unsigned long sample;
