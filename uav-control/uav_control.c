@@ -311,6 +311,11 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     vcm_type = VCM_TYPE_MIXED;
                     vcm_axes = cmd_buffer[PKT_VCM_AXES] & VCM_AXIS_ALL;
                     break;
+                case VCM_TYPE_KILL:
+                    fprintf(stderr, "switching to killswitch enabled mode\n");
+                    vcm_type = VCM_TYPE_KILL;
+                    vcm_axes = VCM_AXIS_ALL; // all axes disabled
+                    break;
                 default:
                     fprintf(stderr, "bad control mode requested. ignoring\n");
                     cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
