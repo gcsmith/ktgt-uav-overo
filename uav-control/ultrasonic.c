@@ -94,6 +94,7 @@ int ultrasonic_init(int gpio, ultrasonic_data_t *data)
 
     memset(data, 0, sizeof(ultrasonic_data_t));
     data->running = 1;
+    data->gpio = gpio;
 
     // open the gpio-event device node
     data->fd = open("/dev/gpio-event", 0);
@@ -135,9 +136,16 @@ int ultrasonic_init(int gpio, ultrasonic_data_t *data)
 // -----------------------------------------------------------------------------
 void ultrasonic_shutdown(ultrasonic_data_t *data)
 {
+    GPIO_EventMonitor_t monitor;
+
     data->running = 0;
     pthread_cancel(data->thread);
     pthread_mutex_destroy(&data->lock);
+
+    monitor.gpio = data->gpio;
+    monitor.onOff = 0;
+    ioctl(data->fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor);
+
     close(data->fd);
 }
 

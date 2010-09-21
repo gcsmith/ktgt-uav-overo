@@ -12,6 +12,7 @@ typedef struct ultrasonic_data
 {
     int running;
     int fd;
+    int gpio;
     pthread_t thread;
     pthread_mutex_t lock;
     unsigned int height;

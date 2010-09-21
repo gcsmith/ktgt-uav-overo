@@ -157,7 +157,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
     socklen_t addr_sz = sizeof(addr);
     int hsock, hclient, rc;
     uint32_t cmd_buffer[32];
-    uint32_t *big_buffer = NULL;
+    uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
     uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
     char ip4[INET_ADDRSTRLEN];
@@ -273,22 +273,22 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 video_lock(&vid_data);
                 if (buff_sz < (vid_data.length + PKT_MJPG_LENGTH))
                 {
-                    free(big_buffer);
+                    free(jpg_buf);
                     buff_sz = vid_data.length + PKT_MJPG_LENGTH;
-                    big_buffer = (uint32_t *)malloc(buff_sz);
+                    jpg_buf = (uint32_t *)malloc(buff_sz);
                 }
 
-                memcpy(&big_buffer[PKT_MJPG_IMG], vid_data.data, vid_data.length);
+                memcpy(&jpg_buf[PKT_MJPG_IMG], vid_data.data, vid_data.length);
                 video_unlock();
 
                 // now send out the entire jpeg frame
-                big_buffer[PKT_COMMAND] = SERVER_ACK_MJPG_FRAME;
-                big_buffer[PKT_LENGTH]  = vid_data.length + PKT_MJPG_LENGTH;
-                big_buffer[PKT_MJPG_WIDTH] = vid_data.width;
-                big_buffer[PKT_MJPG_HEIGHT] = vid_data.height;
-                big_buffer[PKT_MJPG_FPS] = vid_data.fps;
+                jpg_buf[PKT_COMMAND] = SERVER_ACK_MJPG_FRAME;
+                jpg_buf[PKT_LENGTH]  = vid_data.length + PKT_MJPG_LENGTH;
+                jpg_buf[PKT_MJPG_WIDTH] = vid_data.width;
+                jpg_buf[PKT_MJPG_HEIGHT] = vid_data.height;
+                jpg_buf[PKT_MJPG_FPS] = vid_data.fps;
                 
-                send(hclient, (void *)big_buffer, vid_data.length + PKT_MJPG_LENGTH, 0);
+                send(hclient, (void *)jpg_buf, vid_data.length + PKT_MJPG_LENGTH, 0);
                 fprintf(stderr, "send frame size %lu, pkt size %lu\n",
                         vid_data.length, vid_data.length + PKT_BASE_LENGTH);
                 break;
