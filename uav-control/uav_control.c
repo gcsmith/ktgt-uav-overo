@@ -24,8 +24,52 @@
 #include "ultrasonic.h"
 #include "uav_protocol.h"
 #include "video_uvc.h"
+#include "pwm_interface.h"
 
 #define MAX_LEN 64
+
+static void *pwm_thread(void *thread_args)
+{
+    struct timespec req;
+    struct timespec rem;
+    int i;
+
+    int fd_pwm8 = open("/dev/pwm8", 0);
+    int fd_pwm9 = open("/dev/pwm9", 0);
+    int fd_pwm10 = open("/dev/pwm10", 0);
+    int fd_pwm11 = open("/dev/pwm11", 0);
+
+    for (;;) {
+
+        for (i = 2; i < 13; i++) {
+            ioctl(fd_pwm8, PWM_IOCT_DUTY, i);
+            if (!(i % 2)) ioctl(fd_pwm9, PWM_IOCT_DUTY, i);
+            if (!(i % 3)) ioctl(fd_pwm10, PWM_IOCT_DUTY, i);
+            if (!(i % 4)) ioctl(fd_pwm11, PWM_IOCT_DUTY, i);
+            req.tv_sec = 0;
+            req.tv_nsec = 80000000;
+            fprintf(stderr, "pwm up tick\n");
+            nanosleep(&req, &rem);
+        }
+        for (i = 13; i >= 2; i--) {
+            ioctl(fd_pwm8, PWM_IOCT_DUTY, i);
+            if (!(i % 2)) ioctl(fd_pwm9, PWM_IOCT_DUTY, i);
+            if (!(i % 3)) ioctl(fd_pwm10, PWM_IOCT_DUTY, i);
+            if (!(i % 4)) ioctl(fd_pwm11, PWM_IOCT_DUTY, i);
+            req.tv_sec = 0;
+            req.tv_nsec = 80000000;
+            fprintf(stderr, "pwm down tick\n");
+            nanosleep(&req, &rem);
+        }
+    }
+
+    close(fd_pwm11);
+    close(fd_pwm10);
+    close(fd_pwm9);
+    close(fd_pwm8);
+
+    pthread_exit(NULL);
+}
 
 // -----------------------------------------------------------------------------
 // Perform any necessary signal handling. Does nothing useful at the moment.
@@ -298,6 +342,7 @@ int main(int argc, char *argv[])
     char stty_dev[MAX_LEN], v4l_dev[MAX_LEN], port_str[MAX_LEN];
     imu_data_t imu;
     ultrasonic_data_t ultrasonic;
+    pthread_t pwm_tid;
 
     static struct option long_options[] = {
         { "daemonize",  no_argument,       NULL, 'D' },
@@ -407,6 +452,11 @@ int main(int argc, char *argv[])
 
     if (!flag_nullvideo) {
         video_init(v4l_dev, arg_width, arg_height, arg_fps);
+    }
+
+    if (0 != pthread_create(&pwm_tid, NULL, pwm_thread, NULL)) {
+        fprintf(stderr, "failed to create pwm thread\n");
+        goto cleanup;
     }
 
     // server entry point

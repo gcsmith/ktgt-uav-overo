@@ -71,7 +71,7 @@ static void *gpio_rd_thread(void *thread_args)
                 pthread_mutex_lock(&data->lock);
                 // taken from maxbotix from spec: 147 us == 1 inch
                 data->height = delta / 147;
-                printf("gpio%d: delta: %d\n", event.gpio, delta);
+                // printf("gpio%d: delta: %d\n", event.gpio, delta);
                 pthread_mutex_unlock(&data->lock);
             }
             last_usec = 0;
