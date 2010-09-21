@@ -1,7 +1,6 @@
 DESCRIPTION = "PWM kernel module for UAV senior design project"
 HOMEPAGE = "http://www.ce.rit.edu"
 SECTION = "base"
-PRIORITY = "optional"
 LICENSE = "GPL"
 RDEPENDS = "kernel (${KERNEL_VERSION})"
 DEPENDS = "virtual/kernel"

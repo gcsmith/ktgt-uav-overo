@@ -1,7 +1,8 @@
 DESCRIPTION = "Control software for UAV senior design project"
 HOMEPAGE = "http://www.ce.rit.edu"
+SECTION = "base"
 LICENSE = "GPL"
-DEPENDS = ""
+DEPENDS = "gpio-event-module pwm-module"
 
 PV="svn${SRCDATE}"
 PR = "r0"
@@ -17,6 +18,10 @@ S = "${WORKDIR}/uav-control"
 SRCREV = "HEAD"
 
 inherit update-rc.d
+
+do_stage () {
+    install -m 0644 ${S}/uav_protocol.h ${STAGING_INCDIR}/
+}
 
 do_install () {
     install -d ${D}${sbindir}/

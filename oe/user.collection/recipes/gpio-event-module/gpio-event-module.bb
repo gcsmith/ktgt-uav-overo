@@ -1,6 +1,6 @@
 DESCRIPTION = "Linux Driver for Detecting GPIO events"
+HOMEPAGE = "http://www.davehylands.com"
 SECTION = "base"
-PRIORITY = "optional"
 LICENSE = "GPL"
 RDEPENDS = "kernel (${KERNEL_VERSION})"
 DEPENDS = "virtual/kernel"
@@ -26,10 +26,10 @@ do_stage () {
 
 do_install() {  
     install -d ${D}${base_libdir}/modules/${KERNEL_VERSION}/extra/
-        install -m 0644 ${S}/gpio-event-drv.ko ${D}${base_libdir}/modules/${KERNEL_VERSION}/extra/
+    install -m 0644 ${S}/gpio-event-drv.ko ${D}${base_libdir}/modules/${KERNEL_VERSION}/extra/
 
-        install -d ${D}${sysconfdir}/init.d/
-        install -m 0755 ${S}/gpio-event.init ${D}${sysconfdir}/init.d/gpio-event
+    install -d ${D}${sysconfdir}/init.d/
+    install -m 0755 ${S}/gpio-event.init ${D}${sysconfdir}/init.d/gpio-event
 }
 
 PACKAGES = "${PN}"
