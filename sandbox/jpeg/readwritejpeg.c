@@ -384,7 +384,7 @@ printf("width %d\n",cinfo.output_width);
     int i = 0;
     printf("%3d  ", cinfo.output_scanline);
 	for(i = 0; i < row_stride; i++){
-	printf("%3d:",(cinfo.output_scanline - 1)*row_stride + i);
+//	printf("%3d:",(cinfo.output_scanline - 1)*row_stride + i);
 	(*RGBimage)[(cinfo.output_scanline - 1)*row_stride + i] = ((unsigned char) (buffer[0][i]));
 //	printf("%3d ",(unsigned char) *RGBimage[cinfo.output_scanline - 1 + i]);
 	printf("%3d ",(unsigned char) (buffer[0][i]));
