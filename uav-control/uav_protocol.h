@@ -7,7 +7,7 @@
 #define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x00000001  // software version
+#define IDENT_VERSION   0x00000002  // software version
 
 // Packet commands from server to client
 
@@ -64,6 +64,7 @@
 #define VCM_TYPE_RADIO      0x00000000      // fully radio controlled
 #define VCM_TYPE_AUTO       0x00000001      // fully autonomously controlled
 #define VCM_TYPE_MIXED      0x00000002      // mixed auto/remote control
+#define VCM_TYPE_KILL       0x00000003      // killswitch - kill all outputs
 
 #define VCM_AXIS_YAW        0x1
 #define VCM_AXIS_PITCH      0x2
