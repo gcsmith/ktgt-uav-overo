@@ -21,7 +21,7 @@ static void *gpio_rd_thread(void *thread_args)
     struct timeval tv;
     GPIO_Event_t event;
     fd_set rdset;
-    int rc = 0, last_usec = 0;
+    int rc = 0, last_sec = 0, last_usec = 0;
 
     for (;;) {
         // wait for IO to become ready using select
@@ -55,13 +55,23 @@ static void *gpio_rd_thread(void *thread_args)
         switch (event.edgeType)
         {
         case GPIO_EventRisingEdge:
+            // start timing on the rising edge of the pwm
+            last_sec = event.time.tv_sec;
             last_usec = event.time.tv_usec;
             break;
         case GPIO_EventFallingEdge:
+            // stop timing on the falling edge of the pwm
             if (last_usec != 0) {
                 int delta = event.time.tv_usec - last_usec;
+                if (last_sec < event.time.tv_sec)
+                {
+                    // account for microsecond overflow
+                    delta += 1000000;
+                }
                 pthread_mutex_lock(&data->lock);
-                data->height = delta / 147; // from spec (147 us = 1 inch)
+                // taken from maxbotix from spec: 147 us == 1 inch
+                data->height = delta / 147;
+                printf("gpio%d: delta: %d\n", event.gpio, delta);
                 pthread_mutex_unlock(&data->lock);
             }
             last_usec = 0;

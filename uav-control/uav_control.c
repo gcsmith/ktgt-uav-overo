@@ -156,7 +156,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 syslog(LOG_INFO, "read failed -- client disconnected?");
                 goto client_disconnect;
             }
-            fprintf(stderr, "packet received\n");
+            // fprintf(stderr, "packet received\n");
 
             switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
@@ -292,9 +292,10 @@ int main(int argc, char *argv[])
 {
     int index, opt, log_opt, baud = B57600, ret = EXIT_SUCCESS;
     int flag_verbose = 0, flag_daemonize = 0, flag_nullvideo = 0;
-    int flag_v4l = 0, flag_stty = 0, flag_port = 0;
+    int flag_v4l = 0, flag_stty = 0;
     int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
-    char stty_dev[MAX_LEN], v4l_dev[MAX_LEN], port[MAX_LEN];
+    int arg_ultrasonic = 176, arg_override = 65;
+    char stty_dev[MAX_LEN], v4l_dev[MAX_LEN], port_str[MAX_LEN];
     imu_data_t imu;
     ultrasonic_data_t ultrasonic;
 
@@ -303,6 +304,8 @@ int main(int argc, char *argv[])
         { "stty_dev",   required_argument, NULL, 's' },
         { "v4l_dev",    required_argument, NULL, 'v' },
         { "port",       required_argument, NULL, 'p' },
+        { "ultrasonic", required_argument, NULL, 'u' },
+        { "override",   required_argument, NULL, 'o' },
         { "width",      required_argument, NULL, 'x' },
         { "height",     required_argument, NULL, 'y' },
         { "framerate",  required_argument, NULL, 'f' },
@@ -312,7 +315,7 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "Ds:v:p:x:y:f:NVh?";
+    static const char *str = "Ds:v:p:u:o:x:y:f:NVh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
@@ -328,9 +331,13 @@ int main(int argc, char *argv[])
             flag_v4l = 1;
             break;
         case 'p':
-            strncpy(port, optarg, MAX_LEN);
-            arg_port = atoi(port);
-            flag_port = 1;
+            arg_port = atoi(optarg);
+            break;
+        case 'u':
+            arg_ultrasonic = atoi(optarg);
+            break;
+        case 'o':
+            arg_override = atoi(optarg);
             break;
         case 'x':
             arg_width = atoi(optarg);
@@ -381,11 +388,8 @@ int main(int argc, char *argv[])
     }
     syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
 
-    if (!flag_port) {
-        // set default port number if unspecified
-        strncpy(port, "8090", MAX_LEN);
-    }
-    syslog(LOG_INFO, "opening network socket on port %s\n", port);
+    snprintf(port_str, MAX_LEN, "%d", arg_port);
+    syslog(LOG_INFO, "opening network socket on port %s\n", port_str);
 
     // attempt to initialize imu communication
     if (!imu_init(stty_dev, baud, &imu)) {
@@ -395,7 +399,7 @@ int main(int argc, char *argv[])
     }
 
     // attempt to initialize ultrasonic communication
-    if (!ultrasonic_init(146, &ultrasonic)) {
+    if (!ultrasonic_init(arg_ultrasonic, &ultrasonic)) {
         syslog(LOG_ERR, "failed to initialize ultrasonic");
         ret = EXIT_FAILURE;
         goto cleanup;
@@ -406,7 +410,7 @@ int main(int argc, char *argv[])
     }
 
     // server entry point
-    run_server(&imu, &ultrasonic, port);
+    run_server(&imu, &ultrasonic, port_str);
 
     // perform cleanup
 cleanup:
