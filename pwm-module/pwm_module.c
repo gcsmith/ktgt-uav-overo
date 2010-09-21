@@ -54,6 +54,10 @@ struct pwm_module {
     dev_t chrdev;                   // first character device number
     struct class *class;            // device class structure
     struct pwm_dev dev[PWM_COUNT];  // pwm device node data
+    uint32_t gpio171_mux_restore;
+    uint32_t gpio172_mux_restore;
+    uint32_t gpio173_mux_restore;
+    uint32_t gpio174_mux_restore;
 };
 
 static struct pwm_module pwm;
@@ -460,7 +464,7 @@ static void pwm_handle_args(void)
     // initialize structure and process user specified module arguments
     memset(&pwm, 0, sizeof(pwm));
 
-    if (pwm_en_count >= PWM_COUNT) {
+    if (pwm_en_count > PWM_COUNT) {
         printk(KERN_ALERT "specified too many pwm indices. ignoring args\n");
         return;
     }
@@ -506,6 +510,47 @@ static void pwm_handle_args(void)
 }
 
 // -----------------------------------------------------------------------------
+int pwm_disable_spi(void)
+{
+    // this doesn't really belong in a pwm driver, but it's convenient for now
+    void __iomem *base = ioremap(0x480021C8, 8);
+    if (!base) {
+        return 0;
+    }
+
+    pwm.gpio171_mux_restore = ioread16(base + 0);
+    pwm.gpio172_mux_restore = ioread16(base + 2);
+    pwm.gpio173_mux_restore = ioread16(base + 4);
+    pwm.gpio174_mux_restore = ioread16(base + 6);
+
+    iowrite16(0x10C, base + 0);
+    iowrite16(0x10C, base + 2);
+    iowrite16(0x10C, base + 4);
+    iowrite16(0x10C, base + 6);
+
+    iounmap(base);
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+int pwm_restore_spi(void)
+{
+    // this doesn't really belong in a pwm driver, but it's convenient for now
+    void __iomem *base = ioremap(0x480021C8, 8);
+    if (!base) {
+        return 0;
+    }
+
+    iowrite16(pwm.gpio171_mux_restore, base + 0);
+    iowrite16(pwm.gpio172_mux_restore, base + 2);
+    iowrite16(pwm.gpio173_mux_restore, base + 4);
+    iowrite16(pwm.gpio174_mux_restore, base + 6);
+
+    iounmap(base);
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
 static int __init pwm_init(void)
 {
     int rc, i;
@@ -533,6 +578,11 @@ static int __init pwm_init(void)
         }
     }
 
+    if (!pwm_disable_spi()) {
+        printk(KERN_ALERT "unable to disable spi gpio pins");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -552,6 +602,9 @@ static void __exit pwm_exit(void)
     printk("destroying pwm class and device ids...\n");
     class_destroy(pwm.class);
     unregister_chrdev_region(pwm.chrdev, PWM_COUNT);
+
+    printk("restoring spi gpio pins...\n");
+    pwm_restore_spi();
 }
 
 module_init(pwm_init);
