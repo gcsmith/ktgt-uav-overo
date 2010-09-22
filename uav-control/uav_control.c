@@ -366,10 +366,13 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 }
 
                 // send signal off to PWM
+                fprintf(stderr, "value = %f", temp.f);
 
+#if 0
                 cmd_buffer[PKT_COMMAND]  = SERVER_ACK_FLIGHT_CTL;
                 cmd_buffer[PKT_LENGTH]   = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
+#endif
                 break;
             default:
                 syslog(LOG_ERR, "invalid client command (%d)",
