@@ -383,8 +383,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                        cmd_buffer[PKT_COMMAND],
                        cmd_buffer[PKT_LENGTH],
                        cmd_buffer[PKT_BASE + 0],
-                       cmd_buffer[PKT_BASE + 1],
-                       cmd_buffer[PKT_BASE + 2]);
+                       cmd_buffer[PKT_BASE + 1]);
 
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
