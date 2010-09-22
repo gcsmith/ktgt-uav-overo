@@ -6,6 +6,7 @@
 globals global;
 static struct vdIn *g_videoin;
 static pthread_t g_camthrd;
+static int g_vid_enabled = 0;
 
 void *cam_input_thread( void *arg ) {
   /* set cleanup handler to cleanup allocated ressources */
@@ -84,8 +85,11 @@ void *cam_input_thread( void *arg ) {
   return NULL;
 }
 
-void video_lock(video_data *vdata)
+int video_lock(video_data *vdata)
 {
+    if (!g_vid_enabled)
+        return 0;
+
     pthread_cond_wait(&global.db_update, &global.db);
 
     vdata->length = (unsigned long)global.size;
@@ -95,6 +99,7 @@ void video_lock(video_data *vdata)
     vdata->height = global.in_param.res_height;
 
     vdata->fps = global.in_param.fps;
+    return 1;
 }
 
 void video_unlock()

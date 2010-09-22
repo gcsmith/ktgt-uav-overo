@@ -275,10 +275,13 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 send(hclient, (void *)cmd_buffer, PKT_VTI_LENGTH, 0);
                 break;
             case CLIENT_REQ_MJPG_FRAME:
-                fprintf(stderr, "client requested frame... waiting\n");
 
-                // safely lock and copy the jpeg image to our output buffer
-                video_lock(&vid_data);
+                if (!video_lock(&vid_data)) {
+                    // video disabled or non-functioning
+                    continue;
+                }
+
+                // copy the jpeg to our buffer now that we're safely locked
                 if (buff_sz < (vid_data.length + PKT_MJPG_LENGTH))
                 {
                     free(jpg_buf);
@@ -366,7 +369,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 }
 
                 // send signal off to PWM
-                fprintf(stderr, "value = %f", temp.f);
+                fprintf(stderr, "value = %f\n", temp.f);
 
 #if 0
                 cmd_buffer[PKT_COMMAND]  = SERVER_ACK_FLIGHT_CTL;
@@ -375,8 +378,14 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
 #endif
                 break;
             default:
-                syslog(LOG_ERR, "invalid client command (%d)",
-                       cmd_buffer[PKT_COMMAND]);
+                // dump a reasonable number of entries for debugging purposes
+                syslog(LOG_ERR, "invalid client command (C:%d L:%d 0:%d 1:%d)",
+                       cmd_buffer[PKT_COMMAND],
+                       cmd_buffer[PKT_LENGTH],
+                       cmd_buffer[PKT_BASE + 0],
+                       cmd_buffer[PKT_BASE + 1],
+                       cmd_buffer[PKT_BASE + 2]);
+
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
