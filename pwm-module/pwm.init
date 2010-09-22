@@ -2,7 +2,7 @@
 
 start() {
     echo "Starting pwm..."
-    /sbin/modprobe pwm_module
+    /sbin/modprobe pwm_module pwm_en=8,9,10,11
 }
 stop() {
     echo "Stopping pwm..."
