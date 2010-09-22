@@ -175,11 +175,13 @@ int video_init(const char *dev, int width, int height, int fps)
   pthread_create(&g_camthrd, 0, cam_input_thread, pglobal);
   pthread_detach(g_camthrd);
 
+  g_vid_enabled = 1;
   return 1;
 }
 
 void video_shutdown(void)
 {
+    g_vid_enabled = 0;
     global.stop = 1;
     pthread_cancel(g_camthrd);
 
