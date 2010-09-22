@@ -8,6 +8,7 @@ BASE_INSTALL += " \
     task-uav-extended \
     uav-control \
     pwm-module \
+    gpio-module \
     gpio-event-module \
     "
 
