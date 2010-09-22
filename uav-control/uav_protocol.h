@@ -18,6 +18,7 @@
 #define SERVER_ACK_TELEMETRY    4   // acknowledge request for telemetry (+data)
 #define SERVER_ACK_MJPG_FRAME   5   // transmit a single frame of video
 #define SERVER_ACK_SET_CTL_MODE 6
+#define SERVER_ACK_FLIGHT_CTL   7   // acknowledge the flight control command
 
 // Packet commands from client to server
 
@@ -27,6 +28,7 @@
 #define CLIENT_REQ_TELEMETRY    3   // state, orientation, altitude, battery
 #define CLIENT_REQ_MJPG_FRAME   4   // request a single frame of video
 #define CLIENT_REQ_SET_CTL_MODE 5   // request a change in control mode
+#define CLIENT_REQ_FLIGHT_CTL   6   // command the helicopter's flight
 
 // General packet offsets
 
@@ -75,6 +77,12 @@
 #define PKT_VCM_TYPE        PKT_BASE + 0
 #define PKT_VCM_AXES        PKT_BASE + 1
 #define PKT_VCM_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 2))
+
+// Mixed Controller Mode packet offsets
+
+#define PKT_MCM_AXIS        PKT_BASE + 0
+#define PKT_MCM_VALUE       PKT_BASE + 1
+#define PKT_MCM_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 2))
 
 #endif // _UAV_PROTOCOL__H_
 

@@ -29,9 +29,17 @@
 
 #define MAX_LEN 64
 
+// Data structure containing the client's control signals
+typedef struct _client_ctl_sigs
+{
+    float yaw, pitch, roll, alt;
+} client_ctl_sigs;
+
 imu_data_t g_imu;
 ultrasonic_data_t g_ultrasonic;
 pthread_t g_pwmthrd;
+
+client_ctl_sigs ctl_sigs = { 0 };
 
 static void *pwm_thread(void *thread_args)
 {
@@ -329,6 +337,39 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 cmd_buffer[PKT_VCM_TYPE] = vcm_type;
                 cmd_buffer[PKT_VCM_AXES] = vcm_axes;
                 send(hclient, (void *)cmd_buffer, PKT_VCM_LENGTH, 0);
+                break;
+            case CLIENT_REQ_FLIGHT_CTL:
+                temp.i = cmd_buffer[PKT_MCM_VALUE];
+
+                // collect the signal sent
+                switch (cmd_buffer[PKT_MCM_AXIS])
+                {
+                    case VCM_AXIS_YAW:
+                        fprintf(stderr, "yaw control received\n");
+                        ctl_sigs.yaw = temp.f;
+                        break;
+                    case VCM_AXIS_PITCH:
+                        fprintf(stderr, "pitch control received\n");
+                        ctl_sigs.pitch = temp.f;
+                        break;
+                    case VCM_AXIS_ROLL:
+                        fprintf(stderr, "roll control received\n");
+                        ctl_sigs.roll = temp.f;
+                        break;
+                    case VCM_AXIS_ALT:
+                        fprintf(stderr, "altitude control received\n");
+                        ctl_sigs.alt = temp.f;
+                        break;
+                    default:
+                        fprintf(stderr, "bad flight control command. ignoring\n");
+                        continue;
+                }
+
+                // send signal off to PWM
+
+                cmd_buffer[PKT_COMMAND]  = SERVER_ACK_FLIGHT_CTL;
+                cmd_buffer[PKT_LENGTH]   = PKT_BASE_LENGTH;
+                send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 break;
             default:
                 syslog(LOG_ERR, "invalid client command (%d)",
