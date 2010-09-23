@@ -20,12 +20,13 @@
 #include <string.h>
 #include <assert.h>
 
+#include "flight_control.h"
+#include "pwm_interface.h"
 #include "razor_imu.h"
 #include "server.h"
 #include "ultrasonic.h"
 #include "uav_protocol.h"
 #include "video_uvc.h"
-#include "pwm_interface.h"
 
 #define DEV_LEN         64
 #define PKT_BUFF_LEN    2048
@@ -242,6 +243,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
             }
             // fprintf(stderr, "packet received\n");
 
+            fprintf(stderr, "cmd_buf[PKT_COMMAND] = %d\n", cmd_buffer[PKT_COMMAND]);
             switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");

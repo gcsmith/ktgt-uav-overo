@@ -19,7 +19,9 @@ OBJ_FILES = uav_control.o \
 			server.o \
 			ultrasonic.o \
 			video_uvc.o \
-			mjpg-streamer/v4l2uvc.o
+			mjpg-streamer/v4l2uvc.o \
+			../pwm-lib/pwm_lib.o \
+			flight_control.o
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
 $(APPNAME) : $(OBJ_FILES)
