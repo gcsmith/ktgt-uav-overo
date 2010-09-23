@@ -27,7 +27,8 @@
 #include "video_uvc.h"
 #include "pwm_interface.h"
 
-#define MAX_LEN 64
+#define DEV_LEN         64
+#define PKT_BUFF_LEN    2048
 
 // Data structure containing the client's control signals
 typedef struct _client_ctl_sigs
@@ -164,7 +165,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
     struct addrinfo info, *r;
     socklen_t addr_sz = sizeof(addr);
     int hsock, hclient, rc;
-    uint32_t cmd_buffer[32];
+    uint32_t cmd_buffer[PKT_BUFF_LEN];
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
     uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
@@ -218,7 +219,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
         cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
         send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
 
-        if (1 > recv(hclient, (void *)cmd_buffer, 32, 0)) {
+        if (1 > recv(hclient, (void *)cmd_buffer, PKT_BUFF_LEN, 0)) {
             syslog(LOG_INFO, "read failed -- client disconnected?");
             goto client_disconnect;
         }
@@ -235,7 +236,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
 
         // enter main communication loop
         for (;;) {
-            if (1 > recv(hclient, (void *)cmd_buffer, 32, 0)) {
+            if (1 > recv(hclient, (void *)cmd_buffer, PKT_BUFF_LEN, 0)) {
                 syslog(LOG_INFO, "read failed -- client disconnected?");
                 goto client_disconnect;
             }
@@ -369,7 +370,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 }
 
                 // send signal off to PWM
-                fprintf(stderr, "value = %f\n", temp.f);
+                //fprintf(stderr, "value = %f\n", temp.f);
 
 #if 0
                 cmd_buffer[PKT_COMMAND]  = SERVER_ACK_FLIGHT_CTL;
@@ -427,7 +428,7 @@ int main(int argc, char *argv[])
     int flag_v4l = 0, flag_stty = 0;
     int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
     int arg_ultrasonic = 171, arg_override = 172;
-    char stty_dev[MAX_LEN], v4l_dev[MAX_LEN], port_str[MAX_LEN];
+    char stty_dev[DEV_LEN], v4l_dev[DEV_LEN], port_str[DEV_LEN];
 
     static struct option long_options[] = {
         { "daemonize",  no_argument,       NULL, 'D' },
@@ -453,11 +454,11 @@ int main(int argc, char *argv[])
             flag_daemonize = 1;
             break;
         case 's':
-            strncpy(stty_dev, optarg, MAX_LEN);
+            strncpy(stty_dev, optarg, DEV_LEN);
             flag_stty = 1;
             break;
         case 'v':
-            strncpy(v4l_dev, optarg, MAX_LEN);
+            strncpy(v4l_dev, optarg, DEV_LEN);
             flag_v4l = 1;
             break;
         case 'p':
@@ -508,17 +509,17 @@ int main(int argc, char *argv[])
 
     if (!flag_stty) {
         // set default device to UART1 if unspecified
-        strncpy(stty_dev, "/dev/ttyS0", MAX_LEN);
+        strncpy(stty_dev, "/dev/ttyS0", DEV_LEN);
     }
     syslog(LOG_INFO, "opening and configuring stty device '%s'\n", stty_dev);
 
     if (!flag_v4l) {
         // set default device to video0 if unspecified
-        strncpy(v4l_dev, "/dev/video0", MAX_LEN);
+        strncpy(v4l_dev, "/dev/video0", DEV_LEN);
     }
     syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
 
-    snprintf(port_str, MAX_LEN, "%d", arg_port);
+    snprintf(port_str, DEV_LEN, "%d", arg_port);
     syslog(LOG_INFO, "opening network socket on port %s\n", port_str);
 
     // install signal handler for clean shutdown
