@@ -12,7 +12,8 @@
 // -----------------------------------------------------------------------------
 uint32_t read_wlan_rssi(int sock)
 {
-    int rssi;
+    static int rssi = 0;
+    int new_rssi;
     struct iw_statistics stats;
     struct iwreq req = {
         .ifr_name = "wlan0",
@@ -28,15 +29,17 @@ uint32_t read_wlan_rssi(int sock)
         return 0;
     }
 
-    rssi = stats.qual.level;
+    new_rssi = stats.qual.level;
     if (!(stats.qual.updated & IW_QUAL_DBM)) {
         // convert to dBm
-        rssi += 0x100;
+        new_rssi += 0x100;
     }
 
-#if 0
-    fprintf(stderr, "read wlan0 rssi = %d\n", rssi);
-#endif
+    if (0 != new_rssi) {
+        rssi = new_rssi;
+    }
+
+    // fprintf(stderr, "read wlan0 rssi = %d\n", new_rssi);
     return rssi;
 }
 

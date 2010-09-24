@@ -270,7 +270,6 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 goto client_disconnect;
             }
 
-            fprintf(stderr, "cmd_buf[PKT_COMMAND] = %d\n", cmd_buffer[PKT_COMMAND]);
             switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
@@ -385,19 +384,12 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 temp.i = cmd_buffer[PKT_MCM_AXIS_YAW];
                 client_sigs.yaw = temp.f;
 
-                fprintf(stderr, "Received ALT:   %f\n", client_sigs.alt);
-                fprintf(stderr, "Received PITCH: %f\n", client_sigs.pitch);
-                fprintf(stderr, "Received ROLL:  %f\n", client_sigs.roll);
-                fprintf(stderr, "Received YAW:   %f\n\n", client_sigs.yaw);
+                fprintf(stderr, "Received controls: %f, %f, %f, %f\n",
+                        client_sigs.alt, client_sigs.pitch,
+                        client_sigs.roll, client_sigs.yaw);
                 
                 // send signals off to PWMs
                 //flight_control(&client_sigs);
-
-#if 0
-                cmd_buffer[PKT_COMMAND]  = SERVER_ACK_FLIGHT_CTL;
-                cmd_buffer[PKT_LENGTH]   = PKT_BASE_LENGTH;
-                send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
-#endif
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes
