@@ -4,28 +4,29 @@
 #include "uav_protocol.h"
 #include "../pwm-lib/pwm_lib.h"
 
+#define PWM_ALT     0
+#define PWM_PITCH   1
+#define PWM_ROLL    2
+#define PWM_YAW     3
+
 // PWM channel definitions
-#define PWM_ALT     8
-#define PWM_PITCH   9
-#define PWM_ROLL    10
-#define PWM_YAW     11
+#define PWM_DEV_FIRST   8
+#define PWM_DEV_LAST    11
+
+#define PWM_DEV_ALT     PWM_DEV_FIRST + 0
+#define PWM_DEV_PITCH   PWM_DEV_FIRST + 1
+#define PWM_DEV_ROLL    PWM_DEV_FIRST + 2
+#define PWM_DEV_YAW     PWM_DEV_FIRST + 3
 
 // Data structure containing control signal values
-typedef struct _control_signals
+typedef struct ctl_sigs
 {
     float alt, pitch, roll, yaw;
-} ctl_sigs;
-
-// Data structure containing the helicopter's pwm channels
-typedef struct _pwm_channels
-{
-    pwm_t alt, pitch, roll, yaw;
-} pwm_chnls;
+} ctl_sigs_t;
 
 int open_controls();
 void close_controls();
-void check_signal_bounds(pwm_t pwm, int *duty);
-void flight_control(ctl_sigs *sigs, int chnl_flags);
+void flight_control(ctl_sigs_t *sigs, int chnl_flags);
 
 #endif // FLIGHT_CONTROL__H_
 

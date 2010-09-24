@@ -35,20 +35,21 @@ imu_data_t g_imu;
 ultrasonic_data_t g_ultrasonic;
 pthread_t g_pwmthrd;
 
-ctl_sigs client_sigs = { 0 };
+ctl_sigs_t client_sigs = { 0 };
 
 static char autonomous = 1;
 
 static void *pwm_thread(void *thread_args)
 {
+#if 0
     struct timespec req;
     struct timespec rem;
     int i;
 
-    int fd_pwm8 = open("/dev/pwm8", 0);
-    int fd_pwm9 = open("/dev/pwm9", 0);
-    int fd_pwm10 = open("/dev/pwm10", 0);
-    int fd_pwm11 = open("/dev/pwm11", 0);
+    pwm_t pwm1 = pwm_open_device(PWM_ALT);
+    pwm_t pwm2 = pwm_open_device(PWM_PITCH);
+    pwm_t pwm3 = pwm_open_device(PWM_ROLL);
+    pwm_t pwm4 = pwm_open_device(PWM_YAW);
 
     for (;;) {
 
@@ -56,29 +57,30 @@ static void *pwm_thread(void *thread_args)
             continue;
 
         for (i = 2; i < 13; i++) {
-            ioctl(fd_pwm8, PWM_IOCT_DUTY, i);
-            if (!(i % 2)) ioctl(fd_pwm9, PWM_IOCT_DUTY, i);
-            if (!(i % 3)) ioctl(fd_pwm10, PWM_IOCT_DUTY, i);
-            if (!(i % 4)) ioctl(fd_pwm11, PWM_IOCT_DUTY, i);
+            pwm_set_duty(pwm1, i);
+            if (!(i % 2)) pwm_set_duty(pwm2, i);
+            if (!(i % 3)) pwm_set_duty(pwm3, i);
+            if (!(i % 4)) pwm_set_duty(pwm4, i);
             req.tv_sec = 0;
             req.tv_nsec = 80000000;
             nanosleep(&req, &rem);
         }
         for (i = 13; i >= 2; i--) {
-            ioctl(fd_pwm8, PWM_IOCT_DUTY, i);
-            if (!(i % 2)) ioctl(fd_pwm9, PWM_IOCT_DUTY, i);
-            if (!(i % 3)) ioctl(fd_pwm10, PWM_IOCT_DUTY, i);
-            if (!(i % 4)) ioctl(fd_pwm11, PWM_IOCT_DUTY, i);
+            pwm_set_duty(pwm1, i);
+            if (!(i % 2)) pwm_set_duty(pwm2, i);
+            if (!(i % 3)) pwm_set_duty(pwm3, i);
+            if (!(i % 4)) pwm_set_duty(pwm4, i);
             req.tv_sec = 0;
             req.tv_nsec = 80000000;
             nanosleep(&req, &rem);
         }
     }
 
-    close(fd_pwm11);
-    close(fd_pwm10);
-    close(fd_pwm9);
-    close(fd_pwm8);
+    pwm_close_device(pwm4);
+    pwm_close_device(pwm3);
+    pwm_close_device(pwm2);
+    pwm_close_device(pwm1);
+#endif
 
     pthread_exit(NULL);
 }
