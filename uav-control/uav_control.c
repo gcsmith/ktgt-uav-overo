@@ -351,12 +351,14 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     vcm_type = VCM_TYPE_AUTO;
                     vcm_axes = VCM_AXIS_ALL; // all axes autonomously controlled
                     autonomous = 1;
+                    close_controls();
                     break;
                 case VCM_TYPE_MIXED:
                     fprintf(stderr, "switching to remote control mode\n");
                     vcm_type = VCM_TYPE_MIXED;
                     vcm_axes = cmd_buffer[PKT_VCM_AXES] & VCM_AXIS_ALL;
                     autonomous = 0;
+                    open_controls();
                     break;
                 case VCM_TYPE_KILL:
                     fprintf(stderr, "switching to killswitch enabled mode\n");
