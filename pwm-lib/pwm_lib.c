@@ -1,11 +1,17 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include "pwm_lib.h"
 
 pwm_t pwm_open_device(int index)
 {
-    return open("/dev/pwm8", 0);
+    char dev[16] = "/dev/pwm";
+    char index_str[3];
+    itoa(index, index_str, 10);
+    strcat(dev, index_str);
+    return open(dev, 0);
 }
 
 void pwm_close_device(pwm_t pwm)
