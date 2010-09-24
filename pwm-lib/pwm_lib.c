@@ -53,13 +53,20 @@ int pwm_set_compare(pwm_t pwm, int compare)
     return ioctl(pwm, PWM_IOCT_COMPARE, compare);
 }
 
-int pwm_get_minrange(pwm_t pwm)
+unsigned int pwm_get_minrange(pwm_t pwm)
 {
-    return ioctl(pwm, PWM_IOCQ_MINRANGE);
+    return (unsigned int)ioctl(pwm, PWM_IOCQ_MINRANGE);
 }
 
-int pwm_get_maxrange(pwm_t pwm)
+unsigned int pwm_get_maxrange(pwm_t pwm)
 {
-    return ioctl(pwm, PWM_IOCQ_MAXRANGE);
+    return (unsigned int)ioctl(pwm, PWM_IOCQ_MAXRANGE);
+}
+
+int pwm_get_range(pwm_t pwm, unsigned int *lower, unsigned int *upper)
+{
+    *lower = (unsigned int)ioctl(pwm, PWM_IOCQ_MINRANGE);
+    *upper = (unsigned int)ioctl(pwm, PWM_IOCQ_MAXRANGE);
+    return 1;
 }
 

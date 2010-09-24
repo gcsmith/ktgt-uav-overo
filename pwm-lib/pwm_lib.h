@@ -14,8 +14,9 @@ int pwm_get_freq(pwm_t pwm);
 int pwm_set_duty(pwm_t pwm, int duty);
 int pwm_get_duty(pwm_t pwm);
 int pwm_set_compare(pwm_t pwm, int compare);
-int pwm_get_minrange(pwm_t pwm);
-int pwm_get_maxrange(pwm_t pwm);
+unsigned int pwm_get_minrange(pwm_t pwm);
+unsigned int pwm_get_maxrange(pwm_t pwm);
+int pwm_get_range(pwm_t pwm, unsigned int *lower, unsigned int *upper);
 
 #endif // PWM_LIB__H_
 
