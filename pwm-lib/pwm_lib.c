@@ -1,7 +1,6 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
+#include <stdio.h>
 #include <unistd.h>
 #include "pwm_lib.h"
 
@@ -9,8 +8,8 @@ pwm_t pwm_open_device(int index)
 {
     char dev[16] = "/dev/pwm";
     char index_str[3];
-    itoa(index, index_str, 10);
-    strcat(dev, index_str);
+    sprintf(index_str, "%d", index);
+    sprintf(dev, "%s%s", dev, index_str);
     return open(dev, 0);
 }
 
