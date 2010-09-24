@@ -158,6 +158,34 @@ void daemonize()
     close(STDERR_FILENO);
 }
 
+int recv_packet(int hclient, uint32_t *cmd_buffer)
+{
+    // read in the packet header to determine length
+    int rc, bytes_left = PKT_BASE_LENGTH;
+    char *ptr = (char *)cmd_buffer;
+    while (bytes_left > 0) {
+        if (1 > (rc = recv(hclient, (void *)ptr, bytes_left, 0))) {
+            // assume client disconnected for now
+            return 0;
+        }
+        bytes_left -= rc;
+        ptr += rc;
+    }
+
+    // read in the rest of the packet
+    bytes_left = cmd_buffer[PKT_LENGTH] - PKT_BASE_LENGTH;
+    while (bytes_left > 0) {
+        if (1 > (rc = recv(hclient, (void *)ptr, bytes_left, 0))) {
+            // assume client disconnected for now
+            return 0;
+        }
+        bytes_left -= rc;
+        ptr += rc;
+    }
+
+    return 1;
+}
+
 // -----------------------------------------------------------------------------
 void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
 {
@@ -237,11 +265,12 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
 
         // enter main communication loop
         for (;;) {
-            if (1 > recv(hclient, (void *)cmd_buffer, PKT_BUFF_LEN, 0)) {
+            // read until we've consumed an entire packet
+            if (!recv_packet(hclient, cmd_buffer)) {
                 syslog(LOG_INFO, "read failed -- client disconnected?");
+                fprintf(stderr, "what?\n");
                 goto client_disconnect;
             }
-            // fprintf(stderr, "packet received\n");
 
             fprintf(stderr, "cmd_buf[PKT_COMMAND] = %d\n", cmd_buffer[PKT_COMMAND]);
             switch (cmd_buffer[PKT_COMMAND]) {
@@ -258,7 +287,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 break;
             case CLIENT_REQ_TELEMETRY:
-                // syslog(LOG_INFO, "user requested telemetry -- sending...\n");
+                // syslog(LOG_INFO, "user requested telemetry - sending...\n");
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TELEMETRY;
                 cmd_buffer[PKT_LENGTH]  = PKT_VTI_LENGTH;
 
@@ -278,7 +307,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 send(hclient, (void *)cmd_buffer, PKT_VTI_LENGTH, 0);
                 break;
             case CLIENT_REQ_MJPG_FRAME:
-
+                // syslog(LOG_INFO, "user requested mjpg frame - sending...\n");
                 if (!video_lock(&vid_data)) {
                     // video disabled or non-functioning
                     continue;
@@ -542,6 +571,7 @@ int main(int argc, char *argv[])
         uav_shutdown(EXIT_FAILURE);
     }
 
+    // initialize video subsystem unless specified not to (null-video)
     if (!flag_nullvideo) {
         video_init(v4l_dev, arg_width, arg_height, arg_fps);
     }
