@@ -85,6 +85,7 @@ static void *pwm_thread(void *thread_args)
 }
 
 // -----------------------------------------------------------------------------
+// Perform final shutdown and cleanup.
 void uav_shutdown(int rc)
 {
     fprintf(stderr, "shutting down ultrasonic subsystem...\n");
@@ -158,6 +159,8 @@ void daemonize()
     close(STDERR_FILENO);
 }
 
+// -----------------------------------------------------------------------------
+// Receive a single packet. Blocks until the entire message has been consumed.
 int recv_packet(int hclient, uint32_t *cmd_buffer)
 {
     // read in the packet header to determine length
@@ -187,6 +190,8 @@ int recv_packet(int hclient, uint32_t *cmd_buffer)
 }
 
 // -----------------------------------------------------------------------------
+// Server entry-point. Sits in a loop accepting and processing incoming client
+// connections until terminated.
 void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
 {
     struct sockaddr_storage addr;
@@ -268,7 +273,6 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
             // read until we've consumed an entire packet
             if (!recv_packet(hclient, cmd_buffer)) {
                 syslog(LOG_INFO, "read failed -- client disconnected?");
-                fprintf(stderr, "what?\n");
                 goto client_disconnect;
             }
 
