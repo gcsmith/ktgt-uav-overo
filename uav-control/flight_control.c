@@ -67,7 +67,6 @@ void flight_control(ctl_sigs *sigs, int chnl_flags)
     {
         pwm = flight_ctls.alt;
         duty = pwm_get_duty(pwm) + (sigs->alt * pwm_get_duty(pwm));
-        check_signal_bounds(pwm, &duty);
         pwm_set_duty(pwm, duty);
     }
 
@@ -76,7 +75,6 @@ void flight_control(ctl_sigs *sigs, int chnl_flags)
     {
         pwm = flight_ctls.pitch;
         duty = pwm_get_duty(pwm) + (sigs->pitch * pwm_get_duty(pwm));
-        check_signal_bounds(pwm, &duty);
         pwm_set_duty(pwm, duty);
     }
 
@@ -85,7 +83,6 @@ void flight_control(ctl_sigs *sigs, int chnl_flags)
     {
         pwm = flight_ctls.roll;
         duty = pwm_get_duty(pwm) + (sigs->alt * pwm_get_duty(pwm));
-        check_signal_bounds(pwm, &duty);
         pwm_set_duty(pwm, duty);
     }
 
@@ -94,7 +91,6 @@ void flight_control(ctl_sigs *sigs, int chnl_flags)
     {
         pwm = flight_ctls.yaw;
         duty = pwm_get_duty(pwm) + (sigs->yaw * pwm_get_duty(pwm));
-        check_signal_bounds(pwm, &duty);
         pwm_set_duty(pwm, duty);
     }
 }

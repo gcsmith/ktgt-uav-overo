@@ -37,6 +37,8 @@ pthread_t g_pwmthrd;
 
 ctl_sigs client_sigs = { 0 };
 
+static char autonomous = 1;
+
 static void *pwm_thread(void *thread_args)
 {
     struct timespec req;
@@ -49,6 +51,9 @@ static void *pwm_thread(void *thread_args)
     int fd_pwm11 = open("/dev/pwm11", 0);
 
     for (;;) {
+
+        if (!autonomous)
+            continue;
 
         for (i = 2; i < 13; i++) {
             ioctl(fd_pwm8, PWM_IOCT_DUTY, i);
@@ -345,11 +350,13 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     fprintf(stderr, "switching to autonomous control\n");
                     vcm_type = VCM_TYPE_AUTO;
                     vcm_axes = VCM_AXIS_ALL; // all axes autonomously controlled
+                    autonomous = 1;
                     break;
                 case VCM_TYPE_MIXED:
                     fprintf(stderr, "switching to remote control mode\n");
                     vcm_type = VCM_TYPE_MIXED;
                     vcm_axes = cmd_buffer[PKT_VCM_AXES] & VCM_AXIS_ALL;
+                    autonomous = 0;
                     break;
                 case VCM_TYPE_KILL:
                     fprintf(stderr, "switching to killswitch enabled mode\n");
@@ -389,7 +396,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                         client_sigs.roll, client_sigs.yaw);
                 
                 // send signals off to PWMs
-                //flight_control(&client_sigs);
+                flight_control(&client_sigs, vcm_axes);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes
