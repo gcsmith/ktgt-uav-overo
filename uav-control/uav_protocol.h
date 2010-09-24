@@ -80,9 +80,11 @@
 
 // Mixed Controller Mode packet offsets
 
-#define PKT_MCM_AXIS        PKT_BASE + 0
-#define PKT_MCM_VALUE       PKT_BASE + 1
-#define PKT_MCM_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 2))
+#define PKT_MCM_AXIS_ALT    PKT_BASE + 0
+#define PKT_MCM_AXIS_PITCH  PKT_BASE + 1
+#define PKT_MCM_AXIS_ROLL   PKT_BASE + 2
+#define PKT_MCM_AXIS_YAW    PKT_BASE + 3
+#define PKT_MCM_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 4))
 
 #endif // _UAV_PROTOCOL__H_
 

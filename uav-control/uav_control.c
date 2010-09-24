@@ -31,17 +31,11 @@
 #define DEV_LEN         64
 #define PKT_BUFF_LEN    2048
 
-// Data structure containing the client's control signals
-typedef struct _client_ctl_sigs
-{
-    float yaw, pitch, roll, alt;
-} client_ctl_sigs;
-
 imu_data_t g_imu;
 ultrasonic_data_t g_ultrasonic;
 pthread_t g_pwmthrd;
 
-client_ctl_sigs ctl_sigs = { 0 };
+ctl_sigs client_sigs = { 0 };
 
 static void *pwm_thread(void *thread_args)
 {
@@ -378,34 +372,26 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 send(hclient, (void *)cmd_buffer, PKT_VCM_LENGTH, 0);
                 break;
             case CLIENT_REQ_FLIGHT_CTL:
-                temp.i = cmd_buffer[PKT_MCM_VALUE];
+                // collect signals
+                temp.i = cmd_buffer[PKT_MCM_AXIS_ALT];
+                client_sigs.alt = temp.f;
 
-                // collect the signal sent
-                switch (cmd_buffer[PKT_MCM_AXIS])
-                {
-                    case VCM_AXIS_YAW:
-                        fprintf(stderr, "yaw control received\n");
-                        ctl_sigs.yaw = temp.f;
-                        break;
-                    case VCM_AXIS_PITCH:
-                        fprintf(stderr, "pitch control received\n");
-                        ctl_sigs.pitch = temp.f;
-                        break;
-                    case VCM_AXIS_ROLL:
-                        fprintf(stderr, "roll control received\n");
-                        ctl_sigs.roll = temp.f;
-                        break;
-                    case VCM_AXIS_ALT:
-                        fprintf(stderr, "altitude control received\n");
-                        ctl_sigs.alt = temp.f;
-                        break;
-                    default:
-                        fprintf(stderr, "bad flight control command. ignoring\n");
-                        continue;
-                }
+                temp.i = cmd_buffer[PKT_MCM_AXIS_PITCH];
+                client_sigs.pitch = temp.f;
 
-                // send signal off to PWM
-                //fprintf(stderr, "value = %f\n", temp.f);
+                temp.i = cmd_buffer[PKT_MCM_AXIS_ROLL];
+                client_sigs.roll = temp.f;
+
+                temp.i = cmd_buffer[PKT_MCM_AXIS_YAW];
+                client_sigs.yaw = temp.f;
+
+                fprintf(stderr, "Received ALT:   %f\n", client_sigs.alt);
+                fprintf(stderr, "Received PITCH: %f\n", client_sigs.pitch);
+                fprintf(stderr, "Received ROLL:  %f\n", client_sigs.roll);
+                fprintf(stderr, "Received YAW:   %f\n\n", client_sigs.yaw);
+                
+                // send signals off to PWMs
+                //flight_control(&client_sigs);
 
 #if 0
                 cmd_buffer[PKT_COMMAND]  = SERVER_ACK_FLIGHT_CTL;
