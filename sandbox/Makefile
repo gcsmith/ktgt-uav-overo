@@ -28,7 +28,7 @@ MJPG_OBJS = $(MP)/jpeg_utils.o $(MP)/v4l2uvc.o $(MP)/input_uvc.o $(MP)/output_ud
 PWM_OBJS  = pwm_test.o
 RSSI_OBJS = rssi_test.o
 
-OBJ_FILES = ${EVNT_OBJS} ${PWM_OBJS} ${RSSI_OBJS}
+OBJ_FILES = ${EVNT_OBJS} ${GLES_OBJS} ${GPIO_OBJS} ${MADC_OBJS} ${MJPG_OBJS} ${PWM_OBJS} ${RSSI_OBJS}
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
 all: ${APP_NAMES}
