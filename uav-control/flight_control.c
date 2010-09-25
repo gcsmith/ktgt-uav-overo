@@ -1,45 +1,89 @@
 #include <stdio.h>
 #include "flight_control.h"
 
-// Data structure containing the helicopter's pwm channels
-typedef struct pwm_channel
-{
-    pwm_t handle;
-    float value;
-} pwm_channel_t;
+#define PWM_DUTY_MAX   0.09f
+#define PWM_DUTY_MIN   0.05f
+#define PWM_DUTY_IDLE  0.07f
 
 pwm_channel_t g_channels[4];
 
+void assign_duty(pwm_channel_t *pwm, float duty)
+{
+    static int cmp_val = 0;
+    
+    // check bounds
+    if (duty < PWM_DUTY_MIN)
+        duty = PWM_DUTY_MIN;
+    else if (duty > PWM_DUTY_MAX)
+        duty = PWM_DUTY_MAX;
+
+    cmp_val = (int)(pwm->rng_min + (int)((pwm->rng_max - pwm->rng_min) * duty));
+    pwm_set_compare(pwm->handle, cmp_val);
+}
+
+void assign_value(pwm_channel_t *pwm, float value)
+{
+    static int cmp_val = 0, max = 0, min = 0;;
+    static unsigned int hrange = 0;
+
+    hrange = (pwm->rng_max - pwm->rng_min) >> 1;
+    cmp_val = pwm->rng_min + hrange + (int)(hrange * value);
+
+    max = pwm->rng_min + hrange + (int)(hrange * PWM_DUTY_MAX);
+    min = pwm->rng_min + hrange + (int)(hrange * PWM_DUTY_MIN);
+
+    if (cmp_val < min)
+        cmp_val = min;
+    else if (cmp_val > max)
+        cmp_val = max;
+
+    pwm_set_compare(pwm->handle, cmp_val);
+}
+
 int open_controls()
 {
-    int ret = 1;
-
     if (0 > (g_channels[PWM_ALT].handle = pwm_open_device(PWM_DEV_ALT)))
     {
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_ALT);
-        ret = -1;
+        return 0; 
     }
+
+    // keep throttle signal at the current value it is
+    pwm_get_range(g_channels[PWM_ALT].handle, &g_channels[PWM_ALT].rng_min,
+        &g_channels[PWM_ALT].rng_max);
 
     if (0 > (g_channels[PWM_PITCH].handle = pwm_open_device(PWM_DEV_PITCH)))
     {
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_PITCH);
-        ret = -1;
+        return 0; 
     }
+
+    pwm_get_range(g_channels[PWM_PITCH].handle, &g_channels[PWM_PITCH].rng_min,
+            &g_channels[PWM_PITCH].rng_max);
+    assign_duty(&g_channels[PWM_PITCH], PWM_DUTY_IDLE);
 
     if (0 > (g_channels[PWM_ROLL].handle = pwm_open_device(PWM_DEV_ROLL)))
     {
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_ROLL);
-        ret = -1;
+        return 0;
     }
+
+    pwm_get_range(g_channels[PWM_ROLL].handle, &g_channels[PWM_ROLL].rng_min,
+        &g_channels[PWM_ROLL].rng_max);
+    assign_duty(&g_channels[PWM_PITCH], PWM_DUTY_IDLE);
 
     if (0 > (g_channels[PWM_YAW].handle = pwm_open_device(PWM_DEV_YAW)))
     {
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_YAW);
-        ret = -1;
+        return 0;
     }
 
+    pwm_get_range(g_channels[PWM_YAW].handle, &g_channels[PWM_YAW].rng_min,
+            &g_channels[PWM_YAW].rng_max);
+    assign_duty(&g_channels[PWM_PITCH], PWM_DUTY_IDLE);
+
     fprintf(stderr, "opened pwm device nodes\n");
-    return ret;
+    return 1;
 }
 
 // -----------------------------------------------------------------------------
@@ -53,43 +97,28 @@ void close_controls()
 // -----------------------------------------------------------------------------
 void flight_control(ctl_sigs_t *sigs, int chnl_flags)
 {
-    pwm_t pwm = 0;
-    unsigned int lower, upper, hrange;
-
     // adjust altitude if specified
     if (chnl_flags & VCM_AXIS_ALT)
     {
-        pwm = g_channels[PWM_ALT].handle;
-        pwm_get_range(pwm, &lower, &upper);
-        hrange = (upper - lower) >> 1;
-        pwm_set_compare(pwm, lower + hrange + (int)(hrange * sigs->alt));
+        assign_value(&g_channels[PWM_ALT], sigs->alt);
     }
 
     // adjust pitch if specified
     if (chnl_flags & VCM_AXIS_PITCH)
     {
-        pwm = g_channels[PWM_PITCH].handle;
-        pwm_get_range(pwm, &lower, &upper);
-        hrange = (upper - lower) >> 1;
-        pwm_set_compare(pwm, lower + hrange + (int)(hrange * sigs->pitch));
+        assign_value(&g_channels[PWM_PITCH], sigs->pitch);
     }
 
     // adjust roll if specified
     if (chnl_flags & VCM_AXIS_ROLL)
     {
-        pwm = g_channels[PWM_ROLL].handle;
-        pwm_get_range(pwm, &lower, &upper);
-        hrange = (upper - lower) >> 1;
-        pwm_set_compare(pwm, lower + hrange + (int)(hrange * sigs->roll));
+        assign_value(&g_channels[PWM_ROLL], sigs->roll);
     }
 
     // adjust yaw if specified
     if (chnl_flags & VCM_AXIS_YAW)
     {
-        pwm = g_channels[PWM_YAW].handle;
-        pwm_get_range(pwm, &lower, &upper);
-        hrange = (upper - lower) >> 1;
-        pwm_set_compare(pwm, lower + hrange + (int)(hrange * sigs->yaw));
+        assign_value(&g_channels[PWM_YAW], sigs->yaw);
     }
 }
 
