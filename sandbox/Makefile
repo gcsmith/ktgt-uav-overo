@@ -11,7 +11,9 @@ CC            = @${CROSS_COMPILE}gcc
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 OUTPUT_OPTION = -c -o $@
-CFLAGS += -Wall -Werror -O2
+CFLAGS += -Wall -Werror -O2 \
+          -I../pwm-module \
+          -I../gpio-event-module
 
 MP = ../uav-control/mjpg-streamer
 

@@ -2,8 +2,8 @@
 # Garrett Smith 2010
 ##############################################################################
 
-LIBNAME		= pwm
-STATIC_LIBNAME	= lib$(LIBNAME).a
+LIBNAME = pwm
+STATIC_LIBNAME = lib$(LIBNAME).a
 
 PWD   = $(shell pwd)
 OETMP = ${OVEROTOP}/tmp
@@ -17,22 +17,21 @@ ARCH          ?= arm
 CC = $(CROSS_COMPILE)gcc
 AR = $(CROSS_COMPILE)ar
 
-CFLAGS += \
-		  -std=gnu99 \
-		  -Wall \
-		  -Wimplicit \
-		  -Wpointer-arith \
-		  -Wswitch \
-		  -Wredundant-decls \
-		  -Wreturn-type \
-		  -Wshadow \
-		  -Wunused \
-		  -Wcast-qual \
-		  -Wnested-externs \
-		  -Wmissing-prototypes \
-		  -Wstrict-prototypes \
-		  -Wmissing-declarations \
-		  -I ../module
+CFLAGS += -std=gnu99 \
+          -Wall \
+          -Wimplicit \
+          -Wpointer-arith \
+          -Wswitch \
+          -Wredundant-decls \
+          -Wreturn-type \
+          -Wshadow \
+          -Wunused \
+          -Wcast-qual \
+          -Wnested-externs \
+          -Wmissing-prototypes \
+          -Wstrict-prototypes \
+          -Wmissing-declarations \
+          -I ../pwm-module
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 
