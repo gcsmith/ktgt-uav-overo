@@ -382,14 +382,14 @@ printf("width %d\n",cinfo.output_width);
     (void) jpeg_read_scanlines(&cinfo, buffer, 1);
     /* Assume put_scanline_someplace wants a pointer and sample count. */
     int i = 0;
-    printf("%3d  ", cinfo.output_scanline);
+//    printf("%3d  ", cinfo.output_scanline);
 	for(i = 0; i < row_stride; i++){
 //	printf("%3d:",(cinfo.output_scanline - 1)*row_stride + i);
 	(*RGBimage)[(cinfo.output_scanline - 1)*row_stride + i] = ((unsigned char) (buffer[0][i]));
 //	printf("%3d ",(unsigned char) *RGBimage[cinfo.output_scanline - 1 + i]);
-	printf("%3d ",(unsigned char) (buffer[0][i]));
+//	printf("%3d ",(unsigned char) (buffer[0][i]));
 	}
-	printf("\n");
+//	printf("\n");
 //    put_scanline_someplace(buffer[0], row_stride);
   }
 //printf("%3d \n", (unsigned char) *RGBimage[0]);
