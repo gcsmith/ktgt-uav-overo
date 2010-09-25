@@ -50,6 +50,7 @@ int open_controls()
     // keep throttle signal at the current value it is
     pwm_get_range(g_channels[PWM_ALT].handle, &g_channels[PWM_ALT].rng_min,
         &g_channels[PWM_ALT].rng_max);
+    assign_duty(&g_channels[PWM_ALT], PWM_DUTY_MIN);
 
     if (0 > (g_channels[PWM_PITCH].handle = pwm_open_device(PWM_DEV_PITCH)))
     {
