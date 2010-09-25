@@ -30,8 +30,6 @@ typedef struct pwm_channel
     unsigned int rng_min, rng_max;
 } pwm_channel_t;
 
-void assign_duty(pwm_channel_t *pwm, float duty);
-void assign_value(pwm_channel_t *pwm, float value);
 int open_controls();
 void close_controls();
 void flight_control(ctl_sigs_t *sigs, int chnl_flags);
