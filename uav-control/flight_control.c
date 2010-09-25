@@ -9,7 +9,7 @@ pwm_channel_t g_channels[4];
 
 void assign_duty(pwm_channel_t *pwm, float duty)
 {
-    static int cmp_val = 0;
+    int cmp_val = 0;
     
     // check bounds
     if (duty < PWM_DUTY_MIN)
@@ -18,26 +18,24 @@ void assign_duty(pwm_channel_t *pwm, float duty)
         duty = PWM_DUTY_MAX;
 
     cmp_val = (int)(pwm->rng_min + (int)((pwm->rng_max - pwm->rng_min) * duty));
+    fprintf(stderr, "rng_max = %u\n", pwm->rng_max);
+    fprintf(stderr, "rng_min = %u\n", pwm->rng_min);
+    fprintf(stderr, "cmp_val = %u\n", cmp_val);
     pwm_set_compare(pwm->handle, cmp_val);
 }
 
 void assign_value(pwm_channel_t *pwm, float value)
 {
-    static int cmp_val = 0, max = 0, min = 0;;
-    static unsigned int hrange = 0;
+    int cmp, max, min;
+    unsigned int range, hrange;
 
-    hrange = (pwm->rng_max - pwm->rng_min) >> 1;
-    cmp_val = pwm->rng_min + hrange + (int)(hrange * value);
+    range = pwm->rng_max - pwm->rng_min;
+    min = pwm->rng_min + (int)(range * PWM_DUTY_MIN);
+    max = pwm->rng_min + (int)(range * PWM_DUTY_MAX);
+    hrange = (max - min) >> 1;
+    cmp = min + hrange + (int)(hrange * value);
 
-    max = pwm->rng_min + hrange + (int)(hrange * PWM_DUTY_MAX);
-    min = pwm->rng_min + hrange + (int)(hrange * PWM_DUTY_MIN);
-
-    if (cmp_val < min)
-        cmp_val = min;
-    else if (cmp_val > max)
-        cmp_val = max;
-
-    pwm_set_compare(pwm->handle, cmp_val);
+    pwm_set_compare(pwm->handle, cmp);
 }
 
 int open_controls()
@@ -47,6 +45,7 @@ int open_controls()
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_ALT);
         return 0; 
     }
+    fprintf(stderr, "flight control: altitude channel opened\n");
 
     // keep throttle signal at the current value it is
     pwm_get_range(g_channels[PWM_ALT].handle, &g_channels[PWM_ALT].rng_min,
@@ -57,6 +56,7 @@ int open_controls()
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_PITCH);
         return 0; 
     }
+    fprintf(stderr, "flight control: pitch channel opened\n");
 
     pwm_get_range(g_channels[PWM_PITCH].handle, &g_channels[PWM_PITCH].rng_min,
             &g_channels[PWM_PITCH].rng_max);
@@ -67,20 +67,22 @@ int open_controls()
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_ROLL);
         return 0;
     }
+    fprintf(stderr, "flight control: roll channel opened\n");
 
     pwm_get_range(g_channels[PWM_ROLL].handle, &g_channels[PWM_ROLL].rng_min,
         &g_channels[PWM_ROLL].rng_max);
-    assign_duty(&g_channels[PWM_PITCH], PWM_DUTY_IDLE);
+    assign_duty(&g_channels[PWM_ROLL], PWM_DUTY_IDLE);
 
     if (0 > (g_channels[PWM_YAW].handle = pwm_open_device(PWM_DEV_YAW)))
     {
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_YAW);
         return 0;
     }
+    fprintf(stderr, "flight control: yaw channel opened\n");
 
     pwm_get_range(g_channels[PWM_YAW].handle, &g_channels[PWM_YAW].rng_min,
             &g_channels[PWM_YAW].rng_max);
-    assign_duty(&g_channels[PWM_PITCH], PWM_DUTY_IDLE);
+    assign_duty(&g_channels[PWM_YAW], PWM_DUTY_IDLE);
 
     fprintf(stderr, "opened pwm device nodes\n");
     return 1;
