@@ -7,6 +7,7 @@ globals global;
 static struct vdIn *g_videoin;
 static pthread_t g_camthrd;
 static int g_vid_enabled = 0;
+static int g_is_fresh = 0;
 
 void *cam_input_thread( void *arg ) {
   /* set cleanup handler to cleanup allocated ressources */
@@ -66,9 +67,10 @@ void *cam_input_thread( void *arg ) {
     }
     prev_size = global->size;
 #endif
+    g_is_fresh = 1;
 
     /* signal fresh_frame */
-    pthread_cond_broadcast(&pglobal->db_update);
+    // pthread_cond_broadcast(&pglobal->db_update);
     pthread_mutex_unlock( &pglobal->db );
 
     DBG("waiting for next frame\n");
@@ -87,10 +89,17 @@ void *cam_input_thread( void *arg ) {
 
 int video_lock(video_data *vdata)
 {
-    if (!g_vid_enabled)
+    if (!g_vid_enabled) {
         return 0;
+    }
 
-    pthread_cond_wait(&global.db_update, &global.db);
+    pthread_mutex_lock(&global.db);
+    if (!g_is_fresh) {
+        pthread_mutex_unlock(&global.db);
+        return 0;
+    }
+
+    // pthread_cond_wait(&global.db_update, &global.db);
 
     vdata->length = (unsigned long)global.size;
     vdata->data = (const char *)global.buf;

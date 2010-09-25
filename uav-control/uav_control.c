@@ -320,7 +320,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
             case CLIENT_REQ_MJPG_FRAME:
                 // syslog(LOG_INFO, "user requested mjpg frame - sending...\n");
                 if (!video_lock(&vid_data)) {
-                    // video disabled or non-functioning
+                    // video disabled, non-functioning, or frame not ready
                     continue;
                 }
 
