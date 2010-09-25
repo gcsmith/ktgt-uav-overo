@@ -594,7 +594,7 @@ int main(int argc, char *argv[])
         uav_shutdown(EXIT_FAILURE);
     }
 
-    if (0 > gpio_direction_output(arg_mux, 0)) {
+    if (0 > gpio_direction_output(arg_mux, 1)) {
         syslog(LOG_ERR, "failed to set gpio %d direction to output", arg_mux);
         uav_shutdown(EXIT_FAILURE);
     }
