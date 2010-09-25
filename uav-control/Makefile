@@ -9,10 +9,17 @@ OETMP = ${OVEROTOP}/tmp
 TOOLDIR       ?= ${OETMP}/sysroots/`uname -m`-linux/usr/armv7a/bin
 STAGEDIR      ?= ${OETMP}/sysroots/armv7a-angstrom-linux-gnueabi/usr
 CROSS_COMPILE ?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
-CC            = @${CROSS_COMPILE}gcc
+CC            = ${CROSS_COMPILE}gcc
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
-CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE
+
+CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE \
+		  -I../pwm-lib \
+		  -I../pwm-module \
+		  -I../gpio-event-module
+
+LDFLAGS += -L../pwm-lib \
+		   -lpthread -ljpeg -lpwm
 
 OBJ_FILES = uav_control.o \
 			razor_imu.o \
@@ -20,13 +27,13 @@ OBJ_FILES = uav_control.o \
 			ultrasonic.o \
 			video_uvc.o \
 			mjpg-streamer/v4l2uvc.o \
-			../pwm-lib/pwm_lib.o \
 			flight_control.o
+
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
 $(APPNAME) : $(OBJ_FILES)
 	@echo "[LD] $@"
-	$(CC) $(LDFLAGS) -lpthread -ljpeg -o $@ $^
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 .PHONY: %.d
 %.d: ;

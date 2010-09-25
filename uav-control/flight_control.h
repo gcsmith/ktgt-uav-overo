@@ -2,7 +2,7 @@
 #define FLIGHT_CONTROL__H_
 
 #include "uav_protocol.h"
-#include "../pwm-lib/pwm_lib.h"
+#include "pwm_lib.h"
 
 #define PWM_ALT     0
 #define PWM_PITCH   1
