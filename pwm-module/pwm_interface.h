@@ -15,6 +15,8 @@
 #define PWM_IOCT_COMPARE    _IOW(PWM_IOC_MAGIC, 6, int)
 #define PWM_IOCQ_MINRANGE   _IOR(PWM_IOC_MAGIC, 7, int)
 #define PWM_IOCQ_MAXRANGE   _IOR(PWM_IOC_MAGIC, 8, int)
+#define PWM_IOCT_FREQ_X100  _IOW(PWM_IOC_MAGIC, 9, int)
+#define PWM_IOCQ_FREQ_X100  _IOR(PWM_IOC_MAGIC, 10, int)
 
 struct pwm_raw_user_parms {
     int frequency;

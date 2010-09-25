@@ -118,6 +118,31 @@ inline int pwm_get_freq(struct pwm_dev *dev)
 }
 
 // -----------------------------------------------------------------------------
+void pwm_set_freq_x100(struct pwm_dev *dev, uint32_t freq)
+{
+    void __iomem *base = ioremap(dev->gpt_base, GPTIMER_SIZE);
+
+    if (!base) {
+        printk(KERN_ALERT "failed to map GPTIMER address range\n");
+        return;
+    }
+
+    freq = MIN(freq, 100000);
+    dev->tldr = 0xFFFFFFFF - 1300000000 / freq + 1;
+    dev->tmar_min = dev->tldr;
+    dev->tmar_max = (0xFFFFFFFF - dev->tldr) - 1;
+
+    iowrite32(dev->tldr, base + GPT_TLDR); // timer load 20ms period
+    iounmap(base);
+}
+
+// -----------------------------------------------------------------------------
+inline int pwm_get_freq_x100(struct pwm_dev *dev)
+{
+    return 1300000000 / (0xFFFFFFFF - dev->tldr + 1);
+}
+
+// -----------------------------------------------------------------------------
 void pwm_set_duty(struct pwm_dev *dev, uint32_t duty)
 {
     void __iomem *base;
@@ -211,6 +236,14 @@ static int pwm_ioctl(struct inode *inode, struct file *fp,
     case PWM_IOCQ_FREQ:
         // return the pwm frequency
         retval = pwm_get_freq(dev);
+        break;
+    case PWM_IOCT_FREQ_X100:
+        // specify the pwm frequency scaled by 100
+        pwm_set_freq_x100(dev, (uint32_t)arg);
+        break;
+    case PWM_IOCQ_FREQ_X100:
+        // return the pwm frequency scaled by 100
+        retval = pwm_get_freq_x100(dev);
         break;
     case PWM_IOCT_DUTY:
         // specify the pwm duty cycle
@@ -335,6 +368,14 @@ static ssize_t pwm_write(struct file *fp, const char __user *buff,
             }
             freq = simple_strtol(ptok, NULL, 10);
             pwm_set_freq(dev, freq);
+        }
+        else if (!strcmp(ptok, "freq_x100")) {
+            // require a frequency parameter
+            if (!tokenize_str(pstr, &ptok, &pstr)) {
+                break;
+            }
+            freq = simple_strtol(ptok, NULL, 10);
+            pwm_set_freq_x100(dev, freq);
         }
         else if (!strcmp(ptok, "duty")) {
             // require a duty cycle parameter
