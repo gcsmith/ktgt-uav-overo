@@ -13,9 +13,9 @@ DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 OUTPUT_OPTION = -c -o $@
 CFLAGS += -Wall -Werror -O2 \
           -I../pwm-module \
-		  -I../pwm-lib \
+          -I../pwm-lib \
           -I../gpio-event-module \
-		  -I../gpio-lib
+          -I../gpio-lib
 
 MP = ../uav-control/mjpg-streamer
 

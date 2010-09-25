@@ -17,16 +17,16 @@ CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE \
           -I../pwm-module \
           -I../pwm-lib \
           -I../gpio-event-module \
-		  -I../gpio-lib
+          -I../gpio-lib
 
 LDFLAGS += -L../pwm-lib \
-		   -L../gpio-lib \
+           -L../gpio-lib \
            -lpthread -ljpeg -lpwm -lgpio
 
 OBJ_FILES = flight_control.o \
-			razor_imu.o \
+            razor_imu.o \
             server.o \
-			uav_control.o \
+            uav_control.o \
             ultrasonic.o \
             video_uvc.o \
             mjpg-streamer/v4l2uvc.o
