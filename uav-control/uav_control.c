@@ -354,7 +354,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     fprintf(stderr, "switching to radio control\n");
                     vcm_type = VCM_TYPE_RADIO;
                     vcm_axes = VCM_AXIS_ALL; // all axes radio controlled
-                    gpio_set_value(g_muxsel, 0);
+                    gpio_set_value(g_muxsel, 1);
                     break;
                 case VCM_TYPE_AUTO:
                     fprintf(stderr, "switching to autonomous control\n");
@@ -362,7 +362,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     vcm_axes = VCM_AXIS_ALL; // all axes autonomously controlled
                     autonomous = 1;
                     close_controls();
-                    gpio_set_value(g_muxsel, 1);
+                    gpio_set_value(g_muxsel, 0);
                     break;
                 case VCM_TYPE_MIXED:
                     fprintf(stderr, "switching to remote control mode\n");
@@ -370,13 +370,13 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     vcm_axes = cmd_buffer[PKT_VCM_AXES] & VCM_AXIS_ALL;
                     autonomous = 0;
                     open_controls();
-                    gpio_set_value(g_muxsel, 1);
+                    gpio_set_value(g_muxsel, 0);
                     break;
                 case VCM_TYPE_KILL:
                     fprintf(stderr, "switching to killswitch enabled mode\n");
                     vcm_type = VCM_TYPE_KILL;
                     vcm_axes = VCM_AXIS_ALL; // all axes disabled
-                    gpio_set_value(g_muxsel, 0);
+                    gpio_set_value(g_muxsel, 1);
                     break;
                 default:
                     fprintf(stderr, "bad control mode requested. ignoring\n");
