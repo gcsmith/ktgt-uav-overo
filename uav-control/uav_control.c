@@ -27,6 +27,7 @@
 #include "ultrasonic.h"
 #include "uav_protocol.h"
 #include "video_uvc.h"
+#include "user-gpio.h"
 
 #define DEV_LEN         64
 #define PKT_BUFF_LEN    2048
@@ -35,9 +36,9 @@ imu_data_t g_imu;
 ultrasonic_data_t g_ultrasonic;
 pthread_t g_pwmthrd;
 
-ctl_sigs_t client_sigs = { 0 };
-
+static ctl_sigs_t client_sigs = { 0 };
 static char autonomous = 1;
+static int g_muxsel = -1;
 
 static void *pwm_thread(void *thread_args)
 {
@@ -89,6 +90,12 @@ static void *pwm_thread(void *thread_args)
 // Perform final shutdown and cleanup.
 void uav_shutdown(int rc)
 {
+    fprintf(stderr, "shutting down gpio user space subsystem...\n");
+    if (g_muxsel > 0) {
+        gpio_free(g_muxsel);
+    }
+    gpio_term();
+
     fprintf(stderr, "shutting down ultrasonic subsystem...\n");
     ultrasonic_shutdown(&g_ultrasonic);
 
@@ -347,6 +354,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     fprintf(stderr, "switching to radio control\n");
                     vcm_type = VCM_TYPE_RADIO;
                     vcm_axes = VCM_AXIS_ALL; // all axes radio controlled
+                    gpio_set_value(g_muxsel, 0);
                     break;
                 case VCM_TYPE_AUTO:
                     fprintf(stderr, "switching to autonomous control\n");
@@ -354,6 +362,7 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     vcm_axes = VCM_AXIS_ALL; // all axes autonomously controlled
                     autonomous = 1;
                     close_controls();
+                    gpio_set_value(g_muxsel, 1);
                     break;
                 case VCM_TYPE_MIXED:
                     fprintf(stderr, "switching to remote control mode\n");
@@ -361,11 +370,13 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                     vcm_axes = cmd_buffer[PKT_VCM_AXES] & VCM_AXIS_ALL;
                     autonomous = 0;
                     open_controls();
+                    gpio_set_value(g_muxsel, 1);
                     break;
                 case VCM_TYPE_KILL:
                     fprintf(stderr, "switching to killswitch enabled mode\n");
                     vcm_type = VCM_TYPE_KILL;
                     vcm_axes = VCM_AXIS_ALL; // all axes disabled
+                    gpio_set_value(g_muxsel, 0);
                     break;
                 default:
                     fprintf(stderr, "bad control mode requested. ignoring\n");
@@ -435,6 +446,9 @@ void print_usage()
            "  -s [ --stty_dev ] arg   : specify serial device for IMU\n"
            "  -v [ --v4l_dev ] arg    : specify video device for webcam\n"
            "  -p [ --port ] arg       : specify port for network socket\n"
+           "  -m [ --mux ] arg        : specify gpio for mux select line\n"
+           "  -u [ --ultrasonic ] arg : specify gpio for ultrasonic pwm\n"
+           "  -o [ --override ] arg   : specify gpio for override pwm\n"
            "  -x [ --width ] arg      : specify resolution width for webcam\n"
            "  -y [ --height ] arg     : specify resolution height for webcam\n"
            "  -f [ --framerate ] arg  : specify capture framerate for webcam\n"
@@ -451,7 +465,7 @@ int main(int argc, char *argv[])
     int flag_verbose = 0, flag_daemonize = 0, flag_nullvideo = 0;
     int flag_v4l = 0, flag_stty = 0;
     int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
-    int arg_ultrasonic = 171, arg_override = 172;
+    int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
     char stty_dev[DEV_LEN], v4l_dev[DEV_LEN], port_str[DEV_LEN];
 
     static struct option long_options[] = {
@@ -459,6 +473,7 @@ int main(int argc, char *argv[])
         { "stty_dev",   required_argument, NULL, 's' },
         { "v4l_dev",    required_argument, NULL, 'v' },
         { "port",       required_argument, NULL, 'p' },
+        { "mux",        required_argument, NULL, 'm' },
         { "ultrasonic", required_argument, NULL, 'u' },
         { "override",   required_argument, NULL, 'o' },
         { "width",      required_argument, NULL, 'x' },
@@ -470,7 +485,7 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "Ds:v:p:u:o:x:y:f:NVh?";
+    static const char *str = "Ds:v:p:m:u:o:x:y:f:NVh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
@@ -487,6 +502,9 @@ int main(int argc, char *argv[])
             break;
         case 'p':
             arg_port = atoi(optarg);
+            break;
+        case 'm':
+            arg_mux = atoi(optarg);
             break;
         case 'u':
             arg_ultrasonic = atoi(optarg);
@@ -561,6 +579,23 @@ int main(int argc, char *argv[])
     // attempt to initialize ultrasonic communication
     if (!ultrasonic_init(arg_ultrasonic, &g_ultrasonic)) {
         syslog(LOG_ERR, "failed to initialize ultrasonic");
+        uav_shutdown(EXIT_FAILURE);
+    }
+
+    // attempt to initialize gpio pin for multiplexer select
+    if (0 > gpio_init()) {
+        syslog(LOG_ERR, "failed to initialize gpio user space library");
+        uav_shutdown(EXIT_FAILURE);
+    }
+
+    g_muxsel = arg_mux;
+    if (0 > gpio_request(arg_mux, "uav_control mux select line")) {
+        syslog(LOG_ERR, "failed to request mux select gpio %d", arg_mux);
+        uav_shutdown(EXIT_FAILURE);
+    }
+
+    if (0 > gpio_direction_output(arg_mux, 0)) {
+        syslog(LOG_ERR, "failed to set gpio %d direction to output", arg_mux);
         uav_shutdown(EXIT_FAILURE);
     }
 

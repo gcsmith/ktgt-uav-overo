@@ -14,20 +14,22 @@ CC            = @${CROSS_COMPILE}gcc
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 
 CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE \
-          -I../pwm-lib \
           -I../pwm-module \
-          -I../gpio-event-module
+          -I../pwm-lib \
+          -I../gpio-event-module \
+		  -I../gpio-lib
 
 LDFLAGS += -L../pwm-lib \
-           -lpthread -ljpeg -lpwm
+		   -L../gpio-lib \
+           -lpthread -ljpeg -lpwm -lgpio
 
-OBJ_FILES = uav_control.o \
-            razor_imu.o \
+OBJ_FILES = flight_control.o \
+			razor_imu.o \
             server.o \
+			uav_control.o \
             ultrasonic.o \
             video_uvc.o \
-            mjpg-streamer/v4l2uvc.o \
-            flight_control.o
+            mjpg-streamer/v4l2uvc.o
 
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
@@ -50,6 +52,4 @@ ifeq ($(strip $(filter clean%, $(MAKECMDGOALS))),)
 -include $(DEP_FILES)
 endif
 endif
-
-
 
