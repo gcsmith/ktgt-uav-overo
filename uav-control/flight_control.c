@@ -60,7 +60,7 @@ int open_controls()
     fprintf(stderr, "flight control: altitude channel opened\n");
 
     // keep throttle signal at the current value it is
-    pwm_set_freq(g_channels[PWM_ALT].handle, 46);
+    pwm_set_freq_x100(g_channels[PWM_ALT].handle, 4580);
     pwm_get_range(g_channels[PWM_ALT].handle, &g_channels[PWM_ALT].rng_min,
         &g_channels[PWM_ALT].rng_max);
     assign_duty(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
@@ -72,7 +72,7 @@ int open_controls()
     }
     fprintf(stderr, "flight control: pitch channel opened\n");
 
-    pwm_set_freq(g_channels[PWM_PITCH].handle, 46);
+    pwm_set_freq_x100(g_channels[PWM_PITCH].handle, 4580);
     pwm_get_range(g_channels[PWM_PITCH].handle, &g_channels[PWM_PITCH].rng_min,
             &g_channels[PWM_PITCH].rng_max);
     assign_duty(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE);
@@ -84,7 +84,7 @@ int open_controls()
     }
     fprintf(stderr, "flight control: roll channel opened\n");
 
-    pwm_set_freq(g_channels[PWM_ROLL].handle, 46);
+    pwm_set_freq_x100(g_channels[PWM_ROLL].handle, 4580);
     pwm_get_range(g_channels[PWM_ROLL].handle, &g_channels[PWM_ROLL].rng_min,
         &g_channels[PWM_ROLL].rng_max);
     assign_duty(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE);
@@ -96,7 +96,7 @@ int open_controls()
     }
     fprintf(stderr, "flight control: yaw channel opened\n");
 
-    pwm_set_freq(g_channels[PWM_YAW].handle, 46);
+    pwm_set_freq_x100(g_channels[PWM_YAW].handle, 4580);
     pwm_get_range(g_channels[PWM_YAW].handle, &g_channels[PWM_YAW].rng_min,
             &g_channels[PWM_YAW].rng_max);
     assign_duty(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE);
