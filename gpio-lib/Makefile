@@ -1,8 +1,8 @@
 #############################################################################
-# Garrett Smith 2010
-##############################################################################
+# Makefile for building the gpio libray
+#############################################################################
 
-LIBNAME = pwm
+LIBNAME = gpio
 STATIC_LIBNAME = lib$(LIBNAME).a
 
 PWD   = $(shell pwd)
@@ -13,9 +13,6 @@ STAGEDIR      ?= ${OETMP}/sysroots/armv7a-angstrom-linux-gnueabi/usr
 KERNEL_PATH   ?= $(OETMP)/sysroots/overo-angstrom-linux-gnueabi/kernel
 CROSS_COMPILE ?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
 ARCH          ?= arm
-
-CC = $(CROSS_COMPILE)gcc
-AR = $(CROSS_COMPILE)ar
 
 CFLAGS += -std=gnu99 \
           -Wall \
@@ -31,18 +28,18 @@ CFLAGS += -std=gnu99 \
           -Wmissing-prototypes \
           -Wstrict-prototypes \
           -Wmissing-declarations \
-          -I ../pwm-module
+          -I ../gpio-module
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 
-OBJ_FILES = pwm_lib.o
+OBJ_FILES = user-gpio.o
 STATIC_OBJ_FILES = $(addprefix static/,$(OBJ_FILES))
 
 all : $(STATIC_LIBNAME)
 
 $(STATIC_OBJ_FILES) : static
 
-static:
+static :
 	mkdir $@
 
 .PHONY: %.d
@@ -67,5 +64,4 @@ ifeq ($(strip $(filter clean%, $(MAKECMDGOALS))),)
 -include $(DEP_FILES)
 endif
 endif
-
 
