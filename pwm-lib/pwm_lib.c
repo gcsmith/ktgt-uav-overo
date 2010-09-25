@@ -38,6 +38,16 @@ int pwm_get_freq(pwm_t pwm)
     return ioctl(pwm, PWM_IOCQ_FREQ);
 }
 
+int pwm_set_freq_x100(pwm_t pwm, int freq)
+{
+    return ioctl(pwm, PWM_IOCT_FREQ_X100, freq);
+}
+
+int pwm_get_freq_x100(pwm_t pwm)
+{
+    return ioctl(pwm, PWM_IOCQ_FREQ_X100);
+}
+
 int pwm_set_duty(pwm_t pwm, int duty)
 {
     return ioctl(pwm, PWM_IOCT_DUTY, duty);

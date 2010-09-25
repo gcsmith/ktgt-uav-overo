@@ -11,6 +11,8 @@ int pwm_enable(pwm_t pwm);
 int pwm_disable(pwm_t pwm);
 int pwm_set_freq(pwm_t pwm, int freq);
 int pwm_get_freq(pwm_t pwm);
+int pwm_set_freq_x100(pwm_t pwm, int freq);
+int pwm_get_freq_x100(pwm_t pwm);
 int pwm_set_duty(pwm_t pwm, int duty);
 int pwm_get_duty(pwm_t pwm);
 int pwm_set_compare(pwm_t pwm, int compare);
