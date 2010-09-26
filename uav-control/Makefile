@@ -19,9 +19,9 @@ CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE \
           -I../gpio-event-module \
           -I../gpio-lib
 
-LDFLAGS += -L../pwm-lib \
-           -L../gpio-lib \
-           -lpthread -ljpeg -lpwm -lgpio
+LFLAGS += -L../pwm-lib \
+          -L../gpio-lib \
+          -lpthread -ljpeg -lpwm -lgpio
 
 OBJ_FILES = flight_control.o \
             razor_imu.o \
@@ -35,7 +35,7 @@ DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
 $(APPNAME) : $(OBJ_FILES)
 	@echo "[LD] $@"
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) -o $@ $^ $(LFLAGS)
 
 .PHONY: %.d
 %.d: ;
