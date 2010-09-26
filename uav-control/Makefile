@@ -19,7 +19,8 @@ CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE \
           -I../gpio-event-module \
           -I../gpio-lib
 
-LFLAGS += -L../pwm-lib \
+LFLAGS += $(LDFLAGS) \
+          -L../pwm-lib \
           -L../gpio-lib \
           -lpthread -ljpeg -lpwm -lgpio
 
