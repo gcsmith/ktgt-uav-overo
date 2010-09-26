@@ -2,7 +2,7 @@ DESCRIPTION = "Control software for UAV senior design project"
 HOMEPAGE = "http://www.ce.rit.edu"
 SECTION = "base"
 LICENSE = "GPL"
-DEPENDS = "gpio-event-module pwm-module"
+DEPENDS = "gpio-event-module pwm-lib gpio-lib"
 
 PV="svn${SRCDATE}"
 PR = "r0"
