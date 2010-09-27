@@ -19,9 +19,6 @@ FIRMWARE_INSTALL = " \
     "
 
 VIDEO_INSTALL += " \
-    opencv \
-    opencv-dev \
-    opencv-bin \
     mjpg-streamer \
     jpeg \
     "
