@@ -51,7 +51,8 @@
 #define PKT_VTI_RSSI        PKT_BASE + 3   // single strength in dBm
 #define PKT_VTI_ALT         PKT_BASE + 4   // altitude in inches
 #define PKT_VTI_BATT        PKT_BASE + 5   // battery percentage remaining
-#define PKT_VTI_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 6))
+#define PKT_VTI_AUX         PKT_BASE + 6   // auxiliary pwm channel
+#define PKT_VTI_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 7))
 
 // MJPG Frame Info packet offsets
 

@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// Implementation of ultrasonic (PWM) communication.
+// User space interface to gpio event driver.
 // Garrett Smith 2010
 // -----------------------------------------------------------------------------
 
@@ -11,19 +11,30 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "ultrasonic.h"
+#include "gpio_event.h"
 #include "gpio-event-drv.h"
 
-// -----------------------------------------------------------------------------
-static void *gpio_rd_thread(void *thread_args)
+typedef struct gpio_globals
 {
-    ultrasonic_data_t *data = (ultrasonic_data_t *)thread_args;
+    int running;
+    int fd;
+    pthread_t thread;
+    gpio_event_t *gpio[GPIO_COUNT];
+} gpio_globals_t;
+
+static gpio_globals_t globals;
+
+// -----------------------------------------------------------------------------
+static void *gpio_thread(void *pargs)
+{
+    gpio_globals_t *data = (gpio_globals_t *)pargs;
+    gpio_event_t *pevent = NULL;
     struct timeval tv;
     GPIO_Event_t event;
     fd_set rdset;
     int rc = 0, last_sec = 0, last_usec = 0;
 
-    while (data->running) {
+    while (globals.running) {
         // wait for IO to become ready using select
         for (;;) {
             FD_ZERO(&rdset);
@@ -63,16 +74,22 @@ static void *gpio_rd_thread(void *thread_args)
             // stop timing on the falling edge of the pwm
             if (last_usec != 0) {
                 int delta = event.time.tv_usec - last_usec;
-                if (last_sec < event.time.tv_sec)
-                {
+                if (last_sec < event.time.tv_sec) {
                     // account for microsecond overflow
                     delta += 1000000;
                 }
-                pthread_mutex_lock(&data->lock);
-                // taken from maxbotix from spec: 147 us == 1 inch
-                data->height = delta / 147;
-                // printf("gpio%d: delta: %d\n", event.gpio, delta);
-                pthread_mutex_unlock(&data->lock);
+
+                pevent = globals.gpio[event.gpio];
+                if (pevent && pevent->enabled) {
+                    // update data for this event
+                    pthread_mutex_lock(&pevent->lock);
+
+                    pevent->pulsewidth = delta;
+                    pevent->sample++;
+
+                    pthread_cond_broadcast(&pevent->cond);
+                    pthread_mutex_unlock(&pevent->lock);
+                }
             }
             last_usec = 0;
             break;
@@ -86,47 +103,30 @@ static void *gpio_rd_thread(void *thread_args)
 }
 
 // -----------------------------------------------------------------------------
-int ultrasonic_init(int gpio, ultrasonic_data_t *data)
+int gpio_event_init()
 {
-    GPIO_EventMonitor_t monitor;
     void *arg;
     int rc;
 
-    memset(data, 0, sizeof(ultrasonic_data_t));
-    data->running = 1;
-    data->gpio = gpio;
+    // clear out the gpio event list
+    memset(globals.gpio, 0, sizeof(gpio_event_t *) * GPIO_COUNT);
 
     // open the gpio-event device node
-    data->fd = open("/dev/gpio-event", 0);
-    if (data->fd < 0) {
+    globals.fd = open("/dev/gpio-event", 0);
+    if (globals.fd < 0) {
         fprintf(stderr, "failed to open /dev/gpio-event\n");
         return 0;
     }
-    printf("successfully opened /dev/gpio-event for reading\n");
+    fprintf(stderr, "successfully opened /dev/gpio-event for reading\n");
 
     // set read mode to binary (default is ascii)
-    ioctl(data->fd, GPIO_EVENT_IOCTL_SET_READ_MODE, GPIO_EventReadModeBinary);
+    ioctl(globals.fd, GPIO_EVENT_IOCTL_SET_READ_MODE, GPIO_EventReadModeBinary);
 
-    // initialize monitor for gpio146, detect both rising/falling edges
-    monitor.gpio  = gpio;
-    monitor.onOff = 1;
-    monitor.edgeType = GPIO_EventBothEdges;
-    monitor.debounceMilliSec = 0;
-
-    if (ioctl(data->fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor)) {
-        fprintf(stderr, "failed to set gpio monitor\n");
-        return 0;
-    }
-    printf("monitoring rising and falling edge for gpio%d\n", monitor.gpio);
-
-    if (0 != (rc = pthread_mutex_init(&data->lock, NULL))) {
-        syslog(LOG_ERR, "error creating serial mutex (%d)", rc);
-        return 0;
-    }
-
-    arg = (void *)data;
-    if (0 != (rc = pthread_create(&data->thread, NULL, gpio_rd_thread, arg))) {
-        syslog(LOG_ERR, "error creating serial thread (%d)", rc);
+    // kick off the event monitoring thread for all gpio pins
+    globals.running = 1;
+    arg = (void *)&globals;
+    if (0 != (rc = pthread_create(&globals.thread, NULL, gpio_thread, arg))) {
+        fprintf(stderr, "error creating serial thread (%d)", rc);
         return 0;
     }
 
@@ -134,18 +134,64 @@ int ultrasonic_init(int gpio, ultrasonic_data_t *data)
 }
 
 // -----------------------------------------------------------------------------
-void ultrasonic_shutdown(ultrasonic_data_t *data)
+int gpio_event_attach(gpio_event_t *event, int gpio)
 {
     GPIO_EventMonitor_t monitor;
+    int rc;
 
-    data->running = 0;
-    pthread_cancel(data->thread);
-    pthread_mutex_destroy(&data->lock);
+    // initialize monitor for this gpio, detect both rising/falling edges
+    monitor.gpio  = gpio;
+    monitor.onOff = 1;
+    monitor.edgeType = GPIO_EventBothEdges;
+    monitor.debounceMilliSec = 0;
 
-    monitor.gpio = data->gpio;
+    event->gpio = gpio;
+    event->enabled = 1;
+    event->sample = 0;
+    globals.gpio[gpio] = event;
+
+    if (ioctl(globals.fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor)) {
+        fprintf(stderr, "failed to set gpio monitor\n");
+        return 0;
+    }
+    printf("monitoring rising and falling edge for gpio%d\n", monitor.gpio);
+
+    if (0 != (rc = pthread_mutex_init(&event->lock, NULL))) {
+        syslog(LOG_ERR, "error creating gpio event mutex (%d)", rc);
+        return 0;
+    }
+
+    if (0 != (rc = pthread_cond_init(&event->cond, NULL))) {
+        syslog(LOG_ERR, "error creating gpio event condition (%d)", rc);
+        return 0;
+    }
+
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+void gpio_event_detach(gpio_event_t *event)
+{
+    GPIO_EventMonitor_t monitor;
+    monitor.gpio = event->gpio;
     monitor.onOff = 0;
-    ioctl(data->fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor);
 
-    close(data->fd);
+    event->enabled = 0;
+    pthread_mutex_destroy(&event->lock);
+    pthread_cond_destroy(&event->cond);
+
+    ioctl(globals.fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor);
+}
+
+// -----------------------------------------------------------------------------
+void gpio_event_shutdown()
+{
+    globals.running = 0;
+    pthread_cancel(globals.thread);
+
+    if (globals.fd >= 0) {
+        fprintf(stderr, "closing /dev/gpio-event...\n");
+        close(globals.fd);
+    }
 }
 

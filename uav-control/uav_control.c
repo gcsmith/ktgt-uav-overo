@@ -24,7 +24,7 @@
 #include "pwm_interface.h"
 #include "razor_imu.h"
 #include "server.h"
-#include "ultrasonic.h"
+#include "gpio_event.h"
 #include "uav_protocol.h"
 #include "video_uvc.h"
 #include "user-gpio.h"
@@ -33,8 +33,9 @@
 #define PKT_BUFF_LEN    2048
 
 imu_data_t g_imu;
-ultrasonic_data_t g_ultrasonic;
 pthread_t g_pwmthrd;
+gpio_event_t g_gpio_alt; // ultrasonic PWM
+gpio_event_t g_gpio_aux; // auxiliary PWM
 
 static ctl_sigs_t client_sigs = { 0 };
 static char autonomous = 1;
@@ -96,8 +97,10 @@ void uav_shutdown(int rc)
     }
     gpio_term();
 
-    fprintf(stderr, "shutting down ultrasonic subsystem...\n");
-    ultrasonic_shutdown(&g_ultrasonic);
+    fprintf(stderr, "shutting down gpio event subsystem...\n");
+    gpio_event_detach(&g_gpio_aux);
+    gpio_event_detach(&g_gpio_alt);
+    gpio_event_shutdown();
 
     fprintf(stderr, "shutting down imu subsystem...\n");
     imu_shutdown(&g_imu);
@@ -200,7 +203,7 @@ int recv_packet(int hclient, uint32_t *cmd_buffer)
 // -----------------------------------------------------------------------------
 // Server entry-point. Sits in a loop accepting and processing incoming client
 // connections until terminated.
-void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
+void run_server(imu_data_t *imu, const char *port)
 {
     struct sockaddr_storage addr;
     struct sockaddr_in *sa;
@@ -308,13 +311,18 @@ void run_server(imu_data_t *imu, ultrasonic_data_t *us, const char *port)
                 temp.f = imu->angles[2]; cmd_buffer[PKT_VTI_ROLL]  = temp.i;
                 pthread_mutex_unlock(&imu->lock);
 
-                cmd_buffer[PKT_VTI_RSSI]  = read_wlan_rssi(hclient);
+                cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(hclient);
+                cmd_buffer[PKT_VTI_BATT] = 100;
 
-                pthread_mutex_unlock(&us->lock);
-                cmd_buffer[PKT_VTI_ALT] = us->height;
-                pthread_mutex_unlock(&us->lock);
+                pthread_mutex_lock(&g_gpio_alt.lock);
+                // taken from maxbotix from spec: 147 us == 1 inch
+                cmd_buffer[PKT_VTI_ALT] = g_gpio_alt.pulsewidth / 147;
+                pthread_mutex_unlock(&g_gpio_alt.lock);
 
-                cmd_buffer[PKT_VTI_BATT]  = 100;  // battery
+                pthread_mutex_lock(&g_gpio_aux.lock);
+                cmd_buffer[PKT_VTI_AUX]  = g_gpio_aux.pulsewidth;
+                pthread_mutex_unlock(&g_gpio_aux.lock);
+
                 send(hclient, (void *)cmd_buffer, PKT_VTI_LENGTH, 0);
                 break;
             case CLIENT_REQ_MJPG_FRAME:
@@ -576,11 +584,22 @@ int main(int argc, char *argv[])
         uav_shutdown(EXIT_FAILURE);
     }
 
+    // initialize gpio event monitors
+    if (!gpio_event_init()) {
+        syslog(LOG_ERR, "failed to initialize gpio event subsystem");
+        uav_shutdown(EXIT_FAILURE);
+    }
+
+    gpio_event_attach(&g_gpio_alt, arg_ultrasonic);
+    gpio_event_attach(&g_gpio_aux, arg_override);
+
+#if 0
     // attempt to initialize ultrasonic communication
     if (!ultrasonic_init(arg_ultrasonic, &g_ultrasonic)) {
         syslog(LOG_ERR, "failed to initialize ultrasonic");
         uav_shutdown(EXIT_FAILURE);
     }
+#endif
 
     // attempt to initialize gpio pin for multiplexer select
     if (0 > gpio_init()) {
@@ -610,7 +629,7 @@ int main(int argc, char *argv[])
     }
 
     // server entry point
-    run_server(&g_imu, &g_ultrasonic, port_str);
+    run_server(&g_imu, port_str);
     
     uav_shutdown(EXIT_SUCCESS);
     return EXIT_SUCCESS;

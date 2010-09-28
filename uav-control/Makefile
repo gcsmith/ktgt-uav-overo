@@ -25,10 +25,10 @@ LFLAGS += $(LDFLAGS) \
           -lpthread -ljpeg -lpwm -lgpio
 
 OBJ_FILES = flight_control.o \
+			gpio_event.o \
             razor_imu.o \
             server.o \
             uav_control.o \
-            ultrasonic.o \
             video_uvc.o \
             mjpg-streamer/v4l2uvc.o
 
