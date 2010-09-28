@@ -32,7 +32,7 @@ static void *gpio_thread(void *pargs)
     struct timeval tv;
     GPIO_Event_t event;
     fd_set rdset;
-    int rc = 0, last_sec = 0, last_usec = 0;
+    int rc = 0;
 
     while (globals.running) {
         // wait for IO to become ready using select
@@ -63,35 +63,38 @@ static void *gpio_thread(void *pargs)
             continue;
         }
 
+        pevent = globals.gpio[event.gpio];
+        if (!pevent || !pevent->enabled) {
+            continue;
+        }
+
         switch (event.edgeType)
         {
         case GPIO_EventRisingEdge:
             // start timing on the rising edge of the pwm
-            last_sec = event.time.tv_sec;
-            last_usec = event.time.tv_usec;
+            pevent->last_sec = event.time.tv_sec;
+            pevent->last_usec = event.time.tv_usec;
             break;
         case GPIO_EventFallingEdge:
             // stop timing on the falling edge of the pwm
-            if (last_usec != 0) {
-                int delta = event.time.tv_usec - last_usec;
-                if (last_sec < event.time.tv_sec) {
+            if (pevent->last_usec != 0) {
+                int delta = event.time.tv_usec - pevent->last_usec;
+                if (pevent->last_sec < event.time.tv_sec) {
                     // account for microsecond overflow
                     delta += 1000000;
                 }
 
-                pevent = globals.gpio[event.gpio];
-                if (pevent && pevent->enabled) {
-                    // update data for this event
-                    pthread_mutex_lock(&pevent->lock);
+                // update data for this event
+                pthread_mutex_lock(&pevent->lock);
 
-                    pevent->pulsewidth = delta;
-                    pevent->sample++;
+                pevent->pulsewidth = delta;
+                pevent->sample++;
+                fprintf(stderr, "gpio %d val %d\n", pevent->gpio, pevent->pulsewidth);
 
-                    pthread_cond_broadcast(&pevent->cond);
-                    pthread_mutex_unlock(&pevent->lock);
-                }
+                pthread_cond_broadcast(&pevent->cond);
+                pthread_mutex_unlock(&pevent->lock);
             }
-            last_usec = 0;
+            pevent->last_usec = 0;
             break;
         default:
             fprintf(stderr, "unexpected case statement\n");
@@ -148,6 +151,8 @@ int gpio_event_attach(gpio_event_t *event, int gpio)
     event->gpio = gpio;
     event->enabled = 1;
     event->sample = 0;
+    event->last_sec = 0;
+    event->last_usec = 0;
     globals.gpio[gpio] = event;
 
     if (ioctl(globals.fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor)) {

@@ -18,6 +18,8 @@ typedef struct gpio_event
     int enabled;            // is this pin being actively monitored?
     int pulsewidth;         // pulse width of PWM signal on GPIO
     int sample;             // current sample index
+    int last_sec;
+    int last_usec;
 } gpio_event_t;
 
 int gpio_event_init();
