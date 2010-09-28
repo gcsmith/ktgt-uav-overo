@@ -7,7 +7,7 @@
 #define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x00000002  // software version
+#define IDENT_VERSION   0x00000003  // software version
 
 // Packet commands from server to client
 
