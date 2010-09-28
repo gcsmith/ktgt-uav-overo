@@ -25,7 +25,7 @@ LFLAGS += $(LDFLAGS) \
           -lpthread -ljpeg -lpwm -lgpio
 
 OBJ_FILES = flight_control.o \
-			gpio_event.o \
+            gpio_event.o \
             razor_imu.o \
             server.o \
             uav_control.o \

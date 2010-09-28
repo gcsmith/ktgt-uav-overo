@@ -89,7 +89,6 @@ static void *gpio_thread(void *pargs)
 
                 pevent->pulsewidth = delta;
                 pevent->sample++;
-                fprintf(stderr, "gpio %d val %d\n", pevent->gpio, pevent->pulsewidth);
 
                 pthread_cond_broadcast(&pevent->cond);
                 pthread_mutex_unlock(&pevent->lock);
