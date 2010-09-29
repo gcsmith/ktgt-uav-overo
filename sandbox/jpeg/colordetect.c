@@ -5,20 +5,18 @@
 #include "readwritejpeg.h"
 #include "colordetect.h"
 JSAMPLE * image_buffer;
-int image_height;
-int image_width;
+
 int noiseFilter = 5;
 
 int main(int argc, char *argv[]){
+    //int image_height;
+    //int image_width;
     //Color to Look for
     //Green Frisbee RGB= 151 242 192
     unsigned char R = 151;
     unsigned char G = 242;
     unsigned char B = 192;
-    //Color to look for in HSL (will be calculated from RGB)
-    short H = 0;
-    short S = 0;
-    short L = 0;
+ 
     //HSL Threshold values
     //Green Frisbee on carpet 30 100 360
     short Ht = 30;
@@ -26,12 +24,11 @@ int main(int argc, char *argv[]){
     short Lt = 360;
     
     //Define RGBimage
-    unsigned char * RGBimage;
+    //unsigned char * RGBimage;
     //Define file name
     char* filename = "frisbee.jpg";
     
-    int RecolorPixels = 1;
-    int DrawBox = 1;
+   
 
     if( argc!= 1 && argc != 2 && argc != 5 && argc != 8 ){
         printf( "Usage:\n %s filename R G B\n or \n %s filename \
@@ -58,63 +55,110 @@ int main(int argc, char *argv[]){
     
     
     
-    //Convert detect color from RGB to HSL
-    RGB2HSL (R, G, B,&H, &S, &L);
-   
+    runColorDetectionFile(filename,"testimage.jpg",100,R,B,G,Ht,St,Lt);
+   /*
     read_JPEG_file(filename,&RGBimage,&image_width,&image_height);
 
-    //findColorRGB(RGBimage,image_width,image_height, 255, 0, 0, 16);
+    
 
-    // Convert the image to HSL
-    short * HSLimage = malloc(sizeof(short)*image_height*image_width*3);	  
+    runColorDetection(RGBimage,image_width,image_height, R, B, G, Ht, St, Lt);
 
-    COLORimageRGBtoHSL(RGBimage, HSLimage, image_width, image_height);
-
-
-
-    // Find HSL Values in image
-    findColorHSL(HSLimage,image_width,image_height, H, S, L, Ht, St, Lt,RGBimage, RecolorPixels, DrawBox);
-
+    
     // Write the Image back
     write_JPEG_file ("testimage.jpg", 100,RGBimage,image_width,image_height);
+    */
 
     printf("End Test\n");
     return 0;
 }
 
+void runColorDetectionFile(char * infilename,char * outfilename, int quality,
+                        unsigned char R,
+                        unsigned char G, 
+                        unsigned char B, 
+                        short Ht, 
+                        short St, 
+                        short Lt){
+                        
+    int width = 0;
+    int height = 0;
+    //Define RGBimage
+    unsigned char * RGBimage;
+    
+                        
+    read_JPEG_file(infilename,&RGBimage,&width,&height);
 
-void findColorRGB(unsigned char* RGBimage,int width, int height,unsigned char R, unsigned char G, unsigned char B, int threshold){
-    int i = 0;
-    int j = 0;
-    int consPix = 0;
-    int x1 = width, x2 = 0, y1 = height, y2 = 0;
-    for( i = 0; i < height; i++){
-       consPix = 0;
-       for ( j = 0; j < width; j++){
-	 if(sqrt( (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 0]) - R , 2 ) ) +
-                (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 1]) - G , 2 ) ) +
-                (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 2]) - B , 2 ) ) 
-		  ) < (double)threshold ){
-                
-		consPix++;		
-		if(consPix >= noiseFilter){
-			if(j < x1)
-			  x1 = j;
-		        if(j > x2)
-		          x2 = j;
-		        if(i < y1)
-		          y1 = i;
-		        if(i > y2)
-		          y2 = i; 
-		}
-            }else{
-               
-		consPix = 0;
-            }
-       }
-    }
-    printf("(%d,%d) (%d,%d)\n",x1,y1,x2,y2);
+    
+
+    runColorDetection(RGBimage,width,height, R, B, G, Ht, St, Lt);
+
+    
+    // Write the Image back
+    write_JPEG_file(outfilename,quality,RGBimage,width,height);                   
+                        
 }
+
+
+
+
+
+
+void runColorDetectionMemory(unsigned char * inbuffer, unsigned long insize, int quality,
+                        unsigned char R,
+                        unsigned char G, 
+                        unsigned char B, 
+                        short Ht, 
+                        short St, 
+                        short Lt){
+                        
+    int width = 0;
+    int height = 0;
+    //Define RGBimage
+    unsigned char * RGBimage;
+    
+                        
+    read_JPEG_stream(inbuffer,insize,&RGBimage,&width,&height);
+
+    
+
+    runColorDetection(RGBimage,width,height, R, B, G, Ht, St, Lt);
+
+    
+    // Write the Image back
+    write_JPEG_stream (&inbuffer, &insize,quality,RGBimage,width,height);                   
+                        
+}
+
+
+
+
+void runColorDetection(unsigned char * RGBimage,int image_width, int image_height,
+                        unsigned char R,
+                        unsigned char G, 
+                        unsigned char B, 
+                        short Ht, 
+                        short St, 
+                        short Lt){
+     //Color to look for in HSL (will be calculated from RGB)
+    short H = 0;
+    short S = 0;
+    short L = 0;                   
+   
+    int RecolorPixels = 1;
+    int DrawBox = 1;
+   //Convert detect color from RGB to HSL
+    RGB2HSL (R, G, B,&H, &S, &L);                     
+                        
+    // Convert the image to HSL
+    short * HSLimage = malloc(sizeof(short)*image_height*image_width*3);	  
+
+    COLORimageRGBtoHSL(RGBimage, HSLimage, image_width, image_height);
+    // Find HSL Values in image
+    findColorHSL(HSLimage,image_width,image_height, H, S, L, Ht, St, Lt,RGBimage, RecolorPixels, DrawBox);                    
+                        
+}
+
+
 
 void findColorHSL(short* HSLimage, int width, int height,
                 short H, short S, short L,
@@ -310,6 +354,38 @@ double min_double(double x, double y){
 
      printf("%f %f %f\n", *hh, *ss, *ll);
  }
+ void findColorRGB(unsigned char* RGBimage,int width, int height,unsigned char R, unsigned char G, unsigned char B, int threshold){
+    int i = 0;
+    int j = 0;
+    int consPix = 0;
+    int x1 = width, x2 = 0, y1 = height, y2 = 0;
+    for( i = 0; i < height; i++){
+       consPix = 0;
+       for ( j = 0; j < width; j++){
+	 if(sqrt( (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 0]) - R , 2 ) ) +
+                (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 1]) - G , 2 ) ) +
+                (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 2]) - B , 2 ) ) 
+		  ) < (double)threshold ){
+                
+		consPix++;		
+		if(consPix >= noiseFilter){
+			if(j < x1)
+			  x1 = j;
+		        if(j > x2)
+		          x2 = j;
+		        if(i < y1)
+		          y1 = i;
+		        if(i > y2)
+		          y2 = i; 
+		}
+            }else{
+               
+		consPix = 0;
+            }
+       }
+    }
+    printf("(%d,%d) (%d,%d)\n",x1,y1,x2,y2);
+}
 
 //NOT NEEDED
 

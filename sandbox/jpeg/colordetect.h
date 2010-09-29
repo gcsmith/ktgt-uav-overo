@@ -1,3 +1,26 @@
+void runColorDetectionFile(char * infilename,char * outfilename, int quality,
+                        unsigned char R,
+                        unsigned char G, 
+                        unsigned char B, 
+                        short Ht, 
+                        short St, 
+                        short Lt);
+
+void runColorDetectionMemory(unsigned char * inbuffer, unsigned long insize, int quality,
+                        unsigned char R,
+                        unsigned char G, 
+                        unsigned char B, 
+                        short Ht, 
+                        short St, 
+                        short Lt);
+void runColorDetection(unsigned char * RGBimage,int image_width, int image_height,
+                        unsigned char R,
+                        unsigned char G, 
+                        unsigned char B, 
+                        short Ht, 
+                        short St, 
+                        short Lt);
+
 
 void findColorRGB(unsigned char* RGBimage, int width, int height,unsigned char R, unsigned char G, unsigned char B, int threshold);
 void findColorHSL(short* HSLimage, int width, int height,
