@@ -17,7 +17,8 @@
 #define SERVER_ACK_LANDING      3   // acknowledge request to land
 #define SERVER_ACK_TELEMETRY    4   // acknowledge request for telemetry (+data)
 #define SERVER_ACK_MJPG_FRAME   5   // transmit a single frame of video
-#define SERVER_ACK_SET_CTL_MODE 6
+#define SERVER_ACK_SET_CTL_MODE 6   // acknowledge control mode
+#define SERVER_ACK_SET_MCM_AXES 7   // acknowledge mixed controlled axes
 
 // Packet commands from client to server
 
@@ -28,6 +29,7 @@
 #define CLIENT_REQ_MJPG_FRAME   4   // request a single frame of video
 #define CLIENT_REQ_SET_CTL_MODE 5   // request a change in control mode
 #define CLIENT_REQ_FLIGHT_CTL   6   // command the helicopter's flight
+#define CLIENT_REQ_SET_MCM_AXES 7   // request an update of controlled axes
 
 // General packet offsets
 

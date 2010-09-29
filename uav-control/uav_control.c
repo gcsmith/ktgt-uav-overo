@@ -329,7 +329,7 @@ void run_server(imu_data_t *imu, const char *port)
                 case VCM_TYPE_MIXED:
                     fprintf(stderr, "switching to remote control mode\n");
                     vcm_type = VCM_TYPE_MIXED;
-                    vcm_axes = cmd_buffer[PKT_VCM_AXES] & VCM_AXIS_ALL;
+                    vcm_axes = 0; // no axes are enable by just activating MCM
                     autonomous = 0;
                     open_controls();
                     gpio_set_value(g_muxsel, 0);
@@ -374,6 +374,18 @@ void run_server(imu_data_t *imu, const char *port)
                 
                 // send signals off to PWMs
                 flight_control(&client_sigs, vcm_axes);
+                break;
+            case CLIENT_REQ_SET_MCM_AXES:
+                if ((uint32_t)cmd_buffer[PKT_VCM_TYPE] == VCM_TYPE_MIXED)
+                {
+                    vcm_axes = cmd_buffer[PKT_VCM_AXES];
+
+                    cmd_buffer[PKT_COMMAND]  = SERVER_ACK_SET_MCM_AXES;
+                    cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
+                    cmd_buffer[PKT_VCM_TYPE] = vcm_type;
+                    cmd_buffer[PKT_VCM_AXES] = vcm_axes;
+                    send(hclient, (void *)cmd_buffer, PKT_VCM_LENGTH, 0);
+                }
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes
