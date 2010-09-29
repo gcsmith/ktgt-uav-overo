@@ -51,16 +51,35 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
     {
         // joystick is scrolling from up to down
         if ((last_value > value) && (last_value > 0))
+        {
+            fprintf(stderr, "Breaking early: l_v > v\n");
+            last_value = value;
             return;
+        }
 
         // joystick is scrolling from down to up
         if ((last_value < value) && (last_value < 0))
+        {
+            fprintf(stderr, "Breaking early: l_v < v\n");
+            last_value = value;
             return;
+        }
 
+        // no delta
+        if (last_value == value)
+        {
+            fprintf(stderr, "Breaking early: l_v == v\n");
+            last_value = value;
+            return;
+        }
+
+        fprintf(stderr, "flight_control: value = %f\n", value);
         cmp = min + hrange + (int)(hrange * value);
+        last_value = value;
     }
     else
     {
+        fprintf(stderr, "flight_control: value = %f\n", value);
         cmp = min + hrange + (int)(hrange * value);
     }
 
