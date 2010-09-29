@@ -41,52 +41,6 @@ static ctl_sigs_t client_sigs = { 0 };
 static char autonomous = 1;
 static int g_muxsel = -1;
 
-static void *pwm_thread(void *thread_args)
-{
-#if 0
-    struct timespec req;
-    struct timespec rem;
-    int i;
-
-    pwm_t pwm1 = pwm_open_device(PWM_ALT);
-    pwm_t pwm2 = pwm_open_device(PWM_PITCH);
-    pwm_t pwm3 = pwm_open_device(PWM_ROLL);
-    pwm_t pwm4 = pwm_open_device(PWM_YAW);
-
-    for (;;) {
-
-        if (!autonomous)
-            continue;
-
-        for (i = 2; i < 13; i++) {
-            pwm_set_duty(pwm1, i);
-            if (!(i % 2)) pwm_set_duty(pwm2, i);
-            if (!(i % 3)) pwm_set_duty(pwm3, i);
-            if (!(i % 4)) pwm_set_duty(pwm4, i);
-            req.tv_sec = 0;
-            req.tv_nsec = 80000000;
-            nanosleep(&req, &rem);
-        }
-        for (i = 13; i >= 2; i--) {
-            pwm_set_duty(pwm1, i);
-            if (!(i % 2)) pwm_set_duty(pwm2, i);
-            if (!(i % 3)) pwm_set_duty(pwm3, i);
-            if (!(i % 4)) pwm_set_duty(pwm4, i);
-            req.tv_sec = 0;
-            req.tv_nsec = 80000000;
-            nanosleep(&req, &rem);
-        }
-    }
-
-    pwm_close_device(pwm4);
-    pwm_close_device(pwm3);
-    pwm_close_device(pwm2);
-    pwm_close_device(pwm1);
-#endif
-
-    pthread_exit(NULL);
-}
-
 // -----------------------------------------------------------------------------
 // Perform final shutdown and cleanup.
 void uav_shutdown(int rc)
@@ -215,7 +169,7 @@ void run_server(imu_data_t *imu, const char *port)
     unsigned long buff_sz = 0;
     uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
     char ip4[INET_ADDRSTRLEN];
-    video_data vid_data;
+    video_data_t vid_data;
 
     union {
         float f;
@@ -590,16 +544,15 @@ int main(int argc, char *argv[])
         uav_shutdown(EXIT_FAILURE);
     }
 
-    gpio_event_attach(&g_gpio_alt, arg_ultrasonic);
-    gpio_event_attach(&g_gpio_aux, arg_override);
-
-#if 0
-    // attempt to initialize ultrasonic communication
-    if (!ultrasonic_init(arg_ultrasonic, &g_ultrasonic)) {
-        syslog(LOG_ERR, "failed to initialize ultrasonic");
+    if (!gpio_event_attach(&g_gpio_alt, arg_ultrasonic)) {
+        syslog(LOG_ERR, "failed to monitor ultrasonic gpio pin");
         uav_shutdown(EXIT_FAILURE);
     }
-#endif
+
+    if (!gpio_event_attach(&g_gpio_aux, arg_override)) {
+        syslog(LOG_ERR, "failed to monitor auxiliary override gpio pin");
+        uav_shutdown(EXIT_FAILURE);
+    }
 
     // attempt to initialize gpio pin for multiplexer select
     if (0 > gpio_init()) {
@@ -621,11 +574,6 @@ int main(int argc, char *argv[])
     // initialize video subsystem unless specified not to (null-video)
     if (!flag_nullvideo) {
         video_init(v4l_dev, arg_width, arg_height, arg_fps);
-    }
-
-    if (0 != pthread_create(&g_pwmthrd, NULL, pwm_thread, NULL)) {
-        fprintf(stderr, "failed to create pwm thread\n");
-        uav_shutdown(EXIT_FAILURE);
     }
 
     // server entry point

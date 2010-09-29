@@ -87,7 +87,7 @@ void *cam_input_thread( void *arg ) {
   return NULL;
 }
 
-int video_lock(video_data *vdata)
+int video_lock(video_data_t *vdata)
 {
     if (!g_vid_enabled) {
         return 0;

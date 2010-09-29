@@ -18,7 +18,6 @@
 #define SERVER_ACK_TELEMETRY    4   // acknowledge request for telemetry (+data)
 #define SERVER_ACK_MJPG_FRAME   5   // transmit a single frame of video
 #define SERVER_ACK_SET_CTL_MODE 6
-#define SERVER_ACK_FLIGHT_CTL   7   // acknowledge the flight control command
 
 // Packet commands from client to server
 
