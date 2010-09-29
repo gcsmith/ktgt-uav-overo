@@ -1,6 +1,9 @@
 
 void findColorRGB(unsigned char* RGBimage, int width, int height,unsigned char R, unsigned char G, unsigned char B, int threshold);
-void findColorHSL(short* HSLimage, int width, int height,short H, short S, short L, int Hthreshold, int Sthreshold, int Lthreshold,unsigned char * RGBimage);
+void findColorHSL(short* HSLimage, int width, int height,
+                short H, short S, short L,
+                int Hthreshold, int Sthreshold, int Lthreshold,
+                unsigned char * RGBimage, int recolorPixels, int drawBox);
 void hsv_to_hsl(double h, double s, double v, double* hh, double* ss, double* ll);
 
 

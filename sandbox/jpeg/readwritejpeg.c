@@ -352,7 +352,6 @@ read_JPEG_file (char * filename,unsigned char ** RGBimage,int * width, int * hei
    * with the stdio data source.
    */
 
-printf("width %d\n",cinfo.output_width);
 (*width)= cinfo.output_width;
 (*height)= cinfo.output_height;
 

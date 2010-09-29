@@ -9,28 +9,77 @@ int image_height;
 int image_width;
 int noiseFilter = 5;
 
-int main(){
-   unsigned char * RGBimage;
+int main(int argc, char *argv[]){
+    //Color to Look for
+    //Green Frisbee RGB= 151 242 192
+    unsigned char R = 151;
+    unsigned char G = 242;
+    unsigned char B = 192;
+    //Color to look for in HSL (will be calculated from RGB)
+    short H = 0;
+    short S = 0;
+    short L = 0;
+    //HSL Threshold values
+    //Green Frisbee on carpet 30 100 360
+    short Ht = 30;
+    short St = 100;
+    short Lt = 360;
+    
+    //Define RGBimage
+    unsigned char * RGBimage;
+    //Define file name
+    char* filename = "frisbee.jpg";
+    
+    int RecolorPixels = 1;
+    int DrawBox = 1;
 
-   read_JPEG_file("frisbee.jpg",&RGBimage,&image_width,&image_height);
-
-   findColorRGB(RGBimage,image_width,image_height, 255, 0, 0, 16);
-
-   // Convert the image to HSL
-   short * HSLimage = malloc(sizeof(short)*image_height*image_width*3);	  
+    if( argc!= 1 && argc != 2 && argc != 5 && argc != 8 ){
+        printf( "Usage:\n %s filename R G B\n or \n %s filename \
+                R G B Ht St Lt\n *t -> threshold value\n",argv[0],argv[0]);
+        return 0;
+    }
+    //Define File name (first argument 
+    if(argc >= 2){
+        filename = argv[1];
+    }
+    // Define RGB
+    if( argc >= 5){
+        R = (unsigned char)atoi(argv[2]);
+        G = (unsigned char)atoi(argv[3]);
+        B = (unsigned char)atoi(argv[4]);
+    }
+    if( argc == 8){    
+    // Define a new thereshold
+        Ht = (short)atoi(argv[5]);
+        St = (short)atoi(argv[6]);
+        Lt = (short)atoi(argv[7]);
+    
+    }
+    
+    
+    
+    //Convert detect color from RGB to HSL
+    RGB2HSL (R, G, B,&H, &S, &L);
    
-   COLORimageRGBtoHSL(RGBimage, HSLimage, image_width, image_height);
+    read_JPEG_file(filename,&RGBimage,&image_width,&image_height);
+
+    //findColorRGB(RGBimage,image_width,image_height, 255, 0, 0, 16);
+
+    // Convert the image to HSL
+    short * HSLimage = malloc(sizeof(short)*image_height*image_width*3);	  
+
+    COLORimageRGBtoHSL(RGBimage, HSLimage, image_width, image_height);
 
 
 
-   // Find HSL Values in image
-   findColorHSL(HSLimage,image_width,image_height, 146, 279, 278, 30, 100, 360,RGBimage);
+    // Find HSL Values in image
+    findColorHSL(HSLimage,image_width,image_height, H, S, L, Ht, St, Lt,RGBimage, RecolorPixels, DrawBox);
 
-   // Write the Image back
-   write_JPEG_file ("testimage.jpg", 100,RGBimage,image_width,image_height);
+    // Write the Image back
+    write_JPEG_file ("testimage.jpg", 100,RGBimage,image_width,image_height);
 
-   printf("End Test\n");
-   return 0;
+    printf("End Test\n");
+    return 0;
 }
 
 
@@ -43,8 +92,8 @@ void findColorRGB(unsigned char* RGBimage,int width, int height,unsigned char R,
        consPix = 0;
        for ( j = 0; j < width; j++){
 	 if(sqrt( (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 0]) - R , 2 ) ) +
-                     (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 1]) - G , 2 ) ) +
-                     (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 2]) - B , 2 ) ) 
+                (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 1]) - G , 2 ) ) +
+                (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 2]) - B , 2 ) ) 
 		  ) < (double)threshold ){
                 
 		consPix++;		
@@ -67,13 +116,17 @@ void findColorRGB(unsigned char* RGBimage,int width, int height,unsigned char R,
     printf("(%d,%d) (%d,%d)\n",x1,y1,x2,y2);
 }
 
-void findColorHSL(short* HSLimage, int width, int height,short H, short S, short L, int Hthreshold, int Sthreshold, int Lthreshold,unsigned char * RGBimage){
+void findColorHSL(short* HSLimage, int width, int height,
+                short H, short S, short L,
+                int Hthreshold, int Sthreshold, int Lthreshold,
+                unsigned char * RGBimage, int recolorPixels, int drawBox){
     int i = 0;
     int j = 0;
     int consPix = 0;
     int x1 = width, x2 = 0, y1 = height, y2 = 0;
-    int box = 0;
-    double h,s,l;
+    //int box = 0;
+    int thickness = 4;
+    //double h,s,l;
     //hsv_to_hsl((145.0/360.0),(36.0/360.0),(95.0/360.0),&h,&s,&l);
     //printf("%d %d %d\n", (int)(h*360), (int)(s*360), (int)(l*360));
     for( i = 0; i < height; i++){
@@ -86,7 +139,7 @@ void findColorHSL(short* HSLimage, int width, int height,short H, short S, short
             && abs((HSLimage[(i * width * 3) + (j*3) + 2]) - L) < Lthreshold){
 
                 consPix++;		
-
+                
                 if(consPix >= noiseFilter){
                     if(j < x1)
                     x1 = j;
@@ -96,11 +149,80 @@ void findColorHSL(short* HSLimage, int width, int height,short H, short S, short
                       y1 = i;
                     if(i > y2)
                       y2 = i; 
-                }
+                      
+                    if(recolorPixels == 1){
+                        RGBimage[(i * width * 3) + (j*3) + 0] = 0;
+                        RGBimage[(i * width * 3) + (j*3) + 1] = 0;
+                        RGBimage[(i * width * 3) + (j*3) + 2] = 255;                    
+                    }                                        
+                }else if(recolorPixels == 1){
+                    RGBimage[(i * width * 3) + (j*3) + 0] = 255;
+                    RGBimage[(i * width * 3) + (j*3) + 1] = 0;
+                    RGBimage[(i * width * 3) + (j*3) + 2] = 0;                    
+                }   
             }else{
                 consPix = 0;
             }
         }
+    }
+    if(drawBox == 1){
+    
+        //Top Line
+        if(y1 > thickness){
+            i = y1 - thickness;
+        }else{
+            i = 0;
+        }
+        for(;i<=y1;i++){
+            for(j = x1; j <= x2; j++){
+                RGBimage[(i * width * 3) + (j*3) + 0] = 0;
+                RGBimage[(i * width * 3) + (j*3) + 1] = 255;
+                RGBimage[(i * width * 3) + (j*3) + 2] = 0;             
+            }
+        }
+        
+        //Bottom Line
+        if(height - y2 > thickness){
+            i = y2 + thickness;
+        }else{
+            i = y2 + (height - y2);
+        }
+        for(;i>=y2;i--){
+            for(j = x1; j < x2; j++){
+                RGBimage[(i * width * 3) + (j*3) + 0] = 0;
+                RGBimage[(i * width * 3) + (j*3) + 1] = 255;
+                RGBimage[(i * width * 3) + (j*3) + 2] = 0;             
+            }
+        }
+        
+        //Right Line
+        if(width - x2 > thickness){
+            j = x2 + thickness;
+        }else{
+            j = width;
+        }
+        for(;j>=x2;j--){
+            for(i=y1 ;i < y2; i++){
+                RGBimage[(i * width * 3) + (j*3) + 0] = 0;
+                RGBimage[(i * width * 3) + (j*3) + 1] = 255;
+                RGBimage[(i * width * 3) + (j*3) + 2] = 0;             
+            }
+        }
+        
+        //Left Line
+        if(x1 > thickness){
+            j = x1 - thickness;
+        }else{
+            j = 0;
+        }
+        for(;j<=x1;j++){
+            for(i=y1 ;i < y2; i++){
+                RGBimage[(i * width * 3) + (j*3) + 0] = 0;
+                RGBimage[(i * width * 3) + (j*3) + 1] = 255;
+                RGBimage[(i * width * 3) + (j*3) + 2] = 0;             
+            }
+        }
+    
     }
     printf("HSL Bounding box: (%d,%d) (%d,%d)\n",x1,y1,x2,y2);
 }
