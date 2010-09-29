@@ -38,6 +38,7 @@ void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
 
 void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
 {
+    static float last_value = 0;
     int cmp, max, min;
     unsigned int range, hrange;
 
@@ -45,7 +46,23 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
     min = pwm->rng_min + (int)(range * fmin);
     max = pwm->rng_min + (int)(range * fmax);
     hrange = (max - min) >> 1;
-    cmp = min + hrange + (int)(hrange * value);
+
+    if (g_channels[PWM_ALT].handle == pwm->handle)
+    {
+        // joystick is scrolling from up to down
+        if ((last_value > value) && (last_value > 0))
+            return;
+
+        // joystick is scrolling from down to up
+        if ((last_value < value) && (last_value < 0))
+            return;
+
+        cmp = min + hrange + (int)(hrange * value);
+    }
+    else
+    {
+        cmp = min + hrange + (int)(hrange * value);
+    }
 
     pwm_set_compare(pwm->handle, cmp);
 }
