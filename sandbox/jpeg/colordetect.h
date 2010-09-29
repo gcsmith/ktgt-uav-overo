@@ -6,7 +6,7 @@ void runColorDetectionFile(char * infilename,char * outfilename, int quality,
                         short St, 
                         short Lt);
 
-void runColorDetectionMemory(unsigned char * inbuffer, unsigned long insize, int quality,
+void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize, int quality,
                         unsigned char R,
                         unsigned char G, 
                         unsigned char B, 

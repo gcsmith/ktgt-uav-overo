@@ -103,7 +103,7 @@ void runColorDetectionFile(char * infilename,char * outfilename, int quality,
 
 
 
-void runColorDetectionMemory(unsigned char * inbuffer, unsigned long insize, int quality,
+void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize, int quality,
                         unsigned char R,
                         unsigned char G, 
                         unsigned char B, 
@@ -117,7 +117,7 @@ void runColorDetectionMemory(unsigned char * inbuffer, unsigned long insize, int
     unsigned char * RGBimage;
     
                         
-    read_JPEG_stream(inbuffer,insize,&RGBimage,&width,&height);
+    read_JPEG_stream(inbuffer,(*insize),&RGBimage,&width,&height);
 
     
 
@@ -125,7 +125,7 @@ void runColorDetectionMemory(unsigned char * inbuffer, unsigned long insize, int
 
     
     // Write the Image back
-    write_JPEG_stream (&inbuffer, &insize,quality,RGBimage,width,height);                   
+    write_JPEG_stream (&inbuffer, insize,quality,RGBimage,width,height);                   
                         
 }
 
