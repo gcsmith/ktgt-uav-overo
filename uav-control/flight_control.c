@@ -17,7 +17,13 @@
 #define YAW_DUTY_LO 0.047f
 #define YAW_DUTY_HI 0.094f
 
+#define THRO_SENS 10
+
 pwm_channel_t g_channels[4];
+
+// relative throttle control variables
+float thro_last_value = 0.0f;
+int thro_last_cmp = 0, thro_first = 0;
 
 void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
 {
@@ -38,7 +44,6 @@ void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
 
 void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
 {
-    static float last_value = 0;
     int cmp, max, min;
     unsigned int range, hrange;
 
@@ -47,47 +52,77 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
     max = pwm->rng_min + (int)(range * fmax);
     hrange = (max - min) >> 1;
 
+    // thro_last_cmp should be set to the current PWM cmp here to avoid
+    // checking cmp == 0 at the end of this function.
+
+    fprintf(stderr, "pwm channel = %d\n", pwm->handle);
+    fprintf(stderr, "alt chan = %d\n", g_channels[PWM_ALT].handle);
+    fprintf(stderr, "pitch chan = %d\n", g_channels[PWM_PITCH].handle);
+    fprintf(stderr, "roll chan = %d\n", g_channels[PWM_ROLL].handle);
+    fprintf(stderr, "yaw chan = %d\n", g_channels[PWM_YAW].handle);
     if (g_channels[PWM_ALT].handle == pwm->handle)
     {
         // joystick is scrolling from up to down
-        if ((last_value > value) && (last_value > 0))
+        if ((thro_last_value > value) && (thro_last_value > 0) && (value > 0))
         {
-            fprintf(stderr, "Breaking early: l_v > v\n");
-            last_value = value;
-            return;
+            cmp = thro_last_cmp;
         }
 
         // joystick is scrolling from down to up
-        if ((last_value < value) && (last_value < 0))
+        else if ((thro_last_value < value) && (thro_last_value < 0) && (value < 0))
         {
-            fprintf(stderr, "Breaking early: l_v < v\n");
-            last_value = value;
-            return;
+            cmp = thro_last_cmp;
         }
 
         // no delta
-        if (last_value == value)
+        else if (thro_last_value == value)
         {
-            fprintf(stderr, "Breaking early: l_v == v\n");
-            last_value = value;
-            return;
+            cmp = thro_last_cmp;
         }
 
-        fprintf(stderr, "flight_control: value = %f\n", value);
-        cmp = min + hrange + (int)(hrange * value);
-        last_value = value;
+        else
+        {
+            // on the first pass set we need to modify the current PWM signal
+            if (thro_first == 0)
+            {
+                thro_first = 1;
+                cmp = min + (int)(hrange * value);
+                fprintf(stderr, "flight_control alt: value = %f, lv = %f\n", value, thro_last_value);
+                thro_last_cmp = cmp;
+            }
+            else
+            {
+                // scale the value for sensitivity
+                cmp = thro_last_cmp + (int)(hrange * (value/THRO_SENS));
+                if (cmp > max)
+                    cmp = max;
+                if (cmp < min)
+                    cmp = min;
+                fprintf(stderr, "flight_control alt: value = %f, lv = %f, cmp = %d, lc = %d\n", 
+                    value, thro_last_value, cmp, thro_last_cmp);
+                thro_last_cmp = cmp;
+            }
+        }
+
+        thro_last_value = value;
     }
     else
     {
-        fprintf(stderr, "flight_control: value = %f\n", value);
         cmp = min + hrange + (int)(hrange * value);
     }
 
+    if (cmp == 0)
+        return;
+
+    fprintf(stderr, "cmp = %d\n", cmp);
     pwm_set_compare(pwm->handle, cmp);
 }
 
 int open_controls()
 {
+    thro_last_value = 0.0f;
+    thro_last_cmp = 0, thro_first = 0;
+
     if (0 > (g_channels[PWM_ALT].handle = pwm_open_device(PWM_DEV_ALT)))
     {
         fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_ALT);
