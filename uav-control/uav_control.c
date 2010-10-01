@@ -28,18 +28,96 @@
 #include "uav_protocol.h"
 #include "video_uvc.h"
 #include "user-gpio.h"
+#include "pid.h"
 
 #define DEV_LEN         64
 #define PKT_BUFF_LEN    2048
 
 imu_data_t g_imu;
+
 pthread_t g_pwmthrd;
+pthread_t fc_takeoff_land_thrd;
+
 gpio_event_t g_gpio_alt; // ultrasonic PWM
 gpio_event_t g_gpio_aux; // auxiliary PWM
 
 static ctl_sigs_t client_sigs = { 0 };
 static char autonomous = 1;
 static int g_muxsel = -1;
+
+// -----------------------------------------------------------------------------
+void *takeoff_land(void *mode)
+{
+    char *m_mode = (char *)mode;
+    int error, input, last_input, dx_dt;
+    float last_control;
+    ctl_sigs_t control;
+
+    pid_ctrl_t pid;
+    pid.setpoint = 42;      // 42 inches ~= 1 meter
+    pid.Kp = 0.01;
+    pid.Ki = 0.1;
+    pid.Kd = 0.001;
+    pid.total_error = 0.0;
+
+    control.alt = 0.0f;
+
+    if (*m_mode)
+    {
+        // land
+    }
+    else
+    {
+        // take off
+        fprintf(stderr, "FLIGHT CONTROL: Helicopter permission granted to take off\n");
+        pthread_mutex_lock(&g_gpio_alt.lock);
+        while ((input = (g_gpio_alt.pulsewidth / 147)) != pid.setpoint)
+        {
+            pthread_mutex_unlock(&g_gpio_alt.lock);
+
+            // dead reckoning variables
+            error = pid.setpoint - input;
+            last_input = input;
+            dx_dt = input - last_input; // rate of climb [inches per second]
+
+            // if the helicopter is 20 inches from the setpoint, switch to PID control
+            if ((error <= 22) && (error >= -22))
+            {
+                pid_compute(&pid, (float)input, (float *)&error, &control.alt);
+                fprintf(stderr, "pid output = %f\n", control.alt);
+                //flight_control(&control, VCM_AXIS_ALT);
+            }
+            else if (error > 0)
+            {
+                // need to climb
+                if (dx_dt < 1)
+                {
+                    control.alt = 0.1f;
+                    //flight_control(&control, VCM_AXIS_ALT);
+                }
+
+                // need to slow the rate of climb
+                else if (dx_dt > 3)
+                {
+                    control.alt = last_control * 0.5f;
+                    //flight_control(&control, VCM_AXIS_ALT);
+                }
+            }
+            else
+            {
+                control.alt = -0.1f;
+                //flight_control(&control, VCM_AXIS_ALT);
+            }
+
+            last_control = control.alt;
+
+            // sleep for a second to allow the helicopter to lift
+            usleep(1000000);
+        }
+    }
+
+    pthread_exit(NULL);
+}
 
 // -----------------------------------------------------------------------------
 // Perform final shutdown and cleanup.
@@ -172,6 +250,7 @@ void run_server(imu_data_t *imu, const char *port)
     uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
+    char fc_mode = 0;
 
     union {
         float f;
@@ -246,12 +325,18 @@ void run_server(imu_data_t *imu, const char *port)
             switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
+                // create takeoff/land thread for flight control
+                fc_mode = 0;
+                pthread_create(&fc_takeoff_land_thrd, NULL, takeoff_land, (void *)&fc_mode);
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TAKEOFF;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 break;
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
+                // create takeoff/land thread for flight control
+                fc_mode = 1;
+                pthread_create(&fc_takeoff_land_thrd, NULL, takeoff_land, (void *)&fc_mode);
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_LANDING;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);

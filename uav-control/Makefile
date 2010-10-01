@@ -30,7 +30,8 @@ OBJ_FILES = flight_control.o \
             server.o \
             uav_control.o \
             video_uvc.o \
-            mjpg-streamer/v4l2uvc.o
+            mjpg-streamer/v4l2uvc.o \
+			pid.o
 
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
