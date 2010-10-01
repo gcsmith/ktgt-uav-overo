@@ -108,7 +108,7 @@ int video_lock(video_data_t *vdata)//, int type)
     if( type == 0 ){
         g_is_fresh = 0;
     } else if ( type == 1 ){
-        g_unproccessed = 0;
+        g_unprocessed = 0;
     } 
 
     // pthread_cond_wait(&global.db_update, &global.db);
