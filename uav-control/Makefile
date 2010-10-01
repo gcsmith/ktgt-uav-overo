@@ -22,7 +22,7 @@ CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE \
 LFLAGS += $(LDFLAGS) \
           -L../pwm-lib \
           -L../gpio-lib \
-          -lpthread -ljpeg -lpwm -lgpio
+          -lpthread -ljpeg -lpwm -lgpio -lm
 
 OBJ_FILES = flight_control.o \
             gpio_event.o \
@@ -31,7 +31,9 @@ OBJ_FILES = flight_control.o \
             uav_control.o \
             video_uvc.o \
             mjpg-streamer/v4l2uvc.o \
-			pid.o
+	    pid.o \
+            colordetect.o \
+	    readwritejpeg.o
 
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 

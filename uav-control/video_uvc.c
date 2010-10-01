@@ -89,9 +89,8 @@ void *cam_input_thread( void *arg ) {
   return NULL;
 }
 
-int video_lock(video_data_t *vdata)//, int type)
+int video_lock(video_data_t *vdata, int type)
 {
-    int type = 0;
     //Type 0 = Heliview Fetch (Use g_is_fresh)
     //Type 1 = Video Processing (use g_unprocessed)
     if (!g_vid_enabled) {
