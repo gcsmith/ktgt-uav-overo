@@ -127,7 +127,7 @@ void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize, i
 
     
     // Write the Image back
-    write_JPEG_stream (&inbuffer, insize,quality,RGBimage,width,height);                   
+    //write_JPEG_stream (&inbuffer, insize,quality,RGBimage,width,height);                   
                         
 }
 
