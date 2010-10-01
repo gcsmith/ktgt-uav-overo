@@ -8,6 +8,7 @@ static struct vdIn *g_videoin;
 static pthread_t g_camthrd;
 static int g_vid_enabled = 0;
 static int g_is_fresh = 0;
+static int g_unprocessed = 0;
 
 void *cam_input_thread( void *arg ) {
   /* set cleanup handler to cleanup allocated ressources */
@@ -68,6 +69,7 @@ void *cam_input_thread( void *arg ) {
     prev_size = global->size;
 #endif
     g_is_fresh = 1;
+    g_unprocessed = 1;
 
     /* signal fresh_frame */
     // pthread_cond_broadcast(&pglobal->db_update);
@@ -87,17 +89,26 @@ void *cam_input_thread( void *arg ) {
   return NULL;
 }
 
-int video_lock(video_data_t *vdata)
+int video_lock(video_data_t *vdata, int type)
 {
+    //Type 0 = Heliview Fetch (Use g_is_fresh)
+    //Type 1 = Video Processing (use g_unprocessed)
     if (!g_vid_enabled) {
         return 0;
     }
-
+    
     pthread_mutex_lock(&global.db);
-    if (!g_is_fresh) {
+    
+    if ( (!g_is_fresh && type == 0) || (!g_unprocessed && type == 1) ) {
         pthread_mutex_unlock(&global.db);
         return 0;
     }
+    
+    if( type == 0 ){
+        g_is_fresh = 0;
+    } else if ( type == 1 ){
+        g_unproccessed = 0;
+    } 
 
     // pthread_cond_wait(&global.db_update, &global.db);
 
