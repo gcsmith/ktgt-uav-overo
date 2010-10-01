@@ -2,6 +2,8 @@
 
 start() {
     echo "Starting uav-control"
+    echo -n "1" > /sys/bus/usb/devices/1-1/bConfigurationValue
+    sleep 2
     start-stop-daemon --start --quiet --exec /usr/sbin/uav_control -- --daemonize
 }
 stop() {
@@ -29,5 +31,4 @@ case "$1" in
 esac
 
 exit $?
-
 
