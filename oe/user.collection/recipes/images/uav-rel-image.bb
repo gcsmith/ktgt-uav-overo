@@ -19,6 +19,7 @@ FIRMWARE_INSTALL = " \
     "
 
 VIDEO_INSTALL += " \
+    libv4l \
     mjpg-streamer \
     jpeg \
     "

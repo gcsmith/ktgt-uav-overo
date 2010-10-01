@@ -12,14 +12,18 @@ DEV_INSTALL += " \
     diffutils \
     gcc \
     gcc-symlinks \
+    gdb \
     git \
+    jpeg-dev \
     libtool \
     libtool-dev \
+    libv4l-dev \
     make \
     patch \
     patchutils \
+    python \
     subversion \
-	virtual-libc-dev \
+    virtual-libc-dev \
 #   task-native-sdk \
 #   artoolkit-dev \
 #   libdc1394 \
