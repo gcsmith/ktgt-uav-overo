@@ -20,7 +20,7 @@ typedef struct video_data
 
 int video_init(const char *dev, int width, int height, int fps);
 void video_shutdown(void);
-int video_lock(video_data_t *vdata);
+int video_lock(video_data_t *vdata);//, int type);
 void video_unlock();
 
 #endif // _UAV_VIDEO_UVC__H_
