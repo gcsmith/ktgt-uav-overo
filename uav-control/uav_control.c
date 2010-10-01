@@ -36,7 +36,6 @@
 
 imu_data_t g_imu;
 
-pthread_t g_pwmthrd;
 pthread_t fc_takeoff_land_thrd;
 
 gpio_event_t g_gpio_alt; // ultrasonic PWM
@@ -169,9 +168,6 @@ void uav_shutdown(int rc)
 
     fprintf(stderr, "shutting down video subsystem...\n");
     video_shutdown();
-
-    fprintf(stderr, "shutting down pwm subsystem...\n");
-    pthread_cancel(g_pwmthrd);
 
     fprintf(stderr, "shutting down uav control...\n");
     // pthread_exit(NULL);
