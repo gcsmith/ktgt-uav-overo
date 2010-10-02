@@ -140,7 +140,7 @@ void findColorHSL(short* HSLimage, int width, int height,
 #ifdef DRAW_BOUNDING_BOX    
         drawBoundingbox(RGBimage,width,height, x1, y1, x2, y2, thickness, Rbox, Gbox, Bbox);
 #endif
-syslog(LOG_INFO, "HSL Bounding box: (%d,%d) (%d,%d)\n",x1,y1,x2,y2);
+    printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",x1,y1,x2,y2);
 }
 
 
