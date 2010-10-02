@@ -182,7 +182,7 @@ printf("IMAGE PROC\n");
             jpg_buf = (unsigned char *)malloc(buff_sz);
         }
 
-        memcpy(&jpg_buf, vid_data.data, vid_data.length);
+        memcpy(jpg_buf, vid_data.data, vid_data.length);
         video_unlock();
 	    
 	    runColorDetectionMemory(jpg_buf,&buff_sz,&color,&box);
