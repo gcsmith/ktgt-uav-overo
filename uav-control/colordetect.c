@@ -193,10 +193,10 @@ void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
     h = 0; // default to black
     s = 0;
     l = 0;
-    max = max_double(r,g);
-    max = max_double(max,b);
-    min = min_double(r,g);
-    min = min_double(min,b);
+    max = MAX(r,g);
+    max = MAX(max,b);
+    min = MIN(r,g);
+    min = MIN(min,b);
     l = (max + min) / 2.0;
 
     if(max == min){
@@ -224,24 +224,6 @@ void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
 
 
 
-double max_double(double x, double y){
-    return x > y? x : y;
-}
-double min_double(double x, double y){
-    return x< y? x : y;
-}
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -260,10 +242,10 @@ double min_double(double x, double y){
     for( i = 0; i < height; i++){
        consPix = 0;
        for ( j = 0; j < width; j++){
-	 if(sqrt( (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 0]) - R , 2 ) ) +
-                (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 1]) - G , 2 ) ) +
-                (double)(pow((double)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 2]) - B , 2 ) ) 
-		  ) < (double)threshold ){
+	 if(sqrt( (REAL)(pow((REAL)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 0]) - R , 2 ) ) +
+                (REAL)(pow((REAL)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 1]) - G , 2 ) ) +
+                (REAL)(pow((REAL)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 2]) - B , 2 ) ) 
+		  ) < (REAL)threshold ){
                 
 		consPix++;		
 		if(consPix >= noiseFilter){
