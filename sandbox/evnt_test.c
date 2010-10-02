@@ -18,6 +18,12 @@ int main(int argc, char *argv[])
     GPIO_Event_t event;
     fd_set rdset;
     int fd = 0, rc = 0, last_usec = 0;
+    int arg_gpio = 171;
+
+    if (argc >= 2) {
+        arg_gpio = strtol(argv[1], NULL, 10);
+    }
+    fprintf(stderr, "using gpio pin %d\n", arg_gpio);
 
     // open the gpio-event device node
     fd = open("/dev/gpio-event", 0);
@@ -30,8 +36,8 @@ int main(int argc, char *argv[])
     // set read mode to binary (default is ascii)
     ioctl(fd, GPIO_EVENT_IOCTL_SET_READ_MODE, GPIO_EventReadModeBinary);
 
-    // initialize monitor for gpio146, detect both rising/falling edges
-    monitor.gpio  = 146;
+    // initialize monitor for the gpio, detect both rising/falling edges
+    monitor.gpio  = arg_gpio;
     monitor.onOff = 1;
     monitor.edgeType = GPIO_EventBothEdges;
     monitor.debounceMilliSec = 0;
@@ -88,6 +94,12 @@ int main(int argc, char *argv[])
             fprintf(stderr, "unexpected case statement\n");
             break;
         }
+    }
+
+    monitor.onOff = 0;
+    if (ioctl(fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor)) {
+        fprintf(stderr, "failed to set gpio monitor\n");
+        return 1;
     }
 
     close(fd);
