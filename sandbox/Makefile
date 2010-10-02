@@ -19,12 +19,24 @@ CFLAGS += -Wall -Werror -O2 \
 
 MP = ../uav-control/mjpg-streamer
 
-APP_NAMES = evnt_test gles_test gpio_test madc_test mjpg_test pwm_test rssi_test
+APP_NAMES = evnt_test \
+			gles_test \
+			gpio_test \
+			madc_test \
+			mjpg_test \
+			pwm_test \
+			rssi_test
+
 EVNT_OBJS = evnt_test.o
 GLES_OBJS = gles_test.o
 GPIO_OBJS = gpio_test.o
 MADC_OBJS = madc_test.o
-MJPG_OBJS = $(MP)/jpeg_utils.o $(MP)/v4l2uvc.o $(MP)/input_uvc.o $(MP)/output_udp.o $(MP)/mjpg_streamer.o mjpg_test.o
+MJPG_OBJS = mjpg_test.o \
+			$(MP)/input_uvc.o \
+			$(MP)/jpeg_utils.o \
+			$(MP)/mjpg_streamer.o \
+			$(MP)/output_udp.o \
+			$(MP)/v4l2uvc.o
 PWM_OBJS  = pwm_test.o
 RSSI_OBJS = rssi_test.o
 
