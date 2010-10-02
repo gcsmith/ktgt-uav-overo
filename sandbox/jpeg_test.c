@@ -63,22 +63,33 @@ int main(int argc, char *argv[]) {
     };
     boxCoordinates box = {};
     
-    time_t t1,t2;
+    struct timespec spec1, spec2;
+    const int num_iter = 10;
+    long long delta;
+
     for(;;){
         int i;
-        t1 = time(NULL);
-        for( i = 0; i < 10; i++){
+        clock_gettime(CLOCK_REALTIME, &spec1);
+        for( i = 0; i < num_iter; i++){
             runColorDetectionFile (filename, "testimage.jpg", &color, &box);
-            if(!(box->x1 == box->width && box->y1 == box->height &&
-                box->x2 == 0 && box->y2 == 0 ) ){
-                printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box->x1,box->y1,box->x2,box->y2);
+            if(!(box.x1 == box.width && box.y1 == box.height &&
+                box.x2 == 0 && box.y2 == 0 ) ){
+                printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box.x1,box.y1,box.x2,box.y2);
             } else {
-                printf( "Target object not found!" );
+                printf( "Target object not found!\n" );
             }
         }
-        t2 = time(NULL);
-	float FPS = 10.0/difftime( t2, t1 );
-        printf("%f FPS\n", FPS );
+        clock_gettime(CLOCK_REALTIME, &spec2);
+
+        delta = spec2.tv_nsec - spec1.tv_nsec;
+        if (spec2.tv_sec > spec1.tv_sec) {
+            /* add x second */
+            delta += 1000000000 * (spec2.tv_sec - spec1.tv_sec);
+        }
+
+        printf("ticks = %lld\n", delta);
+        double fps = num_iter / ((double)delta / 1000000000.0);
+        printf("%f FPS\n", fps);
     }
 
 #if 0
