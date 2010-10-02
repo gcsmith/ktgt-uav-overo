@@ -5,6 +5,7 @@
 #include "readwritejpeg.h"
 #include "colordetect.h"
 #include <syslog.h>
+#include "utility.h"
 JSAMPLE * image_buffer;
 
 #define REAL double
