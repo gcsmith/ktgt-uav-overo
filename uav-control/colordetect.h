@@ -1,4 +1,5 @@
-
+// DRAW_BOUNDING_BOX  0
+// WRITE_IMAGE  0
 typedef struct {
     unsigned char R;
     unsigned char G; 
@@ -11,19 +12,6 @@ typedef struct {
     char quality;
 } colorToFind;
 
-typedef struct {
-    unsigned char Rvalid;
-    unsigned char Gvalid;
-    unsigned char Bvalid;
-    
-    unsigned char Rnoise;
-    unsigned char Gnoise;
-    unsigned char Bnoise;
-    
-    unsigned char Rbox;
-    unsigned char Gbox;
-    unsigned char Bbox;
-} boxColors;
 
 typedef struct {
     int width;
@@ -69,11 +57,12 @@ void findColorRGB(unsigned char* RGBimage, int width, int height,unsigned char R
 void findColorHSL(short* HSLimage, int width, int height,
                 short H, short S, short L,
                 int Hthreshold, int Sthreshold, int Lthreshold,
-                unsigned char * RGBimage, int recolorPixels, int drawBox);
+                unsigned char * RGBimage);
                 
+#ifdef DRAW_BOUNDING_BOX              
 void drawBoundingbox(unsigned char * RGBimage, int width, int height, int x1, int y1, int x2, int y2, int thickness ,
  unsigned char R, unsigned char G, unsigned char B);                
-                
+#endif                
 
 
 
@@ -86,12 +75,4 @@ double max_double(double x, double y);
 double min_double(double x, double y);
 
 
-
-
-
-void hsv_to_hsl(double h, double s, double v, double* hh, double* ss, double* ll);
-void printCOLORimageHSLshort(int height, int width, short * COLORimage);
-void printCOLORimage(int height, int width, unsigned char * COLORimage);
-void printBWimage(int height, int width, unsigned char * BWimage);
-void findBoundingCoordinates(int height, int width, unsigned char * BWimage);
 
