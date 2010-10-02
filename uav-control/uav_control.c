@@ -150,6 +150,7 @@ void *takeoff_land(void *mode)
 }
 
 void *img_proc(){
+printf("IMAGE PROC\n");
     colorToFind color = {
         .R = 151,
         .G = 242,
@@ -174,14 +175,14 @@ void *img_proc(){
         }
 
 	// copy the jpeg to our buffer now that we're safely locked
-        if (buff_sz < (vid_data.length + PKT_MJPG_LENGTH))
+        if (buff_sz < vid_data.length)
         {
             free(jpg_buf);
-            buff_sz = (vid_data.length + PKT_MJPG_LENGTH)*4;
+            buff_sz = (vid_data.length);
             jpg_buf = (unsigned char *)malloc(buff_sz);
         }
 
-        memcpy(&jpg_buf[PKT_MJPG_IMG], vid_data.data, vid_data.length);
+        memcpy(&jpg_buf, vid_data.data, vid_data.length);
         video_unlock();
 	    
 	    runColorDetectionMemory(jpg_buf,&buff_sz,&color,&box);
