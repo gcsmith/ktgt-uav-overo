@@ -150,17 +150,20 @@ void *takeoff_land(void *mode)
 }
 
 void *img_proc(){
+    colorToFind color = {
+        .R = 0,
+        .G = 0,
+        .B = 0,
+        .Ht = 0,
+        .St = 0,
+        .Lt = 0,
+        .quality = 25    
+    };
+    boxCoordinates box = {};
+
     video_data_t vid_data;
     unsigned char *jpg_buf = NULL;
     unsigned long buff_sz = 0;
-    unsigned char R,G,B;
-    unsigned short Ht,St,Lt;
-    R = 0;
-    G = 0;
-    B = 0;
-    Ht = 0;
-    St = 0;
-    Lt = 0;
 
     for(;;){
 	//pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
@@ -180,8 +183,8 @@ void *img_proc(){
 
         memcpy(&jpg_buf[PKT_MJPG_IMG], vid_data.data, vid_data.length);
         video_unlock();
-	
-	runColorDetectionMemory(jpg_buf,&buff_sz,25,R,B,G,Ht,St,Lt);
+	    
+	    runColorDetectionMemory(jpg_buf,&buff_sz,&color,&box);
     }
 }
 

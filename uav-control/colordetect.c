@@ -12,49 +12,41 @@ JSAMPLE * image_buffer;
 
 int noiseFilter = 5;
 
-void runColorDetectionFile (const char * infilename, const char * outfilename,
-    int quality,
-    unsigned char R,unsigned char G, unsigned char B, 
-    short Ht, short St, short Lt){
+void runColorDetectionFile(const char * infilename, const char * outfilename,
+    colorToFind * color, boxCoordinates * box){
                         
-    int width = 0;
-    int height = 0;
     //Define RGBimage
     unsigned char * RGBimage;   
                         
-    read_JPEG_file(infilename,&RGBimage,&width,&height);    
+    read_JPEG_file(infilename,&RGBimage,&box->width,&box->height);    
 
-    runColorDetection(RGBimage,width,height, R, B, G, Ht, St, Lt);
+    runColorDetection(RGBimage,color, box);
 
 #ifdef WRITE_IMAGE
     // Write the Image back
-    write_JPEG_file(outfilename,quality,RGBimage,width,height);                   
+    write_JPEG_file(outfilename,color->quality,RGBimage,box->width,box->height);                   
 #endif                        
 }
 
 void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize,
-    int quality,
-    unsigned char R,unsigned char G, unsigned char B, 
-    short Ht, short St, short Lt){
+    colorToFind * color, boxCoordinates * box){
                         
-    int width = 0;
-    int height = 0;
     //Define RGBimage
     unsigned char * RGBimage;   
                         
-    read_JPEG_stream(inbuffer,(*insize),&RGBimage,&width,&height);    
+    read_JPEG_stream(inbuffer,(*insize),&RGBimage,&box->width,&box->height);    
 
-    runColorDetection(RGBimage,width,height, R, B, G, Ht, St, Lt);
+    runColorDetection(RGBimage,color, box);
 
 #ifdef WRITE_IMAGE    
     // Write the Image back
-    write_JPEG_stream (&inbuffer, insize,quality,RGBimage,width,height);                   
+    write_JPEG_stream (&inbuffer, insize,color->quality,
+        RGBimage,&box->width,&box->height);                   
 #endif                        
 }
 
-void runColorDetection(unsigned char * RGBimage,int image_width, int image_height,
-    unsigned char R,unsigned char G, unsigned char B, 
-    short Ht, short St, short Lt){
+void runColorDetection(unsigned char * RGBimage,
+    colorToFind * color, boxCoordinates * box){
     
      //Color to look for in HSL (will be calculated from RGB)
     short H = 0;
@@ -62,24 +54,27 @@ void runColorDetection(unsigned char * RGBimage,int image_width, int image_heigh
     short L = 0;                   
 
    //Convert detect color from RGB to HSL
-    RGB2HSL (R, G, B,&H, &S, &L);                     
+    RGB2HSL (color->R, color->G, color->B, &H, &S, &L);                     
                         
     // Convert the image to HSL
-    short * HSLimage = malloc(sizeof(short) * image_height * image_width * 3);	  
+    short * HSLimage = malloc (sizeof(short) * box->height * box->width * 3);	  
 
-    COLORimageRGBtoHSL(RGBimage, HSLimage, image_width, image_height);
-    // Find HSL Values in image
-    findColorHSL(HSLimage, image_width, image_height, H, S, L, Ht, St, Lt,RGBimage);
+    COLORimageRGBtoHSL (RGBimage, HSLimage, box->width, box->height);
+    // Find HSL Values in image 
+    findColorHSL (HSLimage, H, S, L, color, box, RGBimage);
 }
 
-int findColorHSL(short* HSLimage, int width, int height,
-                short H, short S, short L,
-                int Hthreshold, int Sthreshold, int Lthreshold,
-                unsigned char * RGBimage){
+
+int findColorHSL(short* HSLimage, short H, short S, short L,
+    colorToFind * color, boxCoordinates * box, unsigned char * RGBimage){ 
+                 
     int i = 0;
     int j = 0;
     int consPix = 0;
-    int x1 = width, x2 = 0, y1 = height, y2 = 0;
+    box->x1 = box->width;
+    box->y1 = box->height;
+    box->x2 = 0;
+    box->y2 = 0;
 
 #ifdef DRAW_BOUNDING_BOX
     int thickness = 4;  
@@ -96,40 +91,32 @@ int findColorHSL(short* HSLimage, int width, int height,
     unsigned char Gvalid = 0;
     unsigned char Bvalid = 0;
 #endif
-
-    for( i = 0; i < height; i++){
+    for( i = 0; i < box->height; i++){
         consPix = 0;
-        for ( j = 0; j < width; j++){
-
-            if( abs((HSLimage[(i * width * 3) + (j*3) + 0]) - H) < Hthreshold 
-            && abs((HSLimage[(i * width * 3) + (j*3) + 1]) - S) < Sthreshold
-            && abs((HSLimage[(i * width * 3) + (j*3) + 2]) - L) < Lthreshold){
-
+        for ( j = 0; j < box->width; j++){
+            if( abs((HSLimage[(i * box->width * 3) + (j*3) + 0]) - H) < color->Ht
+            && abs((HSLimage[(i * box->width * 3) + (j*3) + 1]) - S) < color->St
+            && abs((HSLimage[(i * box->width * 3) + (j*3) + 2]) - L) < color->Lt){
                 consPix++;		
-                
                 if(consPix >= noiseFilter){
-                    if(j < x1)
-                    x1 = j;
-                    if(j > x2)
-                      x2 = j;
-                    if(i < y1)
-                      y1 = i;
-                    if(i > y2)
-                      y2 = i; 
-#ifdef DRAW_BOUNDING_BOX                      
-                    
-                        RGBimage[(i * width * 3) + (j*3) + 0] = Rnoise;
-                        RGBimage[(i * width * 3) + (j*3) + 1] = Gnoise;
-                        RGBimage[(i * width * 3) + (j*3) + 2] = Bnoise;                    
-                      
+                    if(j < box->x1)
+                        box->x1 = j;
+                    if(j > box->x2)
+                        box->x2 = j;
+                    if(i < box->y1)
+                        box->y1 = i;
+                    if(i > box->y2)
+                        box->y2 = i; 
+#ifdef DRAW_BOUNDING_BOX                    
+                    RGBimage[(i * width * 3) + (j*3) + 0] = Rnoise;
+                    RGBimage[(i * width * 3) + (j*3) + 1] = Gnoise;
+                    RGBimage[(i * width * 3) + (j*3) + 2] = Bnoise;                    
 #endif                                                         
                 }
 #ifdef DRAW_BOUNDING_BOX                
-               
-                    RGBimage[(i * width * 3) + (j*3) + 0] = Rvalid;
-                    RGBimage[(i * width * 3) + (j*3) + 1] = Gvalid;
-                    RGBimage[(i * width * 3) + (j*3) + 2] = Bvalid;                    
-                 
+                RGBimage[(i * width * 3) + (j*3) + 0] = Rvalid;
+                RGBimage[(i * width * 3) + (j*3) + 1] = Gvalid;
+                RGBimage[(i * width * 3) + (j*3) + 2] = Bvalid;                    
 #endif                
             }else{
                 consPix = 0;
@@ -137,10 +124,11 @@ int findColorHSL(short* HSLimage, int width, int height,
         }
     }
 #ifdef DRAW_BOUNDING_BOX    
-        drawBoundingbox(RGBimage,width,height, x1, y1, x2, y2, thickness, Rbox, Gbox, Bbox);
+        drawBoundingbox(RGBimage,box->width,box->height,
+            box->x1, box->y1, box->x2, box->y2, thickness, Rbox, Gbox, Bbox);
 #endif
-    if(!(x1 == width && y1 == height && x2 == 0 && y2 == 0 ) ){
-        printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",x1,y1,x2,y2);
+    if(!(box->x1 == box->width && box->y1 == box->height && box->x2 == 0 && box->y2 == 0 ) ){
+        printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box->x1,box->y1,box->x2,box->y2);
 	return 1;
     }
     else {
@@ -211,7 +199,9 @@ void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
 
 //Still needed?
 
- void findColorRGB(unsigned char* RGBimage,int width, int height,unsigned char R, unsigned char G, unsigned char B, int threshold){
+
+void findColorRGB(unsigned char* RGBimage, int width, int height,
+    unsigned char R, unsigned char G, unsigned char B, int threshold){
     int i = 0;
     int j = 0;
     int consPix = 0;
