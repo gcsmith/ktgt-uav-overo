@@ -4,6 +4,7 @@
 #include "jpeglib.h"
 #include "readwritejpeg.h"
 #include "colordetect.h"
+#include <time.h>
 
 int main(int argc, char *argv[]) {
     //int image_height;
@@ -23,7 +24,7 @@ int main(int argc, char *argv[]) {
     //Define RGBimage
     //unsigned char * RGBimage;
     //Define file name
-    const char *filename = "frisbee.jpg";
+    const char *filename = "./Data/frisbee.jpg";
 
     if (argc!= 1 && argc != 2 && argc != 5 && argc != 8) {
         printf("Usage:\n %s filename R G B\n or \n %s filename"
@@ -50,8 +51,29 @@ int main(int argc, char *argv[]) {
         Lt = (short)atoi(argv[7]);
 
     }
-
-    runColorDetectionFile(filename, "testimage.jpg", 100, R, B, G, Ht, St, Lt);
+    
+    colorToFind color = {
+        .R = R,
+        .G = G,
+        .B = B,
+        .Ht = Ht,
+        .St = St,
+        .Lt = Lt,
+        .quality = 25    
+    };
+    boxCoordinates box = {};
+    
+    time_t t1,t2;
+    for(;;){
+        int i;
+        t1 = time(NULL);
+        for( i = 0; i < 10; i++){
+            runColorDetectionFile (filename, "testimage.jpg", &color, &box);
+        }
+        t2 = time(NULL);
+	float FPS = 10.0/difftime( t2, t1 );
+        printf("%f FPS\n", FPS );
+    }
 
 #if 0
     read_JPEG_file(filename,&RGBimage,&image_width,&image_height);
