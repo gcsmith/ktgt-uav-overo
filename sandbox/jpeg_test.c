@@ -66,12 +66,16 @@ int main(int argc, char *argv[]) {
     struct timespec spec1, spec2;
     const int num_iter = 10;
     long long delta;
+    unsigned char * RGBimage;   
+                        
+    read_JPEG_file(filename,&RGBimage,&box.width,&box.height);    
 
+    
     for(;;){
         int i;
         clock_gettime(CLOCK_REALTIME, &spec1);
         for( i = 0; i < num_iter; i++){
-            runColorDetectionFile (filename, "testimage.jpg", &color, &box);
+            runColorDetection(RGBimage,&color, &box);
             if(!(box.x1 == box.width && box.y1 == box.height &&
                 box.x2 == 0 && box.y2 == 0 ) ){
                 printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box.x1,box.y1,box.x2,box.y2);
