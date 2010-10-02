@@ -39,7 +39,7 @@
 imu_data_t g_imu;
 
 pthread_t fc_takeoff_land_thrd;
-pthread_t img_proc_thrd;
+pthread_t fc_img_proc_thrd;
 
 gpio_event_t g_gpio_alt; // ultrasonic PWM
 gpio_event_t g_gpio_aux; // auxiliary PWM
@@ -151,12 +151,12 @@ void *takeoff_land(void *mode)
 
 void *img_proc(){
     colorToFind color = {
-        .R = 0,
-        .G = 0,
-        .B = 0,
-        .Ht = 0,
-        .St = 0,
-        .Lt = 0,
+        .R = 151,
+        .G = 242,
+        .B = 192,
+        .Ht = 30,
+        .St = 100,
+        .Lt = 360,
         .quality = 25    
     };
     boxCoordinates box = {};
@@ -185,6 +185,13 @@ void *img_proc(){
         video_unlock();
 	    
 	    runColorDetectionMemory(jpg_buf,&buff_sz,&color,&box);
+	    
+	    if(!(box.x1 == box.width && box.y1 == box.height &&
+                box.x2 == 0 && box.y2 == 0 ) ){
+                printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box.x1,box.y1,box.x2,box.y2);
+        } else {
+            printf( "Target object not found!\n" );
+        }
     }
 }
 
@@ -729,7 +736,10 @@ int main(int argc, char *argv[])
 
     // open PWM ports for mixed controlling
     open_controls();
-
+    
+    // Start video processing
+    pthread_create(&fc_img_proc_thrd, NULL, img_proc,NULL);
+    
     // server entry point
     run_server(&g_imu, port_str);
     
