@@ -128,11 +128,11 @@ int findColorHSL(short* HSLimage, short H, short S, short L,
             box->x1, box->y1, box->x2, box->y2, thickness, Rbox, Gbox, Bbox);
 #endif
     if(!(box->x1 == box->width && box->y1 == box->height && box->x2 == 0 && box->y2 == 0 ) ){
-        printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box->x1,box->y1,box->x2,box->y2);
+        //printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box->x1,box->y1,box->x2,box->y2);
 	return 1;
     }
     else {
-        printf( "Target object not found!" );
+        //printf( "Target object not found!" );
         return 0;
     }
 }

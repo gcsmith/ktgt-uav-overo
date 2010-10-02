@@ -69,6 +69,12 @@ int main(int argc, char *argv[]) {
         t1 = time(NULL);
         for( i = 0; i < 10; i++){
             runColorDetectionFile (filename, "testimage.jpg", &color, &box);
+            if(!(box->x1 == box->width && box->y1 == box->height &&
+                box->x2 == 0 && box->y2 == 0 ) ){
+                printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box->x1,box->y1,box->x2,box->y2);
+            } else {
+                printf( "Target object not found!" );
+            }
         }
         t2 = time(NULL);
 	float FPS = 10.0/difftime( t2, t1 );
