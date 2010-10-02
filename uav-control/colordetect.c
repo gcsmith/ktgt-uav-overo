@@ -7,6 +7,8 @@
 #include <syslog.h>
 JSAMPLE * image_buffer;
 
+#define REAL double
+
 int noiseFilter = 5;
 
 void runColorDetectionFile(char * infilename,char * outfilename, int quality,
@@ -179,14 +181,14 @@ void COLORimageRGBtoHSL(unsigned char* COLORimage, short* HSLimage, int width, i
 void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
               short * h_out, short * s_out, short * l_out)
 {
-    double r = R_in/255.0;
-    double g = G_in/255.0;
-    double b = B_in/255.0;
-    double max;
-    double min;
+    REAL r = R_in/255.0;
+    REAL g = G_in/255.0;
+    REAL b = B_in/255.0;
+    REAL max;
+    REAL min;
 
-    double vm;
-    double h,s,l;
+    REAL vm;
+    REAL h,s,l;
 
     h = 0; // default to black
     s = 0;
