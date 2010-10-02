@@ -72,7 +72,7 @@ void runColorDetection(unsigned char * RGBimage,int image_width, int image_heigh
     findColorHSL(HSLimage, image_width, image_height, H, S, L, Ht, St, Lt,RGBimage);
 }
 
-void findColorHSL(short* HSLimage, int width, int height,
+int findColorHSL(short* HSLimage, int width, int height,
                 short H, short S, short L,
                 int Hthreshold, int Sthreshold, int Lthreshold,
                 unsigned char * RGBimage){
@@ -80,7 +80,6 @@ void findColorHSL(short* HSLimage, int width, int height,
     int j = 0;
     int consPix = 0;
     int x1 = width, x2 = 0, y1 = height, y2 = 0;
-
 
 #ifdef DRAW_BOUNDING_BOX
     int thickness = 4;  
@@ -140,7 +139,14 @@ void findColorHSL(short* HSLimage, int width, int height,
 #ifdef DRAW_BOUNDING_BOX    
         drawBoundingbox(RGBimage,width,height, x1, y1, x2, y2, thickness, Rbox, Gbox, Bbox);
 #endif
-    printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",x1,y1,x2,y2);
+    if(!(x1 == width && y1 == height && x2 == 0 && y2 == 0 ) ){
+        printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",x1,y1,x2,y2);
+	return 1;
+    }
+    else {
+        printf( "Target object not found!" );
+        return 0;
+    }
 }
 
 
@@ -203,15 +209,6 @@ void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
 }
 
 
-
-
-
-
-
-
-
-
-
 //Still needed?
 
  void findColorRGB(unsigned char* RGBimage,int width, int height,unsigned char R, unsigned char G, unsigned char B, int threshold){
@@ -246,8 +243,6 @@ void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
     }
     printf("(%d,%d) (%d,%d)\n",x1,y1,x2,y2);
 }
-
-
 
 #ifdef DRAW_BOUNDING_BOX 
 void drawBoundingbox(unsigned char * RGBimage, int width, int height, int x1, int y1, int x2, int y2, int thickness ,

@@ -47,7 +47,7 @@ void runColorDetection(unsigned char * RGBimage,
 void findColorRGB(unsigned char* RGBimage, int width, int height,
     unsigned char R, unsigned char G, unsigned char B, int threshold);
     
-void findColorHSL(short* HSLimage, int width, int height,
+int findColorHSL(short* HSLimage, int width, int height,
                 short H, short S, short L,
                 int Hthreshold, int Sthreshold, int Lthreshold,
                 unsigned char * RGBimage);
