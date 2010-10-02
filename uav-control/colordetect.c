@@ -11,23 +11,17 @@ JSAMPLE * image_buffer;
 
 int noiseFilter = 5;
 
-void runColorDetectionFile(char * infilename,char * outfilename, int quality,
-                        unsigned char R,
-                        unsigned char G, 
-                        unsigned char B, 
-                        short Ht, 
-                        short St, 
-                        short Lt){
+void runColorDetectionFile (const char * infilename, const char * outfilename,
+    int quality,
+    unsigned char R,unsigned char G, unsigned char B, 
+    short Ht, short St, short Lt){
                         
     int width = 0;
     int height = 0;
     //Define RGBimage
-    unsigned char * RGBimage;
-    
+    unsigned char * RGBimage;   
                         
-    read_JPEG_file(infilename,&RGBimage,&width,&height);
-
-    
+    read_JPEG_file(infilename,&RGBimage,&width,&height);    
 
     runColorDetection(RGBimage,width,height, R, B, G, Ht, St, Lt);
 
@@ -37,23 +31,17 @@ void runColorDetectionFile(char * infilename,char * outfilename, int quality,
 #endif                        
 }
 
-void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize, int quality,
-                        unsigned char R,
-                        unsigned char G, 
-                        unsigned char B, 
-                        short Ht, 
-                        short St, 
-                        short Lt){
+void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize,
+    int quality,
+    unsigned char R,unsigned char G, unsigned char B, 
+    short Ht, short St, short Lt){
                         
     int width = 0;
     int height = 0;
     //Define RGBimage
-    unsigned char * RGBimage;
-    
+    unsigned char * RGBimage;   
                         
-    read_JPEG_stream(inbuffer,(*insize),&RGBimage,&width,&height);
-
-    
+    read_JPEG_stream(inbuffer,(*insize),&RGBimage,&width,&height);    
 
     runColorDetection(RGBimage,width,height, R, B, G, Ht, St, Lt);
 
@@ -63,16 +51,10 @@ void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize, i
 #endif                        
 }
 
-
-
-
 void runColorDetection(unsigned char * RGBimage,int image_width, int image_height,
-                        unsigned char R,
-                        unsigned char G, 
-                        unsigned char B, 
-                        short Ht, 
-                        short St, 
-                        short Lt){
+    unsigned char R,unsigned char G, unsigned char B, 
+    short Ht, short St, short Lt){
+    
      //Color to look for in HSL (will be calculated from RGB)
     short H = 0;
     short S = 0;
@@ -82,15 +64,12 @@ void runColorDetection(unsigned char * RGBimage,int image_width, int image_heigh
     RGB2HSL (R, G, B,&H, &S, &L);                     
                         
     // Convert the image to HSL
-    short * HSLimage = malloc(sizeof(short)*image_height*image_width*3);	  
+    short * HSLimage = malloc(sizeof(short) * image_height * image_width * 3);	  
 
     COLORimageRGBtoHSL(RGBimage, HSLimage, image_width, image_height);
     // Find HSL Values in image
-    findColorHSL(HSLimage,image_width,image_height, H, S, L, Ht, St, Lt,RGBimage);                    
-                        
+    findColorHSL(HSLimage, image_width, image_height, H, S, L, Ht, St, Lt,RGBimage);
 }
-
-
 
 void findColorHSL(short* HSLimage, int width, int height,
                 short H, short S, short L,

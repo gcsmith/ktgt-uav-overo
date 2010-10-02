@@ -28,7 +28,7 @@ typedef struct {
     char detected;
 } boxCoordinates;
 
-void runColorDetectionFile(char * infilename,char * outfilename, int quality,
+void runColorDetectionFile(const char * infilename, const char * outfilename, int quality,
                         unsigned char R,
                         unsigned char G, 
                         unsigned char B, 

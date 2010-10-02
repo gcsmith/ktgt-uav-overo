@@ -69,7 +69,7 @@ extern int image_width;		/* Number of columns in image */
  */
 
 GLOBAL(void)
-write_JPEG_file (char * filename, int quality,unsigned char *RGBimage,int width,int height)
+write_JPEG_file (const char * filename, int quality,unsigned char *RGBimage,int width,int height)
 {
   /* This struct contains the JPEG compression parameters and pointers to
    * working space (which is allocated as needed by the JPEG library).
@@ -283,7 +283,7 @@ my_error_exit (j_common_ptr cinfo)
 
 
 GLOBAL(int)
-read_JPEG_file (char * filename,unsigned char ** RGBimage,int * width, int * height)
+read_JPEG_file (const char * filename,unsigned char ** RGBimage,int * width, int * height)
 {
   /* This struct contains the JPEG decompression parameters and pointers to
    * working space (which is allocated as needed by the JPEG library).
