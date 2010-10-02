@@ -81,15 +81,15 @@ int main(int argc, char *argv[]) {
         }
         clock_gettime(CLOCK_REALTIME, &spec2);
 
-        delta = spec2.tv_nsec - spec1.tv_nsec;
+        delta = (spec2.tv_nsec / 1000) - (spec1.tv_nsec / 1000);
         if (spec2.tv_sec > spec1.tv_sec) {
             /* add x second */
-            delta += 1000000000 * (spec2.tv_sec - spec1.tv_sec);
+            delta += 1000000 * (spec2.tv_sec - spec1.tv_sec);
         }
 
         printf("ticks = %lld\n", delta);
-        double fps = num_iter / ((double)delta / 1000000000.0);
-        printf("%f FPS\n", fps);
+        double fps = num_iter / ((double)delta / 1000000.0);
+        printf("%lf FPS\n", fps);
     }
 
 #if 0
