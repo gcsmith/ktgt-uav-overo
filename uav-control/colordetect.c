@@ -14,6 +14,7 @@ typedef double real_t;
 JSAMPLE * image_buffer;
 int noiseFilter = 5;
 
+#ifndef STANDALONE_DEMO
 // -----------------------------------------------------------------------------
 void *color_detect_thread(void *arg) {
     printf("IMAGE PROC\n");
@@ -64,6 +65,7 @@ void *color_detect_thread(void *arg) {
 
     pthread_exit(NULL);
 }
+#endif
 
 // -----------------------------------------------------------------------------
 void runColorDetectionFile(const char * infilename, const char * outfilename,
