@@ -16,13 +16,14 @@
 
 typedef struct gpio_globals
 {
+    int initialized;
     int running;
     int fd;
     pthread_t thread;
     gpio_event_t *gpio[GPIO_COUNT];
 } gpio_globals_t;
 
-static gpio_globals_t globals;
+static gpio_globals_t globals = { 0 };
 
 // -----------------------------------------------------------------------------
 static void *gpio_thread(void *pargs)
@@ -110,6 +111,12 @@ int gpio_event_init()
     void *arg;
     int rc;
 
+    /* don't allow multiple calls to gpio_event_init */
+    if (globals.initialized) {
+        fprintf(stderr, "attempting to call gpio_event_init multiple times\n");
+        return 0;
+    }
+
     // clear out the gpio event list
     memset(globals.gpio, 0, sizeof(gpio_event_t *) * GPIO_COUNT);
 
@@ -132,7 +139,26 @@ int gpio_event_init()
         return 0;
     }
 
+    globals.initialized = 1;
     return 1;
+}
+
+// -----------------------------------------------------------------------------
+void gpio_event_shutdown()
+{
+    /* don't allow shutdown if we didn't call gpio_event_init prior */
+    if (!globals.initialized) {
+        fprintf(stderr, "attempting to shutdown gpio_event prior to init\n");
+        return;
+    }
+
+    globals.running = 0;
+    pthread_cancel(globals.thread);
+
+    if (globals.fd >= 0) {
+        fprintf(stderr, "closing /dev/gpio-event...\n");
+        close(globals.fd);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -142,7 +168,7 @@ int gpio_event_attach(gpio_event_t *event, int gpio)
     int rc;
 
     // initialize monitor for this gpio, detect both rising/falling edges
-    monitor.gpio  = gpio;
+    monitor.gpio = gpio;
     monitor.onOff = 1;
     monitor.edgeType = GPIO_EventBothEdges;
     monitor.debounceMilliSec = 0;
@@ -185,17 +211,5 @@ void gpio_event_detach(gpio_event_t *event)
     pthread_cond_destroy(&event->cond);
 
     ioctl(globals.fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor);
-}
-
-// -----------------------------------------------------------------------------
-void gpio_event_shutdown()
-{
-    globals.running = 0;
-    pthread_cancel(globals.thread);
-
-    if (globals.fd >= 0) {
-        fprintf(stderr, "closing /dev/gpio-event...\n");
-        close(globals.fd);
-    }
 }
 
