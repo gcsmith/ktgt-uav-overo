@@ -33,9 +33,6 @@
 
 imu_data_t g_imu;
 
-pthread_t g_pwmthrd;
-pthread_t fc_takeoff_land_thrd;
-
 gpio_event_t g_gpio_alt; // ultrasonic PWM
 gpio_event_t g_gpio_aux; // auxiliary PWM
 
@@ -47,35 +44,31 @@ static int g_muxsel = -1;
 // Perform final shutdown and cleanup.
 void uav_shutdown(int rc)
 {
-    close_controls();
+    fc_close_controls();
 
-    fprintf(stderr, "shutting down gpio user space subsystem...\n");
+    syslog(LOG_INFO, "shutting down gpio user space subsystem...\n");
     if (g_muxsel > 0) {
         gpio_free(g_muxsel);
     }
     gpio_term();
 
-    fprintf(stderr, "shutting down gpio event subsystem...\n");
+    syslog(LOG_INFO, "shutting down gpio event subsystem...\n");
     gpio_event_detach(&g_gpio_aux);
     gpio_event_detach(&g_gpio_alt);
     gpio_event_shutdown();
 
-    fprintf(stderr, "shutting down imu subsystem...\n");
+    syslog(LOG_INFO, "shutting down imu subsystem...\n");
     imu_shutdown(&g_imu);
 
-    fprintf(stderr, "shutting down video subsystem...\n");
+    syslog(LOG_INFO, "shutting down video subsystem...\n");
     video_shutdown();
 
-    fprintf(stderr, "shutting down pwm subsystem...\n");
-    pthread_cancel(g_pwmthrd);
-
-    fprintf(stderr, "shutting down uav control...\n");
+    syslog(LOG_INFO, "shutting down uav control...\n");
     // pthread_exit(NULL);
 
     syslog(LOG_INFO, "process terminating");
     closelog();
 
-    fprintf(stderr, "terminating...\n");
     exit(rc);
 }
 
@@ -253,18 +246,14 @@ void run_server(imu_data_t *imu, const char *port)
             switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
-                // create takeoff/land thread for flight control
-                fd_tl_data.mode = 0;
-                pthread_create(&fc_takeoff_land_thrd, NULL, takeoff_land, (void *)&fd_tl_data);
+                fc_land();
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TAKEOFF;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 break;
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
-                // create takeoff/land thread for flight control
-                fd_tl_data.mode = 1;
-                pthread_create(&fc_takeoff_land_thrd, NULL, takeoff_land, (void *)&fd_tl_data);
+                fc_takeoff();
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_LANDING;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
@@ -590,7 +579,7 @@ int main(int argc, char *argv[])
     }
 
     // open PWM ports for mixed controlling
-    open_controls();
+    fc_open_controls(&g_gpio_alt);
 
     // server entry point
     run_server(&g_imu, port_str);
