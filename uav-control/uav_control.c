@@ -4,14 +4,12 @@
 // -----------------------------------------------------------------------------
 
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
 #include <pthread.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <syslog.h>
-#include <unistd.h>
 #include <getopt.h>
 #include <signal.h>
 #include <fcntl.h>
@@ -19,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <assert.h>
 
 #include "flight_control.h"
@@ -30,14 +27,13 @@
 #include "uav_protocol.h"
 #include "video_uvc.h"
 #include "user-gpio.h"
-#include "pid.h"
-#include "colordetect.h"
 
 #define DEV_LEN         64
 #define PKT_BUFF_LEN    2048
 
 imu_data_t g_imu;
 
+pthread_t g_pwmthrd;
 pthread_t fc_takeoff_land_thrd;
 
 gpio_event_t g_gpio_alt; // ultrasonic PWM
@@ -48,134 +44,38 @@ static char autonomous = 1;
 static int g_muxsel = -1;
 
 // -----------------------------------------------------------------------------
-void *takeoff_land(void *mode)
-{
-    char *m_mode = (char *)mode;
-    int error, input, last_input, dx_dt;
-    float last_control;
-    char stable = 0, timer_set = 0;
-    ctl_sigs_t control;
-    clock_t timer = 0;;
-
-    pid_ctrl_t pid;
-    pid.setpoint = 42;      // 42 inches ~= 1 meter
-    pid.Kp = 0.01;
-    pid.Ki = 0.1;
-    pid.Kd = 0.001;
-    pid.total_error = 0.0;
-
-    control.alt = 0.0f;
-
-    if (*m_mode)
-    {
-        // land
-    }
-    else
-    {
-        // take off
-        fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
-
-        while (!stable)
-        {
-            pthread_mutex_lock(&g_gpio_alt.lock);
-            while ((input = (g_gpio_alt.pulsewidth / 147)) != pid.setpoint)
-            {
-                pthread_mutex_unlock(&g_gpio_alt.lock);
-    
-                // dead reckoning variables
-                error = pid.setpoint - input;
-                last_input = input;
-                dx_dt = input - last_input; // rate of climb [inches per second]
-    
-                // if the helicopter is 20 inches from the setpoint, switch to PID control
-                if ((error <= 22) && (error >= -22))
-                {
-                    pid_compute(&pid, (float)input, (float *)&error, &control.alt);
-                    // not sure how the output will look from pid controller
-                    fprintf(stderr, "pid output = %f\n", control.alt);
-                    //flight_control(&control, VCM_AXIS_ALT);
-                }
-                else if (error > 0)
-                {
-                    // need to climb
-                    if (dx_dt < 1)
-                    {
-                        control.alt = 0.1f;
-                        //flight_control(&control, VCM_AXIS_ALT);
-                    }
-    
-                    // need to slow the rate of climb
-                    else if (dx_dt > 3)
-                    {
-                        control.alt = last_control * 0.5f;
-                        //flight_control(&control, VCM_AXIS_ALT);
-                    }
-                }
-                else
-                {
-                    control.alt = -0.1f;
-                    //flight_control(&control, VCM_AXIS_ALT);
-                }
-    
-                last_control = control.alt;
-    
-                // sleep for a second to allow the helicopter to lift
-                usleep(1000000);
-
-                // helicopter has strayed away from stability - stop timing 
-                // previous stability
-                if (timer_set)
-                    timer_set = 0;
-            }
-    
-            if ((input == pid.setpoint) && (!timer_set))
-            {
-                // get the time from now that the helicopter should still be at 
-                // the setpoint to be considered stable
-                timer = clock() + 5 * CLOCKS_PER_SEC;
-                timer_set = 1;
-            }
-            else if ((input == pid.setpoint) && timer_set)
-            {
-                // helicopter has been at the setpoint for 5 seconds
-                // alititude requirement has been achieved
-                if (clock() >= timer)
-                    stable = 1;
-            }
-        }
-    }
-
-    pthread_exit(NULL);
-}
-
-// -----------------------------------------------------------------------------
 // Perform final shutdown and cleanup.
 void uav_shutdown(int rc)
 {
     close_controls();
 
-    syslog(LOG_INFO, "shutting down gpio user space subsystem...\n");
+    fprintf(stderr, "shutting down gpio user space subsystem...\n");
     if (g_muxsel > 0) {
         gpio_free(g_muxsel);
     }
     gpio_term();
 
-    syslog(LOG_INFO, "shutting down gpio event subsystem...\n");
+    fprintf(stderr, "shutting down gpio event subsystem...\n");
     gpio_event_detach(&g_gpio_aux);
     gpio_event_detach(&g_gpio_alt);
     gpio_event_shutdown();
 
-    syslog(LOG_INFO, "shutting down imu subsystem...\n");
+    fprintf(stderr, "shutting down imu subsystem...\n");
     imu_shutdown(&g_imu);
 
-    syslog(LOG_INFO, "shutting down video subsystem...\n");
+    fprintf(stderr, "shutting down video subsystem...\n");
     video_shutdown();
 
-    syslog(LOG_INFO, "shutting down uav control...\n");
+    fprintf(stderr, "shutting down pwm subsystem...\n");
+    pthread_cancel(g_pwmthrd);
+
+    fprintf(stderr, "shutting down uav control...\n");
     // pthread_exit(NULL);
 
     syslog(LOG_INFO, "process terminating");
     closelog();
+
+    fprintf(stderr, "terminating...\n");
     exit(rc);
 }
 
@@ -274,12 +174,16 @@ void run_server(imu_data_t *imu, const char *port)
     uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
-    char fc_mode = 0;
+    fd_thro_t fd_tl_data; // flight takeoff/landing data
 
     union {
         float f;
         uint32_t i;
     } temp;
+
+    // initialize flight data for takeoff
+    fd_tl_data.gpio_alt = &g_gpio_alt;
+    fd_tl_data.mode = 0;
 
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;
@@ -350,8 +254,8 @@ void run_server(imu_data_t *imu, const char *port)
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
                 // create takeoff/land thread for flight control
-                fc_mode = 0;
-                pthread_create(&fc_takeoff_land_thrd, NULL, takeoff_land, (void *)&fc_mode);
+                fd_tl_data.mode = 0;
+                pthread_create(&fc_takeoff_land_thrd, NULL, takeoff_land, (void *)&fd_tl_data);
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TAKEOFF;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
@@ -359,8 +263,8 @@ void run_server(imu_data_t *imu, const char *port)
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
                 // create takeoff/land thread for flight control
-                fc_mode = 1;
-                pthread_create(&fc_takeoff_land_thrd, NULL, takeoff_land, (void *)&fc_mode);
+                fd_tl_data.mode = 1;
+                pthread_create(&fc_takeoff_land_thrd, NULL, takeoff_land, (void *)&fd_tl_data);
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_LANDING;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
@@ -392,7 +296,7 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_MJPG_FRAME:
                 // syslog(LOG_INFO, "user requested mjpg frame - sending...\n");
-                if (!video_lock(&vid_data,0)) {
+                if (!video_lock(&vid_data, 0)) {
                     // video disabled, non-functioning, or frame not ready
                     continue;
                 }
@@ -687,7 +591,7 @@ int main(int argc, char *argv[])
 
     // open PWM ports for mixed controlling
     open_controls();
-    
+
     // server entry point
     run_server(&g_imu, port_str);
     

@@ -2,6 +2,7 @@
 #define FLIGHT_CONTROL__H_
 
 #include "uav_protocol.h"
+#include "gpio_event.h"
 #include "pwm_lib.h"
 
 #define PWM_ALT     0
@@ -30,8 +31,15 @@ typedef struct pwm_channel
     unsigned int rng_min, rng_max;
 } pwm_channel_t;
 
+typedef struct fd_thro  // flight data for throttle
+{
+    gpio_event_t *gpio_alt;
+    char mode;
+} fd_thro_t;
+
 int open_controls();
 void close_controls();
+void *takeoff_land(void *fd);
 void flight_control(ctl_sigs_t *sigs, int chnl_flags);
 
 #endif // FLIGHT_CONTROL__H_

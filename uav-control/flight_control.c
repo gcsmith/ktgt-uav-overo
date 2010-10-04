@@ -1,6 +1,8 @@
 #include <pthread.h>
 #include <stdio.h>
+#include <unistd.h>
 #include "flight_control.h"
+#include "pid.h"
 
 #define PWM_DUTY_MIN   0.05f
 #define PWM_DUTY_MAX   0.09f
@@ -183,6 +185,107 @@ void close_controls()
     int i;
     for (i = 0; i < 4; ++i)
         pwm_close_device(g_channels[i].handle);
+}
+
+// -----------------------------------------------------------------------------
+void *takeoff_land(void *fd)
+{
+    fd_thro_t *m_data = (fd_thro_t *)fd;
+    int error, input, last_input, dx_dt;
+    float last_control;
+    char stable = 0, timer_set = 0;
+    ctl_sigs_t control;
+    clock_t timer = 0;;
+
+    pid_ctrl_t pid;
+    pid.setpoint = 42;      // 42 inches ~= 1 meter
+    pid.Kp = 0.01;
+    pid.Ki = 0.1;
+    pid.Kd = 0.001;
+    pid.total_error = 0.0;
+
+    control.alt = 0.0f;
+
+    if (m_data->mode)
+    {
+        // land
+    }
+    else
+    {
+        // take off
+        fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
+
+        while (!stable)
+        {
+            pthread_mutex_lock(&m_data->gpio_alt->lock);
+            while ((input = (m_data->gpio_alt->pulsewidth / 147)) != pid.setpoint)
+            {
+                pthread_mutex_unlock(&m_data->gpio_alt->lock);
+    
+                // dead reckoning variables
+                error = pid.setpoint - input;
+                last_input = input;
+                dx_dt = input - last_input; // rate of climb [inches per second]
+    
+                // if the helicopter is 20 inches from the setpoint, switch to PID control
+                if ((error <= 22) && (error >= -22))
+                {
+                    pid_compute(&pid, (float)input, (float *)&error, &control.alt);
+                    // not sure how the output will look from pid controller
+                    fprintf(stderr, "pid output = %f\n", control.alt);
+                    //flight_control(&control, VCM_AXIS_ALT);
+                }
+                else if (error > 0)
+                {
+                    // need to climb
+                    if (dx_dt < 1)
+                    {
+                        control.alt = 0.1f;
+                        //flight_control(&control, VCM_AXIS_ALT);
+                    }
+    
+                    // need to slow the rate of climb
+                    else if (dx_dt > 3)
+                    {
+                        control.alt = last_control * 0.5f;
+                        //flight_control(&control, VCM_AXIS_ALT);
+                    }
+                }
+                else
+                {
+                    control.alt = -0.1f;
+                    //flight_control(&control, VCM_AXIS_ALT);
+                }
+    
+                last_control = control.alt;
+    
+                // sleep for a second to allow the helicopter to lift
+                usleep(1000000);
+
+                // helicopter has strayed away from stability - stop timing 
+                // previous stability
+                if (timer_set)
+                    timer_set = 0;
+            }
+    
+            if ((input == pid.setpoint) && (!timer_set))
+            {
+                // get the time from now that the helicopter should still be at 
+                // the setpoint to be considered stable
+                timer = clock() + 5 * CLOCKS_PER_SEC;
+                timer_set = 1;
+            }
+            else if ((input == pid.setpoint) && timer_set)
+            {
+                // helicopter has been at the setpoint for 5 seconds
+                // alititude requirement has been achieved
+                if (clock() >= timer)
+                    stable = 1;
+            }
+        }
+    }
+
+    pthread_exit(NULL);
 }
 
 // -----------------------------------------------------------------------------
