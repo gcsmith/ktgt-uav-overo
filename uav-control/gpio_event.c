@@ -16,7 +16,6 @@
 
 typedef struct gpio_globals
 {
-    int initialized;
     int running;
     int fd;
     pthread_t thread;
@@ -112,7 +111,7 @@ int gpio_event_init()
     int rc;
 
     /* don't allow multiple calls to gpio_event_init */
-    if (globals.initialized) {
+    if (globals.running) {
         fprintf(stderr, "attempting to call gpio_event_init multiple times\n");
         return 0;
     }
@@ -139,7 +138,6 @@ int gpio_event_init()
         return 0;
     }
 
-    globals.initialized = 1;
     return 1;
 }
 
@@ -147,7 +145,7 @@ int gpio_event_init()
 void gpio_event_shutdown()
 {
     /* don't allow shutdown if we didn't call gpio_event_init prior */
-    if (!globals.initialized) {
+    if (!globals.running) {
         fprintf(stderr, "attempting to shutdown gpio_event prior to init\n");
         return;
     }
