@@ -45,7 +45,7 @@ static void *gpio_thread(void *pargs)
 
             rc = select(data->fd + 1, &rdset, NULL, NULL, &tv);
             if (rc < 0) {
-                fprintf(stderr, "select call failed\n");
+                syslog(LOG_ERR, "select call failed\n");
             }
             else if (rc > 0) {
                 // data is available
@@ -59,7 +59,7 @@ static void *gpio_thread(void *pargs)
 
         // read the GPIO event structure as a binary object
         if (sizeof(event) != read(data->fd, &event, sizeof(event))) {
-            fprintf(stderr, "read failed: unexpected number of bytes\n");
+            syslog(LOG_ERR, "read failed: unexpected number of bytes\n");
             continue;
         }
 
@@ -96,7 +96,7 @@ static void *gpio_thread(void *pargs)
             pevent->last_usec = 0;
             break;
         default:
-            fprintf(stderr, "unexpected case statement\n");
+            syslog(LOG_ERR, "unexpected case statement\n");
             break;
         }
     }
@@ -112,7 +112,7 @@ int gpio_event_init()
 
     /* don't allow multiple calls to gpio_event_init */
     if (globals.running) {
-        fprintf(stderr, "attempting to call gpio_event_init multiple times\n");
+        syslog(LOG_INFO, "attempting to call gpio_event_init multiple times\n");
         return 0;
     }
 
@@ -122,10 +122,10 @@ int gpio_event_init()
     // open the gpio-event device node
     globals.fd = open("/dev/gpio-event", 0);
     if (globals.fd < 0) {
-        fprintf(stderr, "failed to open /dev/gpio-event\n");
+        syslog(LOG_ERR, "failed to open /dev/gpio-event\n");
         return 0;
     }
-    fprintf(stderr, "successfully opened /dev/gpio-event for reading\n");
+    syslog(LOG_INFO, "successfully opened /dev/gpio-event for reading\n");
 
     // set read mode to binary (default is ascii)
     ioctl(globals.fd, GPIO_EVENT_IOCTL_SET_READ_MODE, GPIO_EventReadModeBinary);
@@ -134,7 +134,7 @@ int gpio_event_init()
     globals.running = 1;
     arg = (void *)&globals;
     if (0 != (rc = pthread_create(&globals.thread, NULL, gpio_thread, arg))) {
-        fprintf(stderr, "error creating serial thread (%d)", rc);
+        syslog(LOG_ERR, "error creating serial thread (%d)", rc);
         return 0;
     }
 
@@ -146,7 +146,7 @@ void gpio_event_shutdown()
 {
     /* don't allow shutdown if we didn't call gpio_event_init prior */
     if (!globals.running) {
-        fprintf(stderr, "attempting to shutdown gpio_event prior to init\n");
+        syslog(LOG_INFO, "attempting to shutdown gpio_event prior to init\n");
         return;
     }
 
@@ -154,7 +154,7 @@ void gpio_event_shutdown()
     pthread_cancel(globals.thread);
 
     if (globals.fd >= 0) {
-        fprintf(stderr, "closing /dev/gpio-event...\n");
+        syslog(LOG_INFO, "closing /dev/gpio-event...\n");
         close(globals.fd);
     }
 }
@@ -179,10 +179,10 @@ int gpio_event_attach(gpio_event_t *event, int gpio)
     globals.gpio[gpio] = event;
 
     if (ioctl(globals.fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor)) {
-        fprintf(stderr, "failed to set gpio monitor\n");
+        syslog(LOG_ERR, "failed to set gpio monitor\n");
         return 0;
     }
-    printf("monitoring rising and falling edge for gpio%d\n", monitor.gpio);
+    syslog(LOG_INFO, "monitoring activity for gpio%d\n", monitor.gpio);
 
     if (0 != (rc = pthread_mutex_init(&event->lock, NULL))) {
         syslog(LOG_ERR, "error creating gpio event mutex (%d)", rc);

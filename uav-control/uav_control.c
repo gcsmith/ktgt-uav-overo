@@ -150,7 +150,7 @@ void *takeoff_land(void *mode)
 }
 
 void *img_proc(){
-printf("IMAGE PROC\n");
+    printf("IMAGE PROC\n");
     colorToFind color = {
         .R = 151,
         .G = 242,
@@ -202,30 +202,28 @@ void uav_shutdown(int rc)
 {
     close_controls();
 
-    fprintf(stderr, "shutting down gpio user space subsystem...\n");
+    syslog(LOG_INFO, "shutting down gpio user space subsystem...\n");
     if (g_muxsel > 0) {
         gpio_free(g_muxsel);
     }
     gpio_term();
 
-    fprintf(stderr, "shutting down gpio event subsystem...\n");
+    syslog(LOG_INFO, "shutting down gpio event subsystem...\n");
     gpio_event_detach(&g_gpio_aux);
     gpio_event_detach(&g_gpio_alt);
     gpio_event_shutdown();
 
-    fprintf(stderr, "shutting down imu subsystem...\n");
+    syslog(LOG_INFO, "shutting down imu subsystem...\n");
     imu_shutdown(&g_imu);
 
-    fprintf(stderr, "shutting down video subsystem...\n");
+    syslog(LOG_INFO, "shutting down video subsystem...\n");
     video_shutdown();
 
-    fprintf(stderr, "shutting down uav control...\n");
+    syslog(LOG_INFO, "shutting down uav control...\n");
     // pthread_exit(NULL);
 
     syslog(LOG_INFO, "process terminating");
     closelog();
-
-    fprintf(stderr, "terminating...\n");
     exit(rc);
 }
 
@@ -739,7 +737,7 @@ int main(int argc, char *argv[])
     open_controls();
     
     // Start video processing
-    pthread_create(&fc_img_proc_thrd, NULL, img_proc,NULL);
+    pthread_create(&fc_img_proc_thrd, NULL, img_proc, NULL);
     
     // server entry point
     run_server(&g_imu, port_str);
