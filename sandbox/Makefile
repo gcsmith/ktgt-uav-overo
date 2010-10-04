@@ -72,7 +72,7 @@ gpio_test: ${GPIO_OBJS}
 
 jpeg_test: ${JPEG_OBJS}
 	@echo "[LD] $@"
-	$(CC) $(LDFLAGS) -lpthread -ljpeg -lm -lrt -o $@ $^
+	$(CC) $(LDFLAGS) -lpthread -ljpeg -lm -lrt -DSTANDALONE_DEMO -o $@ $^ 
 
 madc_test: ${MADC_OBJS}
 	@echo "[LD] $@"

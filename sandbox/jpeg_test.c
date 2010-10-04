@@ -17,9 +17,9 @@ int main(int argc, char *argv[]) {
 
     //HSL Threshold values
     //Green Frisbee on carpet 30 100 360
-    short Ht = 30;
-    short St = 100;
-    short Lt = 360;
+    unsigned char Ht = 21;
+    unsigned char St = 71;
+    unsigned char Lt = 255;
 
     //Define RGBimage
     //unsigned char * RGBimage;
@@ -62,14 +62,25 @@ int main(int argc, char *argv[]) {
         .quality = 25    
     };
     boxCoordinates box = {};
-    
     struct timespec spec1, spec2;
     const int num_iter = 10;
     long long delta;
-    unsigned char * RGBimage;   
-                        
-    read_JPEG_file(filename,&RGBimage,&box.width,&box.height);    
+    unsigned char * RGBimage;
+    FILE * jpeg = fopen(filename,"r");
+    fseek(jpeg, 0, SEEK_END);
+    unsigned long size = ftell(jpeg);
+    unsigned char * stream = (unsigned char *)malloc(size);
+    fseek(jpeg, 0, SEEK_SET);
+    long int i = 0;
+    for(i = 0; i < size; i++){
+        stream[i] = fgetc(jpeg);
+    }
+    fclose (jpeg);
+                   
+    //read_JPEG_file(filename,&RGBimage,&box.width,&box.height);
+    printf("%ld\n", size);
 
+    read_JPEG_stream(stream, size/4, &RGBimage, &box.width, &box.height);
     
     for(;;){
         int i;
