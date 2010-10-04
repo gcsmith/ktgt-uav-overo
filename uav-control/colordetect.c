@@ -1,17 +1,71 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <syslog.h>
+#include <pthread.h>
 #include "jpeglib.h"
 #include "readwritejpeg.h"
 #include "colordetect.h"
-#include <syslog.h>
 #include "utility.h"
+#include "video_uvc.h"
+
+typedef double real_t;
+
 JSAMPLE * image_buffer;
-
-#define REAL double
-
 int noiseFilter = 5;
 
+// -----------------------------------------------------------------------------
+void *color_detect_thread(void *arg) {
+    printf("IMAGE PROC\n");
+    colorToFind color = {
+        .R = 151,
+        .G = 242,
+        .B = 192,
+        .Ht = 30,
+        .St = 100,
+        .Lt = 360,
+        .quality = 25    
+    };
+    boxCoordinates box = {};
+
+    video_data_t vid_data;
+    unsigned char *jpg_buf = NULL;
+    unsigned long buff_sz = 0;
+
+    for (;;) {
+        //pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+        if (!video_lock(&vid_data, 1)) {
+            // video disabled, non-functioning, or frame not ready
+            continue;
+        }
+
+        // copy the jpeg to our buffer now that we're safely locked
+        if (buff_sz < vid_data.length) {
+            free(jpg_buf);
+            buff_sz = (vid_data.length);
+            jpg_buf = (unsigned char *)malloc(buff_sz);
+        }
+
+        memcpy(jpg_buf, vid_data.data, vid_data.length);
+        video_unlock();
+
+        runColorDetectionMemory(jpg_buf, &buff_sz, &color, &box);
+
+        if (!(box.x1 == box.width &&
+              box.y1 == box.height &&
+              box.x2 == 0 && box.y2 == 0)) {
+            printf("HSL Bounding box: (%d,%d) (%d,%d)\n",
+                   box.x1, box.y1, box.x2, box.y2);
+        }
+        else {
+            printf("Target object not found!\n");
+        }
+    }
+
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
 void runColorDetectionFile(const char * infilename, const char * outfilename,
     colorToFind * color, boxCoordinates * box){
                         
@@ -28,6 +82,7 @@ void runColorDetectionFile(const char * infilename, const char * outfilename,
 #endif                        
 }
 
+// -----------------------------------------------------------------------------
 void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize,
     colorToFind * color, boxCoordinates * box){
                         
@@ -45,6 +100,7 @@ void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize,
 #endif                        
 }
 
+// -----------------------------------------------------------------------------
 void runColorDetection(unsigned char * RGBimage,
     colorToFind * color, boxCoordinates * box){
     
@@ -64,7 +120,7 @@ void runColorDetection(unsigned char * RGBimage,
     findColorHSL (HSLimage, H, S, L, color, box, RGBimage);
 }
 
-
+// -----------------------------------------------------------------------------
 int findColorHSL(short* HSLimage, short H, short S, short L,
     colorToFind * color, boxCoordinates * box, unsigned char * RGBimage){ 
                  
@@ -137,7 +193,7 @@ int findColorHSL(short* HSLimage, short H, short S, short L,
     }
 }
 
-
+// -----------------------------------------------------------------------------
 void COLORimageRGBtoHSL(unsigned char* COLORimage, short* HSLimage, int width, int height){
     int i = 0, j = 0;
     for( i = 0; i < height; i++){ 
@@ -152,17 +208,18 @@ void COLORimageRGBtoHSL(unsigned char* COLORimage, short* HSLimage, int width, i
     }
 }
 
+// -----------------------------------------------------------------------------
 void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
               short * h_out, short * s_out, short * l_out)
 {
-    REAL r = R_in/255.0;
-    REAL g = G_in/255.0;
-    REAL b = B_in/255.0;
-    REAL max;
-    REAL min;
+    real_t r = R_in/255.0;
+    real_t g = G_in/255.0;
+    real_t b = B_in/255.0;
+    real_t max;
+    real_t min;
 
-    REAL vm;
-    REAL h,s,l;
+    real_t vm;
+    real_t h,s,l;
 
     h = 0; // default to black
     s = 0;
@@ -199,7 +256,7 @@ void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
 
 //Still needed?
 
-
+// -----------------------------------------------------------------------------
 void findColorRGB(unsigned char* RGBimage, int width, int height,
     unsigned char R, unsigned char G, unsigned char B, int threshold){
     int i = 0;
@@ -209,10 +266,10 @@ void findColorRGB(unsigned char* RGBimage, int width, int height,
     for( i = 0; i < height; i++){
        consPix = 0;
        for ( j = 0; j < width; j++){
-	 if(sqrt( (REAL)(pow((REAL)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 0]) - R , 2 ) ) +
-                (REAL)(pow((REAL)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 1]) - G , 2 ) ) +
-                (REAL)(pow((REAL)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 2]) - B , 2 ) ) 
-		  ) < (REAL)threshold ){
+	 if(sqrt( (real_t)(pow((real_t)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 0]) - R , 2 ) ) +
+              (real_t)(pow((real_t)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 1]) - G , 2 ) ) +
+              (real_t)(pow((real_t)( (unsigned char) RGBimage[(i * width * 3) + (j*3) + 2]) - B , 2 ) ) 
+		  ) < (real_t)threshold ){
                 
 		consPix++;		
 		if(consPix >= noiseFilter){
@@ -235,6 +292,7 @@ void findColorRGB(unsigned char* RGBimage, int width, int height,
 }
 
 #ifdef DRAW_BOUNDING_BOX 
+// -----------------------------------------------------------------------------
 void drawBoundingbox(unsigned char * RGBimage, int width, int height, int x1, int y1, int x2, int y2, int thickness ,
  unsigned char R, unsigned char G, unsigned char B){
  int i = 0;
@@ -296,5 +354,4 @@ void drawBoundingbox(unsigned char * RGBimage, int width, int height, int x1, in
         }
 }
 #endif
-
 

@@ -39,7 +39,6 @@
 imu_data_t g_imu;
 
 pthread_t fc_takeoff_land_thrd;
-pthread_t fc_img_proc_thrd;
 
 gpio_event_t g_gpio_alt; // ultrasonic PWM
 gpio_event_t g_gpio_aux; // auxiliary PWM
@@ -147,53 +146,6 @@ void *takeoff_land(void *mode)
     }
 
     pthread_exit(NULL);
-}
-
-void *img_proc(){
-    printf("IMAGE PROC\n");
-    colorToFind color = {
-        .R = 151,
-        .G = 242,
-        .B = 192,
-        .Ht = 30,
-        .St = 100,
-        .Lt = 360,
-        .quality = 25    
-    };
-    boxCoordinates box = {};
-
-    video_data_t vid_data;
-    unsigned char *jpg_buf = NULL;
-    unsigned long buff_sz = 0;
-
-    for(;;){
-	//pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
-	if (!video_lock(&vid_data,1)) 
-	{
-            // video disabled, non-functioning, or frame not ready
-            continue;
-        }
-
-	// copy the jpeg to our buffer now that we're safely locked
-        if (buff_sz < vid_data.length)
-        {
-            free(jpg_buf);
-            buff_sz = (vid_data.length);
-            jpg_buf = (unsigned char *)malloc(buff_sz);
-        }
-
-        memcpy(jpg_buf, vid_data.data, vid_data.length);
-        video_unlock();
-	    
-	    runColorDetectionMemory(jpg_buf,&buff_sz,&color,&box);
-	    
-	    if(!(box.x1 == box.width && box.y1 == box.height &&
-                box.x2 == 0 && box.y2 == 0 ) ){
-                printf( "HSL Bounding box: (%d,%d) (%d,%d)\n",box.x1,box.y1,box.x2,box.y2);
-        } else {
-            printf( "Target object not found!\n" );
-        }
-    }
 }
 
 // -----------------------------------------------------------------------------
@@ -735,9 +687,6 @@ int main(int argc, char *argv[])
 
     // open PWM ports for mixed controlling
     open_controls();
-    
-    // Start video processing
-    pthread_create(&fc_img_proc_thrd, NULL, img_proc, NULL);
     
     // server entry point
     run_server(&g_imu, port_str);
