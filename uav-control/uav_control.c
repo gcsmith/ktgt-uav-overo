@@ -335,7 +335,14 @@ void run_server(imu_data_t *imu, const char *port)
                         client_sigs.roll, client_sigs.yaw);
                 
                 // send signals off to PWMs
-                flight_control(&client_sigs);
+                flight_control(&client_sigs, vcm_axes);
+                break;
+            case CLIENT_REQ_THRO_EVT:
+                // client is telling flight control to increment the throttle signal
+                temp.i = cmd_buffer[PKT_THRO_EVT_VALUE];
+                client_sigs.alt = temp.f;
+                fprintf(stderr, "received throttle event %f\n", client_sigs.alt);
+                flight_control(&client_sigs, VCM_AXIS_ALT);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes

@@ -193,6 +193,7 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
     fprintf(stderr, "yaw chan = %d\n", g_channels[PWM_YAW].handle);
     if (g_channels[PWM_ALT].handle == pwm->handle)
     {
+#if 0
         // joystick is scrolling from up to down
         if ((thro_last_value > value) && (thro_last_value > 0) && (value > 0))
         {
@@ -210,8 +211,8 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
         {
             cmp = thro_last_cmp;
         }
-
-        else 
+#endif
+        //else 
         {
             // on the first pass set we need to modify the current PWM signal
             if (thro_first == 0)
@@ -224,7 +225,11 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
             else
             {
                 // scale the value for sensitivity
-                //value = 0.1f;
+                if (value < 0.0f)
+                    value = -0.10f;
+                else
+                    value = 0.10f;
+
                 cmp = thro_last_cmp + (int)(hrange * value);
                 if (cmp > max)
                     cmp = max;
@@ -406,7 +411,7 @@ void fc_update_axes(int chnl_flags)
 }
 
 // -----------------------------------------------------------------------------
-void flight_control(ctl_sigs_t *sigs)
+void flight_control(ctl_sigs_t *sigs, int chnl_flags)
 {
 #if 0
     // assign incoming signals to fight control's signal carrier
@@ -419,25 +424,25 @@ void flight_control(ctl_sigs_t *sigs)
 #endif
 
     // adjust altitude if specified
-    if (vcm_axes & VCM_AXIS_ALT)
+    if (chnl_flags & VCM_AXIS_ALT)
     {
         assign_value(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt);
     }
 
     // adjust pitch if specified
-    if (vcm_axes & VCM_AXIS_PITCH)
+    if (chnl_flags & VCM_AXIS_PITCH)
     {
         assign_value(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch);
     }
 
     // adjust roll if specified
-    if (vcm_axes & VCM_AXIS_ROLL)
+    if (chnl_flags & VCM_AXIS_ROLL)
     {
         assign_value(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll);
     }
 
     // adjust yaw if specified
-    if (vcm_axes & VCM_AXIS_YAW)
+    if (chnl_flags & VCM_AXIS_YAW)
     {
         assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw);
     }
