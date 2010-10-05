@@ -110,7 +110,7 @@ int gpio_event_init()
     void *arg;
     int rc;
 
-    /* don't allow multiple calls to gpio_event_init */
+    // don't allow multiple calls to gpio_event_init
     if (globals.running) {
         syslog(LOG_INFO, "attempting to call gpio_event_init multiple times\n");
         return 0;
@@ -144,7 +144,7 @@ int gpio_event_init()
 // -----------------------------------------------------------------------------
 void gpio_event_shutdown()
 {
-    /* don't allow shutdown if we didn't call gpio_event_init prior */
+    // don't allow shutdown if we didn't call gpio_event_init prior
     if (!globals.running) {
         syslog(LOG_INFO, "attempting to shutdown gpio_event prior to init\n");
         return;

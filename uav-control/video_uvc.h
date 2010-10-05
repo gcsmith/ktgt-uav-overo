@@ -12,10 +12,10 @@
 
 typedef struct video_data
 {
-    const char *data;      /* global buffer */
-    unsigned long length;  /* global buffer size */
-    int width, height;     /* frame resolution */
-    int fps;               /* frame rate */
+    const char *data;       // global buffer
+    unsigned long length;   // global buffer size
+    int width, height;      // frame resolution
+    int fps;                // frame rate
 } video_data_t;
 
 int video_init(const char *dev, int width, int height, int fps);

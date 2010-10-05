@@ -11,5 +11,8 @@
 #define MAX(a, b)   (((a) > (b)) ? (a) : (b))
 #define LEN(x)      (sizeof(x) / sizeof((x)[0]))
 
+uint32_t read_wlan_rssi(int sock);
+void daemonize(void);
+
 #endif // _UAV_UTILITY_IMU__H_
 

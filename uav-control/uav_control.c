@@ -12,7 +12,6 @@
 #include <syslog.h>
 #include <getopt.h>
 #include <signal.h>
-#include <fcntl.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,17 +21,16 @@
 #include "flight_control.h"
 #include "pwm_interface.h"
 #include "razor_imu.h"
-#include "server.h"
 #include "gpio_event.h"
 #include "uav_protocol.h"
 #include "video_uvc.h"
 #include "user-gpio.h"
+#include "utility.h"
 
 #define DEV_LEN         64
 #define PKT_BUFF_LEN    2048
 
 imu_data_t g_imu;
-
 gpio_event_t g_gpio_alt; // ultrasonic PWM
 gpio_event_t g_gpio_aux; // auxiliary PWM
 
@@ -84,41 +82,6 @@ void signal_handler(int sig)
         syslog(LOG_WARNING, "unhandled signal (%s)", strsignal(sig));
         break;
     }
-}
-
-// -----------------------------------------------------------------------------
-// Daemonize the process by forking from init and chdir-ing to /.
-void daemonize()
-{
-    pid_t pid, sid;
-
-    pid = fork();
-    if (pid < 0) {
-        // failed to fork
-        syslog(LOG_ERR, "failed to fork process");
-        exit(EXIT_FAILURE);
-    }
-    else if (pid > 0) {
-        // parent process - terminate
-        exit(EXIT_SUCCESS);
-    }
-
-    umask(0);
-
-    sid = setsid();
-    if (sid < 0) {
-        syslog(LOG_ERR, "failed to execute setsid()");
-        exit(EXIT_FAILURE);
-    }
-
-    if (chdir("/") < 0) {
-        syslog(LOG_ERR, "failed to chdir() to /");
-        exit(EXIT_FAILURE);
-    }
-
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
 }
 
 // -----------------------------------------------------------------------------

@@ -24,16 +24,16 @@ LFLAGS += $(LDFLAGS) \
           -L../gpio-lib \
           -lpthread -ljpeg -lpwm -lgpio -lm
 
-OBJ_FILES = flight_control.o \
+OBJ_FILES = colordetect.o \
+            flight_control.o \
             gpio_event.o \
+            pid.o \
             razor_imu.o \
-            server.o \
+            readwritejpeg.o \
             uav_control.o \
+            utility.o \
             video_uvc.o \
-            mjpg-streamer/v4l2uvc.o \
-	    pid.o \
-            colordetect.o \
-	    readwritejpeg.o
+            mjpg-streamer/v4l2uvc.o
 
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
