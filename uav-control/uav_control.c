@@ -167,16 +167,11 @@ void run_server(imu_data_t *imu, const char *port)
     uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
-    fd_thro_t fd_tl_data; // flight takeoff/landing data
 
     union {
         float f;
         uint32_t i;
     } temp;
-
-    // initialize flight data for takeoff
-    fd_tl_data.gpio_alt = &g_gpio_alt;
-    fd_tl_data.mode = 0;
 
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;
@@ -246,14 +241,14 @@ void run_server(imu_data_t *imu, const char *port)
             switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
-                fc_land();
+                fc_takeoff();
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TAKEOFF;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
                 break;
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
-                fc_takeoff();
+                fc_land();
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_LANDING;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                 send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
@@ -350,6 +345,8 @@ void run_server(imu_data_t *imu, const char *port)
                     continue;
                 }
 
+                fc_update_axes(vcm_axes);
+
                 cmd_buffer[PKT_COMMAND]  = SERVER_ACK_SET_CTL_MODE;
                 cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
                 cmd_buffer[PKT_VCM_TYPE] = vcm_type;
@@ -375,7 +372,7 @@ void run_server(imu_data_t *imu, const char *port)
                         client_sigs.roll, client_sigs.yaw);
                 
                 // send signals off to PWMs
-                flight_control(&client_sigs, vcm_axes);
+                flight_control(&client_sigs);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes

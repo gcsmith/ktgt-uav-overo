@@ -26,13 +26,30 @@ pthread_t takeoff_thrd;
 pthread_t land_thrd;
 
 // mutexes
-pthread_mutex_t mcm_alive_event;
-pthread_mutex_t mcm_value_event;
-pthread_mutex_t mcm_signals_event;
+pthread_mutex_t fc_alive_event;
+#if 0
+pthread_mutex_t fc_signals_event;
+#endif
+pthread_mutex_t fc_axes_event;
 
+// pwm channels to helicopter's controls
 pwm_channel_t g_channels[4];
 
 gpio_event_t *usrf; // ultrasonic range finder pwm
+
+// axes flags
+int vcm_axes;
+
+// flight control's master signal carrier
+#if 0
+ctl_sigs_t fc_mr_ctl;
+#endif
+
+// flight control's alive flag
+char fc_alive;
+
+// flight control's autonomous control flag
+char fc_allow_autonomous;
 
 // relative throttle control variables
 float thro_last_value = 0.0f;
@@ -130,11 +147,13 @@ void *takeoff()
     pthread_exit(NULL);
 }
 
+// -----------------------------------------------------------------------------
 void *land()
 {
     pthread_exit(NULL);
 }
 
+// -----------------------------------------------------------------------------
 void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
 {
     int cmp_val = 0;
@@ -152,6 +171,7 @@ void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
     pwm_set_compare(pwm->handle, cmp_val);
 }
 
+// -----------------------------------------------------------------------------
 void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
 {
     int cmp, max, min;
@@ -184,13 +204,11 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
             cmp = thro_last_cmp;
         }
 
-#if 0
         // no delta
         else if (thro_last_value == value)
         {
             cmp = thro_last_cmp;
         }
-#endif
 
         else 
         {
@@ -205,8 +223,8 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
             else
             {
                 // scale the value for sensitivity
-                value = 0.1f;
-                cmp = thro_last_cmp + (int)(hrange * (value));
+                //value = 0.1f;
+                cmp = thro_last_cmp + (int)(hrange * value);
                 if (cmp > max)
                     cmp = max;
                 if (cmp < min)
@@ -231,14 +249,28 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
     pwm_set_compare(pwm->handle, cmp);
 }
 
+// -----------------------------------------------------------------------------
 int fc_open_controls(gpio_event_t *pwm_usrf)
 {
     thro_last_value = 0.0f;
     thro_last_cmp = 0, thro_first = 0;
 
+    // direct flight control to ultrasonic sensor
     usrf = pwm_usrf;
 
-    pthread_mutex_init(&mcm_value_event, NULL);
+    // initial flight controls
+#if 0
+    fc_mr_ctl.alt   = 0.0f;
+    fc_mr_ctl.pitch = 0.0f;
+    fc_mr_ctl.roll  = 0.0f;
+    fc_mr_ctl.yaw   = 0.0f;
+#endif
+
+    pthread_mutex_init(&fc_alive_event, NULL);
+#if 0
+    pthread_mutex_init(&fc_signals_event, NULL);
+#endif
+    pthread_mutex_init(&fc_axes_event, NULL);
 
     if (0 > (g_channels[PWM_ALT].handle = pwm_open_device(PWM_DEV_ALT)))
     {
@@ -289,6 +321,7 @@ int fc_open_controls(gpio_event_t *pwm_usrf)
             &g_channels[PWM_YAW].rng_max);
     assign_duty(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE);
 
+    fc_alive = 1;
     fprintf(stderr, "opened pwm device nodes\n");
     return 1;
 }
@@ -297,16 +330,29 @@ int fc_open_controls(gpio_event_t *pwm_usrf)
 void fc_close_controls()
 {
     int i;
+
+    // set flag for all controllers to see that flight control is shutting down
+    pthread_mutex_lock(&fc_alive_event);
+    fc_alive = 0;
+    pthread_mutex_unlock(&fc_alive_event);
+
+    // TODO: Wait for controller threads to exit
+
     for (i = 0; i < 4; ++i)
         pwm_close_device(g_channels[i].handle);
 
     usrf = NULL;
+
+    pthread_mutex_destroy(&fc_alive_event);
+#if 0
+    pthread_mutex_destroy(&fc_signals_event);
+#endif
+    pthread_mutex_destroy(&fc_axes_event);
 }
 
 // -----------------------------------------------------------------------------
 void fc_takeoff()
 {
-
     pthread_create(&takeoff_thrd, NULL, takeoff, NULL);
 }
 
@@ -317,33 +363,80 @@ void fc_land()
 }
 
 // -----------------------------------------------------------------------------
-void flight_control(ctl_sigs_t *sigs, int chnl_flags)
+void alt_controller()
 {
-    // assign incoming signals to fight control's signal carrier
-    pthread_mutex_lock(&mcm_signals_event);
+    char thread_done = 0;
 
-    pthread_mutex_unlock(&mcm_signals_event);
+    while (!thread_done)
+    {
+        pthread_mutex_lock(&fc_alive_event);
+
+        if (fc_alive)
+        {
+            pthread_mutex_unlock(&fc_alive_event);
+
+            if (!(vcm_axes & VCM_AXIS_ALT))
+            {
+                // altitude is controlled autonomously
+            }
+        }
+        else
+        {
+            pthread_mutex_unlock(&fc_alive_event);
+            thread_done = 1;
+        }
+    }
+
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+void pitch_controller()
+{
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+void fc_update_axes(int chnl_flags)
+{
+    pthread_mutex_lock(&fc_axes_event);
+    vcm_axes = chnl_flags;
+    pthread_mutex_unlock(&fc_axes_event);
+}
+
+// -----------------------------------------------------------------------------
+void flight_control(ctl_sigs_t *sigs)
+{
+#if 0
+    // assign incoming signals to fight control's signal carrier
+    pthread_mutex_lock(&fc_signals_event);
+    fc_mr_ctl.alt = sigs->alt;
+    fc_mr_ctl.pitch = sigs->pitch;
+    fc_mr_ctl.roll = sigs->roll;
+    fc_mr_ctl.yaw = sigs->yaw;
+    pthread_mutex_unlock(&fc_signals_event);
+#endif
 
     // adjust altitude if specified
-    if (chnl_flags & VCM_AXIS_ALT)
+    if (vcm_axes & VCM_AXIS_ALT)
     {
         assign_value(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt);
     }
 
     // adjust pitch if specified
-    if (chnl_flags & VCM_AXIS_PITCH)
+    if (vcm_axes & VCM_AXIS_PITCH)
     {
         assign_value(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch);
     }
 
     // adjust roll if specified
-    if (chnl_flags & VCM_AXIS_ROLL)
+    if (vcm_axes & VCM_AXIS_ROLL)
     {
         assign_value(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll);
     }
 
     // adjust yaw if specified
-    if (chnl_flags & VCM_AXIS_YAW)
+    if (vcm_axes & VCM_AXIS_YAW)
     {
         assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw);
     }

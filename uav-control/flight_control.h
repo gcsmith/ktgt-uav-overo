@@ -32,24 +32,12 @@ typedef struct pwm_channel
     unsigned int rng_min, rng_max;
 } pwm_channel_t;
 
-typedef struct fd_thro  // flight data for throttle
-{
-    gpio_event_t *gpio_alt;
-    char mode;
-} fd_thro_t;
-
-pthread_mutex_t mcm_alive_event;
-pthread_mutex_t mcm_value_event;
-pthread_mutex_t mcm_signals_event;
-
-char mcm_alive;
-
 int fc_open_controls(gpio_event_t *pwm_usrf);
 void fc_close_controls();
-void flight_control(ctl_sigs_t *sigs, int chnl_flags);
-void fc_start_mcm();
 void fc_takeoff();
 void fc_land();
+void fc_update_axes(int chnl_flags);
+void flight_control(ctl_sigs_t *sigs);
 
 #endif // FLIGHT_CONTROL__H_
 
