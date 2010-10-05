@@ -267,41 +267,41 @@ void run_server(imu_data_t *imu, const char *port)
                 jpg_buf[PKT_MJPG_FPS] = vid_data.fps;
                 
                 send(hclient, (void *)jpg_buf, vid_data.length + PKT_MJPG_LENGTH, 0);
-                fprintf(stderr, "send frame size %lu, pkt size %lu\n",
-                        vid_data.length, vid_data.length + PKT_BASE_LENGTH);
+                syslog(LOG_DEBUG, "send frame size %lu, pkt size %lu\n",
+                       vid_data.length, vid_data.length + PKT_BASE_LENGTH);
                 break;
             case CLIENT_REQ_SET_CTL_MODE:
                 // interpret client's request for input mode change
                 switch (cmd_buffer[PKT_VCM_TYPE])
                 {
                 case VCM_TYPE_RADIO:
-                    fprintf(stderr, "switching to radio control\n");
+                    syslog(LOG_DEBUG, "switching to radio control\n");
                     vcm_type = VCM_TYPE_RADIO;
                     vcm_axes = VCM_AXIS_ALL; // all axes radio controlled
                     gpio_set_value(g_muxsel, 1);
                     break;
                 case VCM_TYPE_AUTO:
-                    fprintf(stderr, "switching to autonomous control\n");
+                    syslog(LOG_DEBUG, "switching to autonomous control\n");
                     vcm_type = VCM_TYPE_AUTO;
                     vcm_axes = VCM_AXIS_ALL; // all axes autonomously controlled
                     autonomous = 1;
                     gpio_set_value(g_muxsel, 0);
                     break;
                 case VCM_TYPE_MIXED:
-                    fprintf(stderr, "switching to remote control mode\n");
+                    syslog(LOG_DEBUG, "switching to remote control mode\n");
                     vcm_type = VCM_TYPE_MIXED;
                     vcm_axes = cmd_buffer[PKT_VCM_AXES];
                     autonomous = 0;
                     gpio_set_value(g_muxsel, 0);
                     break;
                 case VCM_TYPE_KILL:
-                    fprintf(stderr, "switching to killswitch enabled mode\n");
+                    syslog(LOG_DEBUG, "switching to killswitch enabled mode\n");
                     vcm_type = VCM_TYPE_KILL;
                     vcm_axes = VCM_AXIS_ALL; // all axes disabled
                     gpio_set_value(g_muxsel, 1);
                     break;
                 default:
-                    fprintf(stderr, "bad control mode requested. ignoring\n");
+                    syslog(LOG_DEBUG, "bad control mode requested. ignoring\n");
                     cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
                     cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
                     send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
@@ -330,7 +330,7 @@ void run_server(imu_data_t *imu, const char *port)
                 temp.i = cmd_buffer[PKT_MCM_AXIS_YAW];
                 client_sigs.yaw = temp.f;
 
-                fprintf(stderr, "Received controls: %f, %f, %f, %f\n",
+                syslog(LOG_DEBUG, "Received controls: %f, %f, %f, %f\n",
                         client_sigs.alt, client_sigs.pitch,
                         client_sigs.roll, client_sigs.yaw);
                 
@@ -456,7 +456,7 @@ int main(int argc, char *argv[])
         case 0:
             break;
         default:
-            fprintf(stderr, "unexpected argument '%c'\n", opt);
+            syslog(LOG_ERR, "unexpected argument '%c'\n", opt);
             assert(!"unhandled case in option handling -- this is an error");
             break;
         }
@@ -466,8 +466,6 @@ int main(int argc, char *argv[])
         // run as a background process
         daemonize();
     }
-
-    printf("verbose = %d\n", flag_verbose);
 
     // attach to the system log server
     log_opt = flag_verbose ? (LOG_PID | LOG_PERROR) : LOG_PID;
