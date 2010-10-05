@@ -366,7 +366,6 @@ void print_usage()
 {
     printf("usage: uav_control [options]\n\n"
            "Program options:\n"
-           "  -D [ --daemonize ]      : run as a background process\n"
            "  -s [ --stty_dev ] arg   : specify serial device for IMU\n"
            "  -v [ --v4l_dev ] arg    : specify video device for webcam\n"
            "  -p [ --port ] arg       : specify port for network socket\n"
@@ -376,9 +375,11 @@ void print_usage()
            "  -x [ --width ] arg      : specify resolution width for webcam\n"
            "  -y [ --height ] arg     : specify resolution height for webcam\n"
            "  -f [ --framerate ] arg  : specify capture framerate for webcam\n"
-           "  -N [ --null-video ] arg : do not capture video from webcam\n"
-           "  -v [ --verbose ]        : enable verbose logging\n"
-           "  -h [ --help ]           : display this usage message\n");
+           "  -D [ --daemonize ]      : run as a background process\n"
+           "  -V [ --verbose ]        : enable verbose logging\n"
+           "  -h [ --help ]           : display this usage message\n"
+           "  --no-video              : do not capture video from webcam\n"
+           "  --no-gpio               : do not perform any gpio processing\n");
 }
 
 // -----------------------------------------------------------------------------
@@ -386,14 +387,14 @@ void print_usage()
 int main(int argc, char *argv[])
 {
     int index, opt, log_opt, baud = B57600;
-    int flag_verbose = 0, flag_daemonize = 0, flag_nullvideo = 0;
-    int flag_v4l = 0, flag_stty = 0;
+    int flag_verbose = 0, flag_daemonize = 0, flag_novideo = 0, flag_nogpio = 0;
     int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
-    char stty_dev[DEV_LEN], v4l_dev[DEV_LEN], port_str[DEV_LEN];
+    char port_str[DEV_LEN];
+    char stty_dev[DEV_LEN] = "/dev/ttyS0";
+    char v4l_dev[DEV_LEN] = "/dev/video0";
 
-    static struct option long_options[] = {
-        { "daemonize",  no_argument,       NULL, 'D' },
+    struct option long_options[] = {
         { "stty_dev",   required_argument, NULL, 's' },
         { "v4l_dev",    required_argument, NULL, 'v' },
         { "port",       required_argument, NULL, 'p' },
@@ -403,26 +404,23 @@ int main(int argc, char *argv[])
         { "width",      required_argument, NULL, 'x' },
         { "height",     required_argument, NULL, 'y' },
         { "framerate",  required_argument, NULL, 'f' },
-        { "null-video", no_argument,       NULL, 'N' },
+        { "daemonize",  no_argument,       NULL, 'D' },
         { "verbose",    no_argument,       NULL, 'V' },
         { "help",       no_argument,       NULL, 'h' },
+        { "no-video",   no_argument,       &flag_novideo, 1 },
+        { "no-gpio",    no_argument,       &flag_nogpio,  1 },
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "Ds:v:p:m:u:o:x:y:f:NVh?";
+    static const char *str = "s:v:p:m:u:o:x:y:f:DVh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
-        case 'D':
-            flag_daemonize = 1;
-            break;
         case 's':
             strncpy(stty_dev, optarg, DEV_LEN);
-            flag_stty = 1;
             break;
         case 'v':
             strncpy(v4l_dev, optarg, DEV_LEN);
-            flag_v4l = 1;
             break;
         case 'p':
             arg_port = atoi(optarg);
@@ -445,11 +443,11 @@ int main(int argc, char *argv[])
         case 'f':
             arg_fps = atoi(optarg);
             break;
+        case 'D':
+            flag_daemonize = 1;
+            break;
         case 'V':
             flag_verbose = 1;
-            break;
-        case 'N':
-            flag_nullvideo = 1;
             break;
         case 'h': // fall through
         case '?':
@@ -458,6 +456,7 @@ int main(int argc, char *argv[])
         case 0:
             break;
         default:
+            fprintf(stderr, "unexpected argument '%c'\n", opt);
             assert(!"unhandled case in option handling -- this is an error");
             break;
         }
@@ -468,22 +467,12 @@ int main(int argc, char *argv[])
         daemonize();
     }
 
+    printf("verbose = %d\n", flag_verbose);
+
     // attach to the system log server
     log_opt = flag_verbose ? (LOG_PID | LOG_PERROR) : LOG_PID;
     openlog("uav", log_opt, LOG_DAEMON);
     syslog(LOG_INFO, "uav-control initialized");
-
-    if (!flag_stty) {
-        // set default device to UART1 if unspecified
-        strncpy(stty_dev, "/dev/ttyS0", DEV_LEN);
-    }
-    syslog(LOG_INFO, "opening and configuring stty device '%s'\n", stty_dev);
-
-    if (!flag_v4l) {
-        // set default device to video0 if unspecified
-        strncpy(v4l_dev, "/dev/video0", DEV_LEN);
-    }
-    syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
 
     snprintf(port_str, DEV_LEN, "%d", arg_port);
     syslog(LOG_INFO, "opening network socket on port %s\n", port_str);
@@ -495,46 +484,52 @@ int main(int argc, char *argv[])
     }
 
     // attempt to initialize imu communication
+    syslog(LOG_INFO, "opening and configuring stty device '%s'\n", stty_dev);
     if (!imu_init(stty_dev, baud, &g_imu)) {
         syslog(LOG_ERR, "failed to initialize IMU");
         uav_shutdown(EXIT_FAILURE);
     }
 
-    // initialize gpio event monitors
-    if (!gpio_event_init()) {
-        syslog(LOG_ERR, "failed to initialize gpio event subsystem");
-        uav_shutdown(EXIT_FAILURE);
+    // initialize the gpio subsystem(s) unless specified not to (no-gpio)
+    if (!flag_nogpio)
+    {
+        // initialize gpio event monitors
+        if (!gpio_event_init()) {
+            syslog(LOG_ERR, "failed to initialize gpio event subsystem");
+            uav_shutdown(EXIT_FAILURE);
+        }
+
+        if (!gpio_event_attach(&g_gpio_alt, arg_ultrasonic)) {
+            syslog(LOG_ERR, "failed to monitor ultrasonic gpio pin");
+            uav_shutdown(EXIT_FAILURE);
+        }
+
+        if (!gpio_event_attach(&g_gpio_aux, arg_override)) {
+            syslog(LOG_ERR, "failed to monitor auxiliary override gpio pin");
+            uav_shutdown(EXIT_FAILURE);
+        }
+
+        // attempt to initialize gpio pin for multiplexer select
+        if (0 > gpio_init()) {
+            syslog(LOG_ERR, "failed to initialize gpio user space library");
+            uav_shutdown(EXIT_FAILURE);
+        }
+
+        g_muxsel = arg_mux;
+        if (0 > gpio_request(arg_mux, "uav_control mux select line")) {
+            syslog(LOG_ERR, "failed to request mux select gpio %d", arg_mux);
+            uav_shutdown(EXIT_FAILURE);
+        }
+
+        if (0 > gpio_direction_output(arg_mux, 1)) {
+            syslog(LOG_ERR, "failed to set gpio %d direction to output", arg_mux);
+            uav_shutdown(EXIT_FAILURE);
+        }
     }
 
-    if (!gpio_event_attach(&g_gpio_alt, arg_ultrasonic)) {
-        syslog(LOG_ERR, "failed to monitor ultrasonic gpio pin");
-        uav_shutdown(EXIT_FAILURE);
-    }
-
-    if (!gpio_event_attach(&g_gpio_aux, arg_override)) {
-        syslog(LOG_ERR, "failed to monitor auxiliary override gpio pin");
-        uav_shutdown(EXIT_FAILURE);
-    }
-
-    // attempt to initialize gpio pin for multiplexer select
-    if (0 > gpio_init()) {
-        syslog(LOG_ERR, "failed to initialize gpio user space library");
-        uav_shutdown(EXIT_FAILURE);
-    }
-
-    g_muxsel = arg_mux;
-    if (0 > gpio_request(arg_mux, "uav_control mux select line")) {
-        syslog(LOG_ERR, "failed to request mux select gpio %d", arg_mux);
-        uav_shutdown(EXIT_FAILURE);
-    }
-
-    if (0 > gpio_direction_output(arg_mux, 1)) {
-        syslog(LOG_ERR, "failed to set gpio %d direction to output", arg_mux);
-        uav_shutdown(EXIT_FAILURE);
-    }
-
-    // initialize video subsystem unless specified not to (null-video)
-    if (!flag_nullvideo) {
+    // initialize video subsystem unless specified not to (no-video)
+    if (!flag_novideo) {
+        syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
         video_init(v4l_dev, arg_width, arg_height, arg_fps);
     }
 
