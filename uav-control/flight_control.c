@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <syslog.h>
 #include "flight_control.h"
 #include "pid.h"
 
@@ -274,10 +275,10 @@ int fc_open_controls(gpio_event_t *pwm_usrf)
 
     if (0 > (g_channels[PWM_ALT].handle = pwm_open_device(PWM_DEV_ALT)))
     {
-        fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_ALT);
+        syslog(LOG_ERR, "Error opening pwm device %d\n", PWM_DEV_ALT);
         return 0; 
     }
-    fprintf(stderr, "flight control: altitude channel opened\n");
+    syslog(LOG_INFO, "flight control: altitude channel opened\n");
 
     // keep throttle signal at the current value it is
     pwm_set_freq_x100(g_channels[PWM_ALT].handle, 4580);
@@ -287,10 +288,10 @@ int fc_open_controls(gpio_event_t *pwm_usrf)
 
     if (0 > (g_channels[PWM_PITCH].handle = pwm_open_device(PWM_DEV_PITCH)))
     {
-        fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_PITCH);
+        syslog(LOG_ERR, "Error opening pwm device %d\n", PWM_DEV_PITCH);
         return 0; 
     }
-    fprintf(stderr, "flight control: pitch channel opened\n");
+    syslog(LOG_INFO, "flight control: pitch channel opened\n");
 
     pwm_set_freq_x100(g_channels[PWM_PITCH].handle, 4580);
     pwm_get_range(g_channels[PWM_PITCH].handle, &g_channels[PWM_PITCH].rng_min,
@@ -299,10 +300,10 @@ int fc_open_controls(gpio_event_t *pwm_usrf)
 
     if (0 > (g_channels[PWM_ROLL].handle = pwm_open_device(PWM_DEV_ROLL)))
     {
-        fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_ROLL);
+        syslog(LOG_ERR, "Error opening pwm device %d\n", PWM_DEV_ROLL);
         return 0;
     }
-    fprintf(stderr, "flight control: roll channel opened\n");
+    syslog(LOG_INFO, "flight control: roll channel opened\n");
 
     pwm_set_freq_x100(g_channels[PWM_ROLL].handle, 4580);
     pwm_get_range(g_channels[PWM_ROLL].handle, &g_channels[PWM_ROLL].rng_min,
@@ -311,10 +312,10 @@ int fc_open_controls(gpio_event_t *pwm_usrf)
 
     if (0 > (g_channels[PWM_YAW].handle = pwm_open_device(PWM_DEV_YAW)))
     {
-        fprintf(stderr, "Error opening pwm device %d\n", PWM_DEV_YAW);
+        syslog(LOG_ERR, "Error opening pwm device %d\n", PWM_DEV_YAW);
         return 0;
     }
-    fprintf(stderr, "flight control: yaw channel opened\n");
+    syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
     pwm_set_freq_x100(g_channels[PWM_YAW].handle, 4580);
     pwm_get_range(g_channels[PWM_YAW].handle, &g_channels[PWM_YAW].rng_min,
@@ -322,7 +323,7 @@ int fc_open_controls(gpio_event_t *pwm_usrf)
     assign_duty(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE);
 
     fc_alive = 1;
-    fprintf(stderr, "opened pwm device nodes\n");
+    syslog(LOG_INFO, "opened pwm device nodes\n");
     return 1;
 }
 

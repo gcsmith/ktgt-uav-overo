@@ -19,7 +19,7 @@ void *cam_input_thread(void *arg) {
 
         // grab a frame
         if (uvcGrab(g_videoin) < 0) {
-            IPRINT("Error grabbing frames\n");
+            syslog(LOG_ERR, "Error grabbing frames\n");
             exit(EXIT_FAILURE);
         }
 
@@ -168,24 +168,24 @@ int video_init(const char *dev, int width, int height, int fps)
     // allocate webcam datastructure
     g_videoin = malloc(sizeof(struct vdIn));
     if (g_videoin == NULL) {
-        IPRINT("not enough memory for g_videoin\n");
+        syslog(LOG_ERR, "not enough memory for g_videoin\n");
         return 0;
     }
     memset(g_videoin, 0, sizeof(struct vdIn));
 
     // display the parsed values
-    IPRINT("Using V4L2 device.: %s\n", dev);
-    IPRINT("Desired Resolution: %i x %i\n", width, height);
-    IPRINT("Frames Per Second.: %i\n", fps);
-    IPRINT("Format............: %s\n", "MJPEG");
+    syslog(LOG_INFO, "  V4L2 device        : %s\n", dev);
+    syslog(LOG_INFO, "  Desired Resolution : %i x %i\n", width, height);
+    syslog(LOG_INFO, "  Frames Per Second  : %i\n", fps);
+    syslog(LOG_INFO, "  Vdeo Stream Format : %s\n", "MJPEG");
     //(format==V4L2_PIX_FMT_YUYV)?"YUV":"MJPEG");
 #if 0
     if ( format == V4L2_PIX_FMT_YUYV )
-        IPRINT("JPEG Quality......: %d\n", gquality);
+        syslog(LOG_ERR, "JPEG Quality......: %d\n", gquality);
 #endif
     // open video device and prepare data structure
     if (init_videoIn(g_videoin, (char *)dev, width, height, fps, format, 1, pglobal) < 0) {
-        IPRINT("init_VideoIn failed\n");
+        syslog(LOG_ERR, "init_VideoIn failed\n");
         return 0;
     }
 
