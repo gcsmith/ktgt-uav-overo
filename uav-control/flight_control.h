@@ -37,7 +37,7 @@ void fc_close_controls();
 void fc_takeoff();
 void fc_land();
 void fc_update_axes(int chnl_flags);
-void flight_control(ctl_sigs_t *sigs);
+void flight_control(ctl_sigs_t *sigs, int chnl_flags);
 
 #endif // FLIGHT_CONTROL__H_
 
