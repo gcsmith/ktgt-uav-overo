@@ -225,12 +225,13 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value)
             else
             {
                 // scale the value for sensitivity
+#if 0
                 if (value < 0.0f)
                     value = -0.10f;
                 else
                     value = 0.10f;
-
-                cmp = thro_last_cmp + (int)(hrange * value);
+#endif
+                cmp = thro_last_cmp + (int)(hrange * value * 0.15f);
                 if (cmp > max)
                     cmp = max;
                 if (cmp < min)
