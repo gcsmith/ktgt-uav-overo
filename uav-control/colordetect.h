@@ -1,17 +1,21 @@
-// DRAW_BOUNDING_BOX  0
+#ifndef _UAV_COLORDETECT__H_
+#define _UAV_COLORDETECT__H_
+
+#include "utility.h"
+
 // WRITE_IMAGE  0
-typedef struct {
-    unsigned char R;
-    unsigned char G; 
-    unsigned char B; 
+
+typedef struct track_color {
+    uint8_t R;
+    uint8_t G; 
+    uint8_t B; 
     
-    unsigned short Ht;
-    unsigned short St; 
-    unsigned short Lt;
+    uint16_t Ht;
+    uint16_t St; 
+    uint16_t Lt;
     
     char quality;
-} colorToFind;
-
+} track_color_t;
 
 typedef struct {
     int width;
@@ -26,36 +30,28 @@ typedef struct {
     int xc;
     int yc;
     char detected;
-} boxCoordinates;
+} track_coords_t;
 
-void runColorDetectionFile(const char * infilename, const char * outfilename,
-    colorToFind * color, boxCoordinates * box);
+void runColorDetectionFile(const char *infile, const char *outfile,
+                           track_color_t *color, track_coords_t *box);
 
-void runColorDetectionMemory(unsigned char * inbuffer, unsigned long * insize,
-    colorToFind * color, boxCoordinates * box);
+void runColorDetectionMemory(const uint8_t *buffer, unsigned long *length,
+                             track_color_t *color, track_coords_t *box);
                         
-void runColorDetection(unsigned char * RGBimage,
-    colorToFind * color, boxCoordinates * box);
+void runColorDetection(const uint8_t *buffer,
+                       track_color_t * color, track_coords_t * box);
 
-
-void findColorRGB(unsigned char* RGBimage, int width, int height,
-    unsigned char R, unsigned char G, unsigned char B, int threshold);
+void findColorRGB(const uint8_t *buffer, int width, int height,
+                  uint8_t R, uint8_t G, uint8_t B, int thresh);
     
-int findColorHSL(short* HSLimage,
-                short H, short S, short L,
-                colorToFind * color,
-                boxCoordinates * box,
-                unsigned char * RGBimage);
+void findColorHSL(const short *buffer, short H, short S, short L,
+                  track_color_t *color, track_coords_t *box);
                 
-#ifdef DRAW_BOUNDING_BOX              
-void drawBoundingbox(unsigned char * RGBimage,
-    boxCoordinates * box, int thickness,
-    unsigned char R, unsigned char G, unsigned char B);                
-#endif                
+void COLORimageRGBtoHSL(const uint8_t *rgb_in, short *hsl_out,
+                        int width, int height);
 
-void COLORimageRGBtoHSL(unsigned char* COLORimage, short* HSLimage,
-    int width, int height);
-
-void RGB2HSL (unsigned char R_in, unsigned char G_in, unsigned char B_in,
+void RGB2HSL (uint8_t R_in, uint8_t G_in, uint8_t B_in,
               short * h_out, short * s_out, short * l_out);
+
+#endif // _UAV_COLORDETECT__H_
 

@@ -15,24 +15,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-/*
- * Include file for users of JPEG library.
- * You will need to have included system headers that define at least
- * the typedefs FILE and size_t before you can include jpeglib.h.
- * (stdio.h is sufficient on ANSI-conforming systems.)
- * You may also wish to include "jerror.h".
- */
-
-#include "jpeglib.h"
-
-/*
- * <setjmp.h> is used for the optional error recovery mechanism shown in
- * the second part of the example.
- */
-
+#include <jpeglib.h>
 #include <setjmp.h>
-
-
+#include "readwritejpeg.h"
 
 /******************** JPEG COMPRESSION SAMPLE INTERFACE *******************/
 
@@ -58,18 +43,17 @@
  * RGB color and is described by:
  */
 
-extern JSAMPLE * image_buffer;	/* Points to large array of R,G,B-order data */
-extern int image_height;	/* Number of rows in image */
-extern int image_width;		/* Number of columns in image */
-
+extern JSAMPLE * image_buffer;  /* Points to large array of R,G,B-order data */
+extern int image_height;        /* Number of rows in image */
+extern int image_width;         /* Number of columns in image */
 
 /*
  * Sample routine for JPEG compression.  We assume that the target file name
  * and a compression quality factor are passed in.
  */
 
-GLOBAL(void)
-write_JPEG_file (const char * filename, int quality,unsigned char *RGBimage,int width,int height)
+void jpeg_wr_file(const char *filename, int quality, 
+                  const uint8_t *buffer, int width, int height)
 {
   /* This struct contains the JPEG compression parameters and pointers to
    * working space (which is allocated as needed by the JPEG library).
@@ -88,9 +72,9 @@ write_JPEG_file (const char * filename, int quality,unsigned char *RGBimage,int 
    */
   struct jpeg_error_mgr jerr;
   /* More stuff */
-  FILE * outfile;		/* target file */
-  JSAMPROW row_pointer[1];	/* pointer to JSAMPLE row[s] */
-  int row_stride;		/* physical row width in image buffer */
+  FILE * outfile;           /* target file */
+  JSAMPROW row_pointer[1];  /* pointer to JSAMPLE row[s] */
+  int row_stride;           /* physical row width in image buffer */
 
   /* Step 1: allocate and initialize JPEG compression object */
 
@@ -122,10 +106,10 @@ write_JPEG_file (const char * filename, int quality,unsigned char *RGBimage,int 
   /* First we supply a description of the input image.
    * Four fields of the cinfo struct must be filled in:
    */
-  cinfo.image_width = width; 	/* image width and height, in pixels */
+  cinfo.image_width = width;        /* image width and height, in pixels */
   cinfo.image_height = height;
-  cinfo.input_components = 3;		/* # of color components per pixel */
-  cinfo.in_color_space = JCS_RGB; 	/* colorspace of input image */
+  cinfo.input_components = 3;       /* # of color components per pixel */
+  cinfo.in_color_space = JCS_RGB;   /* colorspace of input image */
   /* Now use the library's routine to set default compression parameters.
    * (You must set at least cinfo.in_color_space before calling this,
    * since the defaults depend on the source color space.)
@@ -151,7 +135,7 @@ write_JPEG_file (const char * filename, int quality,unsigned char *RGBimage,int 
    * To keep things simple, we pass one scanline per call; you can pass
    * more if you wish, though.
    */
-  row_stride = width * 3;	/* JSAMPLEs per row in image_buffer */
+  row_stride = width * 3;   /* JSAMPLEs per row in image_buffer */
 
   while (cinfo.next_scanline < cinfo.image_height) {
     /* jpeg_write_scanlines expects an array of pointers to scanlines.
@@ -160,7 +144,7 @@ write_JPEG_file (const char * filename, int quality,unsigned char *RGBimage,int 
      */
     //row_pointer[0] = & image_buffer[cinfo.next_scanline * row_stride];
 
-    row_pointer[0] = & RGBimage[cinfo.next_scanline * row_stride];
+    row_pointer[0] = (uint8_t *)&buffer[cinfo.next_scanline * row_stride];
     (void) jpeg_write_scanlines(&cinfo, row_pointer, 1);
   }
 
@@ -250,9 +234,9 @@ write_JPEG_file (const char * filename, int quality,unsigned char *RGBimage,int 
  */
 
 struct my_error_mgr {
-  struct jpeg_error_mgr pub;	/* "public" fields */
+  struct jpeg_error_mgr pub;    /* "public" fields */
 
-  jmp_buf setjmp_buffer;	/* for return to caller */
+  jmp_buf setjmp_buffer;        /* for return to caller */
 };
 
 typedef struct my_error_mgr * my_error_ptr;
@@ -261,8 +245,7 @@ typedef struct my_error_mgr * my_error_ptr;
  * Here's the routine that will replace the standard error_exit method:
  */
 
-METHODDEF(void)
-my_error_exit (j_common_ptr cinfo)
+void my_error_exit(j_common_ptr cinfo)
 {
   /* cinfo->err really points to a my_error_mgr struct, so coerce pointer */
   my_error_ptr myerr = (my_error_ptr) cinfo->err;
@@ -282,8 +265,8 @@ my_error_exit (j_common_ptr cinfo)
  */
 
 
-GLOBAL(int)
-read_JPEG_file (const char * filename,unsigned char ** RGBimage,int * width, int * height)
+int jpeg_rd_file(const char *filename, unsigned char **buffer,
+                 int *width, int *height)
 {
   /* This struct contains the JPEG decompression parameters and pointers to
    * working space (which is allocated as needed by the JPEG library).
@@ -295,9 +278,9 @@ read_JPEG_file (const char * filename,unsigned char ** RGBimage,int * width, int
    */
   struct my_error_mgr jerr;
   /* More stuff */
-  FILE * infile;		/* source file */
-  JSAMPARRAY buffer;		/* Output row buffer */
-  int row_stride;		/* physical row width in output buffer */
+  FILE * infile;        /* source file */
+  JSAMPARRAY row_buff;  /* Output row buffer */
+  int row_stride;       /* physical row width in output buffer */
 
   /* In this example we want to open the input file before doing anything else,
    * so that the setjmp() error recovery below can assume the file is open.
@@ -355,8 +338,8 @@ read_JPEG_file (const char * filename,unsigned char ** RGBimage,int * width, int
 (*width)= cinfo.output_width;
 (*height)= cinfo.output_height;
 
-//*RGBimage = malloc(sizeof(unsigned char) * (*width) * (*height) * 3);
-*RGBimage = calloc((*width) * (*height) * 3,sizeof(unsigned char)  );
+//*buffer = malloc(sizeof(unsigned char) * (*width) * (*height) * 3);
+*buffer = calloc((*width) * (*height) * 3,sizeof(unsigned char)  );
   /* We may need to do some setup of our own at this point before reading
    * the data.  After jpeg_start_decompress() we have the correct scaled
    * output image dimensions available, as well as the output colormap
@@ -366,8 +349,8 @@ read_JPEG_file (const char * filename,unsigned char ** RGBimage,int * width, int
   /* JSAMPLEs per row in output buffer */
   row_stride = cinfo.output_width * cinfo.output_components;
   /* Make a one-row-high sample array that will go away when done with image */
-  buffer = (*cinfo.mem->alloc_sarray)
-		((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+  row_buff = (*cinfo.mem->alloc_sarray)
+           ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
 
   /* Step 6: while (scan lines remain to be read) */
   /*           jpeg_read_scanlines(...); */
@@ -380,20 +363,20 @@ read_JPEG_file (const char * filename,unsigned char ** RGBimage,int * width, int
      * Here the array is only one element long, but you could ask for
      * more than one scanline at a time if that's more convenient.
      */
-    (void) jpeg_read_scanlines(&cinfo, buffer, 1);
+    (void) jpeg_read_scanlines(&cinfo, row_buff, 1);
     /* Assume put_scanline_someplace wants a pointer and sample count. */
     int i = 0;
-//    printf("%3d  ", cinfo.output_scanline);
-	for(i = 0; i < row_stride; i++){
-//	printf("%3d:",(cinfo.output_scanline - 1)*row_stride + i);
-	(*RGBimage)[(cinfo.output_scanline - 1)*row_stride + i] = ((unsigned char) (buffer[0][i]));
-//	printf("%3d ",(unsigned char) *RGBimage[cinfo.output_scanline - 1 + i]);
-//	printf("%3d ",(unsigned char) (buffer[0][i]));
-	}
-//	printf("\n");
-//    put_scanline_someplace(buffer[0], row_stride);
+    // printf("%3d  ", cinfo.output_scanline);
+    for(i = 0; i < row_stride; i++){
+    // printf("%3d:",(cinfo.output_scanline - 1)*row_stride + i);
+        (*buffer)[(cinfo.output_scanline - 1)*row_stride + i] = ((unsigned char) (row_buff[0][i]));
+        // printf("%3d ",(unsigned char) *buffer[cinfo.output_scanline - 1 + i]);
+        //printf("%3d ",(unsigned char) (row_buff[0][i]));
+    }
+    // printf("\n");
+    // put_scanline_someplace(row_buff[0], row_stride);
   }
-//printf("%3d \n", (unsigned char) *RGBimage[0]);
+  //printf("%3d \n", (unsigned char) *buffer[0]);
   /* Step 7: Finish decompression */
 
   (void) jpeg_finish_decompress(&cinfo);
@@ -421,21 +404,9 @@ read_JPEG_file (const char * filename,unsigned char ** RGBimage,int * width, int
   return 1;
 }
 
-GLOBAL(int)
-read_JPEG_stream (unsigned char * inbuffer, unsigned long insize,unsigned char ** RGBimage,int * width, int * height)
+int jpeg_rd_mem(const uint8_t *stream_in, unsigned long length,
+                uint8_t **rgb_out, int *width, int *height)
 {
-
-/* Data source and destination managers: memory buffers. */
-/*
-EXTERN(void) jpeg_mem_dest JPP((j_compress_ptr cinfo,
-			       unsigned char ** outbuffer,
-			       unsigned long * outsize));
-EXTERN(void) jpeg_mem_src JPP((j_decompress_ptr cinfo,
-			      unsigned char * inbuffer,
-			      unsigned long insize));
-			      */
-
-
   /* This struct contains the JPEG decompression parameters and pointers to
    * working space (which is allocated as needed by the JPEG library).
    */
@@ -444,11 +415,11 @@ EXTERN(void) jpeg_mem_src JPP((j_decompress_ptr cinfo,
    * Note that this struct must live as long as the main JPEG parameter
    * struct, to avoid dangling-pointer problems.
    */
-  //struct my_error_mgr jerr;
+  struct my_error_mgr jerr;
   /* More stuff */
- // FILE * infile;		/* source file */
-  JSAMPARRAY buffer;		/* Output row buffer */
-  int row_stride;		/* physical row width in output buffer */
+ // FILE * infile;      /* source file */
+  JSAMPARRAY row_buff;    /* Output row buffer */
+  int row_stride;       /* physical row width in output buffer */
 
   /* In this example we want to open the input file before doing anything else,
    * so that the setjmp() error recovery below can assume the file is open.
@@ -464,7 +435,7 @@ EXTERN(void) jpeg_mem_src JPP((j_decompress_ptr cinfo,
   /* Step 1: allocate and initialize JPEG decompression object */
 
   /* We set up the normal JPEG error routines, then override error_exit. */
-  //cinfo.err = jpeg_std_error(&jerr.pub);
+  cinfo.err = jpeg_std_error(&jerr.pub);
   //jerr.pub.error_exit = my_error_exit;
   /* Establish the setjmp return context for my_error_exit to use. */
  
@@ -482,36 +453,30 @@ EXTERN(void) jpeg_mem_src JPP((j_decompress_ptr cinfo,
   jpeg_create_decompress(&cinfo);
 
   /* Step 2: specify data source (eg, a file) */
-
   //jpeg_stdio_src(&cinfo, infile);
-  jpeg_mem_src(&cinfo,inbuffer, insize);
-
+  jpeg_mem_src(&cinfo, (uint8_t *)stream_in, length);
   /* Step 3: read file parameters with jpeg_read_header() */
-
   (void) jpeg_read_header(&cinfo, TRUE);
   /* We can ignore the return value from jpeg_read_header since
    *   (a) suspension is not possible with the stdio data source, and
    *   (b) we passed TRUE to reject a tables-only JPEG file as an error.
    * See libjpeg.txt for more info.
    */
-
   /* Step 4: set parameters for decompression */
 
   /* In this example, we don't need to change any of the defaults set by
    * jpeg_read_header(), so we do nothing here.
    */
   /* Step 5: Start decompressor */
-
   (void) jpeg_start_decompress(&cinfo);
   /* We can ignore the return value since suspension is not possible
    * with the stdio data source.
    */
-
 (*width)= cinfo.output_width;
 (*height)= cinfo.output_height;
 
-//*RGBimage = malloc(sizeof(unsigned char) * (*width) * (*height) * 3);
-*RGBimage = calloc((*width) * (*height) * 3,sizeof(unsigned char)  );
+//*rgb_out = malloc(sizeof(unsigned char) * (*width) * (*height) * 3);
+*rgb_out = calloc((*width) * (*height) * 3,sizeof(unsigned char)  );
   /* We may need to do some setup of our own at this point before reading
    * the data.  After jpeg_start_decompress() we have the correct scaled
    * output image dimensions available, as well as the output colormap
@@ -521,8 +486,8 @@ EXTERN(void) jpeg_mem_src JPP((j_decompress_ptr cinfo,
   /* JSAMPLEs per row in output buffer */
   row_stride = cinfo.output_width * cinfo.output_components;
   /* Make a one-row-high sample array that will go away when done with image */
-  buffer = (*cinfo.mem->alloc_sarray)
-		((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+  row_buff = (*cinfo.mem->alloc_sarray)
+           ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
 
   /* Step 6: while (scan lines remain to be read) */
   /*           jpeg_read_scanlines(...); */
@@ -535,20 +500,20 @@ EXTERN(void) jpeg_mem_src JPP((j_decompress_ptr cinfo,
      * Here the array is only one element long, but you could ask for
      * more than one scanline at a time if that's more convenient.
      */
-    (void) jpeg_read_scanlines(&cinfo, buffer, 1);
+    (void) jpeg_read_scanlines(&cinfo, row_buff, 1);
     /* Assume put_scanline_someplace wants a pointer and sample count. */
     int i = 0;
-//    printf("%3d  ", cinfo.output_scanline);
-	for(i = 0; i < row_stride; i++){
-//	printf("%3d:",(cinfo.output_scanline - 1)*row_stride + i);
-	(*RGBimage)[(cinfo.output_scanline - 1)*row_stride + i] = ((unsigned char) (buffer[0][i]));
-//	printf("%3d ",(unsigned char) *RGBimage[cinfo.output_scanline - 1 + i]);
-//	printf("%3d ",(unsigned char) (buffer[0][i]));
-	}
-//	printf("\n");
-//    put_scanline_someplace(buffer[0], row_stride);
+    // printf("%3d  ", cinfo.output_scanline);
+    for(i = 0; i < row_stride; i++){
+        // printf("%3d:",(cinfo.output_scanline - 1)*row_stride + i);
+        (*rgb_out)[(cinfo.output_scanline - 1)*row_stride + i] = ((unsigned char) (row_buff[0][i]));
+        // printf("%3d ",(unsigned char) *rgb_out[cinfo.output_scanline - 1 + i]);
+        // printf("%3d ",(unsigned char) (row_buff[0][i]));
+    }
+    // printf("\n");
+    // put_scanline_someplace(row_buff[0], row_stride);
   }
-//printf("%3d \n", (unsigned char) *RGBimage[0]);
+//printf("%3d \n", (unsigned char) *rgb_out[0]);
   /* Step 7: Finish decompression */
 
   (void) jpeg_finish_decompress(&cinfo);
@@ -576,8 +541,8 @@ EXTERN(void) jpeg_mem_src JPP((j_decompress_ptr cinfo,
   return 1;
 }
 
-GLOBAL(void)
-write_JPEG_stream (unsigned char ** outbuffer, unsigned long * outsize, int quality,unsigned char *RGBimage,int width,int height)
+void jpeg_wr_mem(uint8_t **stream_out, unsigned long *length,
+                 int quality, const uint8_t *rgb_in, int width, int height)
 {
   /* This struct contains the JPEG compression parameters and pointers to
    * working space (which is allocated as needed by the JPEG library).
@@ -596,9 +561,9 @@ write_JPEG_stream (unsigned char ** outbuffer, unsigned long * outsize, int qual
    */
   struct jpeg_error_mgr jerr;
   /* More stuff */
-  //FILE * outfile;		/* target file */
-  JSAMPROW row_pointer[1];	/* pointer to JSAMPLE row[s] */
-  int row_stride;		/* physical row width in image buffer */
+  //FILE * outfile;         /* target file */
+  JSAMPROW row_pointer[1];  /* pointer to JSAMPLE row[s] */
+  int row_stride;           /* physical row width in image buffer */
 
   /* Step 1: allocate and initialize JPEG compression object */
 
@@ -627,16 +592,16 @@ write_JPEG_stream (unsigned char ** outbuffer, unsigned long * outsize, int qual
   jpeg_stdio_dest(&cinfo, outfile);
 */
 
-jpeg_mem_dest(&cinfo, outbuffer, outsize);
+jpeg_mem_dest(&cinfo, stream_out, length);
   /* Step 3: set parameters for compression */
 
   /* First we supply a description of the input image.
    * Four fields of the cinfo struct must be filled in:
    */
-  cinfo.image_width = width; 	/* image width and height, in pixels */
+  cinfo.image_width = width;        /* image width and height, in pixels */
   cinfo.image_height = height;
-  cinfo.input_components = 3;		/* # of color components per pixel */
-  cinfo.in_color_space = JCS_RGB; 	/* colorspace of input image */
+  cinfo.input_components = 3;       /* # of color components per pixel */
+  cinfo.in_color_space = JCS_RGB;   /* colorspace of input image */
   /* Now use the library's routine to set default compression parameters.
    * (You must set at least cinfo.in_color_space before calling this,
    * since the defaults depend on the source color space.)
@@ -662,7 +627,7 @@ jpeg_mem_dest(&cinfo, outbuffer, outsize);
    * To keep things simple, we pass one scanline per call; you can pass
    * more if you wish, though.
    */
-  row_stride = width * 3;	/* JSAMPLEs per row in image_buffer */
+  row_stride = width * 3;   /* JSAMPLEs per row in image_buffer */
 
   while (cinfo.next_scanline < cinfo.image_height) {
     /* jpeg_write_scanlines expects an array of pointers to scanlines.
@@ -671,7 +636,7 @@ jpeg_mem_dest(&cinfo, outbuffer, outsize);
      */
     //row_pointer[0] = & image_buffer[cinfo.next_scanline * row_stride];
 
-    row_pointer[0] = & RGBimage[cinfo.next_scanline * row_stride];
+    row_pointer[0] = (uint8_t *)&stream_out[cinfo.next_scanline * row_stride];
     (void) jpeg_write_scanlines(&cinfo, row_pointer, 1);
   }
 

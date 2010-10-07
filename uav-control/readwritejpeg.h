@@ -1,18 +1,25 @@
+#ifndef _UAV_READWRITEJPEG__H_
+#define _UAV_READWRITEJPEG__H_
+
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <jpeglib.h>
+#include "utility.h"
 
-void write_JPEG_file (const char * filename, int quality,
-    unsigned char *RGBimage, int width, int height);
+void jpeg_wr_file(const char *filename, int quality,
+                  const uint8_t *buffer, int width, int height);
     
-int read_JPEG_file (const char * filename, unsigned char ** RGBimage,
-    int * width, int * height);
+int jpeg_rd_file(const char *filename, uint8_t **buffer,
+                 int *width, int *height);
 
-int read_JPEG_stream (unsigned char * inbuffer, unsigned long insize,
-    unsigned char ** RGBimage, int * width, int * height);
+void jpeg_wr_mem(uint8_t **stream_out, unsigned long *length,
+                 int quality, const uint8_t *rgb_in, int width, int height);
     
-void write_JPEG_stream (unsigned char ** outbuffer, unsigned long * outsize,
-    int quality, unsigned char *RGBimage, int width, int height);
+int jpeg_rd_mem(const uint8_t *stream, unsigned long length,
+                uint8_t **rgb_out, int *width, int *height);
     
-void my_error_exit (j_common_ptr cinfo);
+void my_error_exit(j_common_ptr cinfo);
+
+#endif // _UAV_READWRITEJPEG__H_
+

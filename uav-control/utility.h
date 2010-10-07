@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 
+typedef float real_t;
+
 #define MIN(a, b)   (((a) < (b)) ? (a) : (b))
 #define MAX(a, b)   (((a) > (b)) ? (a) : (b))
 #define LEN(x)      (sizeof(x) / sizeof((x)[0]))
