@@ -8,10 +8,11 @@ TOOLDIR       ?= ${OETMP}/sysroots/`uname -m`-linux/usr/armv7a/bin
 STAGEDIR      ?= ${OETMP}/sysroots/armv7a-angstrom-linux-gnueabi/usr
 CROSS_COMPILE ?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
 CC            = @${CROSS_COMPILE}gcc
+PROFILE       ?= "release"
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 OUTPUT_OPTION = -DSTANDALONE_DEMO -c -o $@
-CFLAGS += -Wall -Werror -O2 \
+CFLAGS += -Wall -Werror \
           -I../pwm-module \
           -I../pwm-lib \
           -I../gpio-event-module \
@@ -20,6 +21,19 @@ CFLAGS += -Wall -Werror -O2 \
 
 UC = ../uav-control
 MS = ../uav-control/mjpg-streamer
+
+ifeq ("$(PROFILE)", "gprof")
+	CFLAGS += -O0 -ggdb -pg
+	LDFLAGS += -O0 -ggdb -pg
+else
+ifeq ("$(PROFILE)", "debug")
+	CFLAGS += -O0 -ggdb
+	LDFLAGS += -O0 -ggdb
+else
+	CFLAGS += -O2
+	LDFLAGS += -O2
+endif
+endif
 
 APP_NAMES = evnt_test \
             gles_test \
@@ -98,7 +112,7 @@ rssi_test: ${RSSI_OBJS}
 	$(CC) $(CFLAGS) $(DEP_OUTPUT_OPTION) $(OUTPUT_OPTION) $<
 
 clean:
-	@rm -rf $(APP_NAMES) *.o *.d
+	@rm -rf $(APP_NAMES) *.o *.d ../uav-control/*.o
 
 ifneq ($(DEP_FILES),)
 ifeq ($(strip $(filter clean%, $(MAKECMDGOALS))),)
