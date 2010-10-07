@@ -10,7 +10,7 @@ CROSS_COMPILE ?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
 CC            = @${CROSS_COMPILE}gcc
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
-OUTPUT_OPTION = -c -o $@
+OUTPUT_OPTION = -DSTANDALONE_DEMO -c -o $@
 CFLAGS += -Wall -Werror -O2 \
           -I../pwm-module \
           -I../pwm-lib \
@@ -72,7 +72,7 @@ gpio_test: ${GPIO_OBJS}
 
 jpeg_test: ${JPEG_OBJS}
 	@echo "[LD] $@"
-	$(CC) $(LDFLAGS) -lpthread -ljpeg -lm -lrt -DSTANDALONE_DEMO -o $@ $^ 
+	$(CC) $(LDFLAGS) -lpthread -ljpeg -lm -lrt -o $@ $^ 
 
 madc_test: ${MADC_OBJS}
 	@echo "[LD] $@"
