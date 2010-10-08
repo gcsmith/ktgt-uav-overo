@@ -18,9 +18,9 @@ void *color_detect_thread(void *arg)
         .r = 151,
         .g = 242,
         .b = 192,
-        .h = 30,
-        .s = 100,
-        .l = 360,
+        .ht = 30,
+        .st = 100,
+        .lt = 360,
         .filter = 5    
     };
     track_coords_t box = {};
