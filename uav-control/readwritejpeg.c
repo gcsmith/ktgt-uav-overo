@@ -469,11 +469,23 @@ int jpeg_rd_mem(const uint8_t *stream_in, unsigned long length,
     /* We can ignore the return value since suspension is not possible
      * with the stdio data source.
      */
-    (*width)= cinfo.output_width;
-    (*height)= cinfo.output_height;
 
-    //*rgb_out = malloc(sizeof(unsigned char) * (*width) * (*height) * 3);
-    *rgb_out = calloc((*width) * (*height) * 3,sizeof(unsigned char)  );
+    if (NULL != *rgb_out) {
+        // buffer has been specified, make sure dimensions match
+        if (*width != cinfo.output_width || *height != cinfo.output_height) {
+            fprintf(stderr, "buffer dims (%d, %d) don't match image (%d, %d)\n",
+                    *width, *height, cinfo.output_width, cinfo.output_height);
+            return 0;
+        }
+    }
+    else {
+        // allocate a new buffer for the decompressed image
+        *width= cinfo.output_width;
+        *height= cinfo.output_height;
+        *rgb_out = malloc(sizeof(uint8_t) * (*width) * (*height) * 3);
+    }
+
+    // *rgb_out = calloc((*width) * (*height) * 3,sizeof(unsigned char)  );
     /* We may need to do some setup of our own at this point before reading
      * the data.  After jpeg_start_decompress() we have the correct scaled
      * output image dimensions available, as well as the output colormap

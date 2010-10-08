@@ -24,20 +24,20 @@ void runColorDetectionFile(const char *infile, const char *outfile,
 void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
         track_color_t *color, track_coords_t *box);
 
-void runColorDetection(const uint8_t *rgb_in,
+void runColorDetection(const uint8_t *rgb_in, uint16_t **hsl_buff,
         track_color_t *color, track_coords_t *box);
 
 void findColorRGB(const uint8_t *rgb_in, int width, int height,
         uint8_t R, uint8_t G, uint8_t B, int thresh);
 
-void findColorHSL(const short *hsl_in, short h, short s, short l,
+void findColorHSL(const uint16_t *hsl_in, uint16_t h, uint16_t s, uint16_t l,
         track_color_t *color, track_coords_t *box);
 
-void COLORimageRGBtoHSL(const uint8_t *rgb_in, short *hsl_out,
+void COLORimageRGBtoHSL(const uint8_t *rgb_in, uint16_t *hsl_out,
         int width, int height);
 
 void RGB2HSL(uint8_t r_in, uint8_t g_in, uint8_t b_in,
-        short *h_out, short *s_out, short *l_out);
+        uint16_t *h_out, uint16_t *s_out, uint16_t *l_out);
 
 #endif // _UAV_COLORDETECT__H_
 

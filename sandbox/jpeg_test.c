@@ -26,12 +26,12 @@ float test_decompress_loop(int iterations, const uint8_t *stream_in,
     struct timespec t0, t1;
     track_coords_t box = { 0 };
     unsigned long j;
-    uint8_t *rgb_out;
+    uint8_t *rgb_buff = NULL;
 
     clock_gettime(CLOCK_REALTIME, &t0);
     for (j = 0; j < iterations; j++) {
         // simply decompress the jpeg stream each iteration
-        jpeg_rd_mem(stream_in, length, &rgb_out, &box.width, &box.height);
+        jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
         printf("."); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -46,12 +46,13 @@ float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
     struct timespec t0, t1;
     track_coords_t box = { 0 };
     unsigned long j;
-    uint8_t *rgb_out;
+    uint8_t *rgb_buff = NULL;
+    uint16_t *hsl_buff = NULL;
 
     clock_gettime(CLOCK_REALTIME, &t0);
     for (j = 0; j < iterations; j++) {
-        jpeg_rd_mem(stream_in, length, &rgb_out, &box.width, &box.height);
-        runColorDetection(rgb_out, color, &box);
+        jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
+        runColorDetection(rgb_buff, &hsl_buff, color, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);

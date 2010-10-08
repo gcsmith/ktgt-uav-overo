@@ -64,11 +64,12 @@ void *color_detect_thread(void *arg)
 void runColorDetectionFile(const char *infile, const char *outfile,
         track_color_t *color, track_coords_t *box)
 {
-    uint8_t *rgb;
+    uint8_t *rgb = NULL;
+    uint16_t *hsl = NULL;
 
     // decode image from file, run color detection algorithm, write it back out
     jpeg_rd_file(infile, &rgb, &box->width, &box->height);    
-    runColorDetection(rgb, color, box);
+    runColorDetection(rgb, &hsl, color, box);
 #if 0
     jpeg_wr_file(outfile, color->quality, rgb, box->width, box->height);
 #endif
@@ -78,37 +79,42 @@ void runColorDetectionFile(const char *infile, const char *outfile,
 void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
         track_color_t *color, track_coords_t *box)
 {
-    uint8_t *rgb;   
+    uint8_t *rgb = NULL;
+    uint16_t *hsl = NULL;
 
     // decode image from mem, run color detection algorithm, write it back out
     jpeg_rd_mem(stream_in, *length, &rgb, &box->width, &box->height);    
-    runColorDetection(rgb, color, box);
+    runColorDetection(rgb, &hsl, color, box);
 #if 0
     jpeg_wr_mem(&stream_in, length, color->quality, rgb, &box->width, &box->height);
 #endif
 }
 
 // -----------------------------------------------------------------------------
-void runColorDetection(const uint8_t *rgb_in,
+void runColorDetection(const uint8_t *rgb_in, uint16_t **hsl_buff,
         track_color_t *color, track_coords_t *box)
 {
 
     // color to look for in HSL (will be calculated from RGB)
-    short h = 0, s = 0, l = 0;                   
-    short *hsl_buff = malloc(sizeof(short) * box->height * box->width * 3);
+    uint16_t h = 0, s = 0, l = 0;                   
+
+    if (NULL == *hsl_buff) {
+        // TODO: GET RID OF THIS
+        *hsl_buff = malloc(sizeof(uint16_t) * box->height * box->width * 3);
+    }
 
     // convert detect color from RGB to HSL
     RGB2HSL(color->r, color->g, color->b, &h, &s, &l);                     
                         
     // convert the image to HSL
-    COLORimageRGBtoHSL(rgb_in, hsl_buff, box->width, box->height);
+    COLORimageRGBtoHSL(rgb_in, *hsl_buff, box->width, box->height);
 
     // find HSL values in image 
-    findColorHSL(hsl_buff, h, s, l, color, box);
+    findColorHSL(*hsl_buff, h, s, l, color, box);
 }
 
 // -----------------------------------------------------------------------------
-void findColorHSL(const short *hsl_in, short h, short s, short l,
+void findColorHSL(const uint16_t *hsl_in, uint16_t h, uint16_t s, uint16_t l,
         track_color_t *color, track_coords_t *box)
 {
     int x = 0, y = 0, consec = 0, noise_filter = color->filter;
@@ -163,7 +169,7 @@ void findColorHSL(const short *hsl_in, short h, short s, short l,
 }
 
 // -----------------------------------------------------------------------------
-void COLORimageRGBtoHSL(const uint8_t *rgb_in, short *hsl_out,
+void COLORimageRGBtoHSL(const uint8_t *rgb_in, uint16_t *hsl_out,
         int width, int height)
 {
     int i = 0, j = 0;
@@ -182,7 +188,7 @@ void COLORimageRGBtoHSL(const uint8_t *rgb_in, short *hsl_out,
 
 // -----------------------------------------------------------------------------
 void RGB2HSL(uint8_t r_in, uint8_t g_in, uint8_t b_in,
-        short *h_out, short *s_out, short *l_out)
+        uint16_t *h_out, uint16_t *s_out, uint16_t *l_out)
 {
     real_t r = r_in / 255.0f;
     real_t g = g_in / 255.0f;
