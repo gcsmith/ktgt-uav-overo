@@ -31,9 +31,15 @@
 #define DEV_LEN         64
 #define PKT_BUFF_LEN    2048
 
+typedef struct client_info {
+    int fd;
+    pthread_mutex_t lock;
+} client_info_t;
+
 imu_data_t g_imu;
 gpio_event_t g_gpio_alt; // ultrasonic PWM
 gpio_event_t g_gpio_aux; // auxiliary PWM
+client_info_t g_client;
 
 static ctl_sigs_t client_sigs = { 0 };
 static char autonomous = 1;
@@ -89,13 +95,13 @@ void signal_handler(int sig)
 
 // -----------------------------------------------------------------------------
 // Receive a single packet. Blocks until the entire message has been consumed.
-int recv_packet(int hclient, uint32_t *cmd_buffer)
+int recv_packet(client_info_t *client, uint32_t *cmd_buffer)
 {
     // read in the packet header to determine length
     int rc, bytes_left = PKT_BASE_LENGTH;
     char *ptr = (char *)cmd_buffer;
     while (bytes_left > 0) {
-        if (1 > (rc = recv(hclient, (void *)ptr, bytes_left, 0))) {
+        if (1 > (rc = recv(client->fd, (void *)ptr, bytes_left, 0))) {
             // assume client disconnected for now
             return 0;
         }
@@ -106,7 +112,7 @@ int recv_packet(int hclient, uint32_t *cmd_buffer)
     // read in the rest of the packet
     bytes_left = cmd_buffer[PKT_LENGTH] - PKT_BASE_LENGTH;
     while (bytes_left > 0) {
-        if (1 > (rc = recv(hclient, (void *)ptr, bytes_left, 0))) {
+        if (1 > (rc = recv(client->fd, (void *)ptr, bytes_left, 0))) {
             // assume client disconnected for now
             return 0;
         }
@@ -118,6 +124,17 @@ int recv_packet(int hclient, uint32_t *cmd_buffer)
 }
 
 // -----------------------------------------------------------------------------
+// Send a single packet of the specified length (in units of bytes).
+size_t send_packet(client_info_t *client, uint32_t *cmd_buffer, size_t length)
+{
+    size_t bytes_written = 0;
+    pthread_mutex_lock(&client->lock);
+    bytes_written = send(client->fd, (void *)cmd_buffer, length, 0);
+    pthread_mutex_unlock(&client->lock);
+    return bytes_written;
+}
+
+// -----------------------------------------------------------------------------
 // Server entry-point. Sits in a loop accepting and processing incoming client
 // connections until terminated.
 void run_server(imu_data_t *imu, const char *port)
@@ -126,7 +143,7 @@ void run_server(imu_data_t *imu, const char *port)
     struct sockaddr_in *sa;
     struct addrinfo info, *r;
     socklen_t addr_sz = sizeof(addr);
-    int hsock, hclient, rc;
+    int hsock, rc;
     uint32_t cmd_buffer[PKT_BUFF_LEN];
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
@@ -165,11 +182,16 @@ void run_server(imu_data_t *imu, const char *port)
         exit(EXIT_FAILURE);
     }
 
+    if (0 != (rc = pthread_mutex_init(&g_client.lock, NULL))) {
+        syslog(LOG_ERR, "error creating client mutex lock (%d)", rc);
+        exit(EXIT_FAILURE);
+    }
+
     for (;;) {
         // block until we receive an incoming connection from a client
         syslog(LOG_INFO, "waiting for incoming connection");
-        if (0 > (hclient = accept(hsock, (struct sockaddr *)&addr, &addr_sz))) {
-            syslog(LOG_ERR, "failed to accept incoming client (%d)", hclient);
+        if (0 > (g_client.fd = accept(hsock, (struct sockaddr *)&addr, &addr_sz))) {
+            syslog(LOG_ERR, "failed to accept incoming client (%d)", g_client.fd);
             exit(EXIT_FAILURE);
         }
         sa = (struct sockaddr_in *)&addr;
@@ -179,9 +201,9 @@ void run_server(imu_data_t *imu, const char *port)
         // send request for client identification
         cmd_buffer[PKT_COMMAND] = SERVER_REQ_IDENT;
         cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-        send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
+        send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
 
-        if (1 > recv(hclient, (void *)cmd_buffer, PKT_BUFF_LEN, 0)) {
+        if (1 > recv(g_client.fd, (void *)cmd_buffer, PKT_BUFF_LEN, 0)) {
             syslog(LOG_INFO, "read failed -- client disconnected?");
             goto client_disconnect;
         }
@@ -199,7 +221,7 @@ void run_server(imu_data_t *imu, const char *port)
         // enter main communication loop
         for (;;) {
             // read until we've consumed an entire packet
-            if (!recv_packet(hclient, cmd_buffer)) {
+            if (!recv_packet(&g_client, cmd_buffer)) {
                 syslog(LOG_INFO, "read failed -- client disconnected?");
                 goto client_disconnect;
             }
@@ -210,14 +232,14 @@ void run_server(imu_data_t *imu, const char *port)
                 fc_takeoff();
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TAKEOFF;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-                send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
+                send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
                 break;
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
                 fc_land();
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_LANDING;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-                send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
+                send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
                 break;
             case CLIENT_REQ_TELEMETRY:
                 // syslog(LOG_INFO, "user requested telemetry - sending...\n");
@@ -230,7 +252,7 @@ void run_server(imu_data_t *imu, const char *port)
                 temp.f = imu->angles[2]; cmd_buffer[PKT_VTI_ROLL]  = temp.i;
                 pthread_mutex_unlock(&imu->lock);
 
-                cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(hclient);
+                cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
                 cmd_buffer[PKT_VTI_BATT] = 100;
 
                 pthread_mutex_lock(&g_gpio_alt.lock);
@@ -242,7 +264,7 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_VTI_AUX]  = g_gpio_aux.pulsewidth;
                 pthread_mutex_unlock(&g_gpio_aux.lock);
 
-                send(hclient, (void *)cmd_buffer, PKT_VTI_LENGTH, 0);
+                send_packet(&g_client, cmd_buffer, PKT_VTI_LENGTH);
                 break;
             case CLIENT_REQ_MJPG_FRAME:
                 // syslog(LOG_INFO, "user requested mjpg frame - sending...\n");
@@ -268,7 +290,7 @@ void run_server(imu_data_t *imu, const char *port)
                 jpg_buf[PKT_MJPG_HEIGHT] = vid_data.height;
                 jpg_buf[PKT_MJPG_FPS] = vid_data.fps;
                 
-                send(hclient, (void *)jpg_buf, vid_data.length + PKT_MJPG_LENGTH, 0);
+                send_packet(&g_client, jpg_buf, vid_data.length + PKT_MJPG_LENGTH);
                 syslog(LOG_DEBUG, "send frame size %lu, pkt size %lu\n",
                        vid_data.length, vid_data.length + PKT_BASE_LENGTH);
                 break;
@@ -305,7 +327,7 @@ void run_server(imu_data_t *imu, const char *port)
                     syslog(LOG_DEBUG, "bad control mode requested. ignoring\n");
                     cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
                     cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-                    send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
+                    send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
                     continue;
                 }
 
@@ -315,7 +337,7 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
                 cmd_buffer[PKT_VCM_TYPE] = vcm_type;
                 cmd_buffer[PKT_VCM_AXES] = vcm_axes;
-                send(hclient, (void *)cmd_buffer, PKT_VCM_LENGTH, 0);
+                send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
                 break;
             case CLIENT_REQ_FLIGHT_CTL:
                 // collect signals
@@ -355,16 +377,17 @@ void run_server(imu_data_t *imu, const char *port)
 
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
                 cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-                send(hclient, (void *)cmd_buffer, PKT_BASE_LENGTH, 0);
+                send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
                 goto client_disconnect;
             }
         }
 
         // perform cleanup -- disconnect and wait for next connection
 client_disconnect:
-        syslog(LOG_INFO, "disconnected from client (%d)", hclient);
-        shutdown(hclient, SHUT_RDWR);
-        close(hclient);
+        syslog(LOG_INFO, "disconnected from client (%d)", g_client.fd);
+        shutdown(g_client.fd, SHUT_RDWR);
+        close(g_client.fd);
+        g_client.fd = -1;
     }
 }
 

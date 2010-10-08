@@ -19,12 +19,12 @@ void *color_detect_thread(void *arg)
 {
     printf("IMAGE PROC\n");
     track_color_t color = {
-        .r = 151,
-        .g = 242,
-        .b = 192,
-        .ht = 22, //30,
-        .st = 71, //100,
-        .lt = 255, //360,
+        .r = 170,
+        .g = 42,
+        .b = 119,
+        .ht = 15,
+        .st = 15,
+        .lt = 15,
         .filter = 5    
     };
     track_coords_t box = {};
