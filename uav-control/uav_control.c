@@ -251,8 +251,7 @@ void run_server(imu_data_t *imu, const char *port)
                 }
 
                 // copy the jpeg to our buffer now that we're safely locked
-                if (buff_sz < (vid_data.length + PKT_MJPG_LENGTH))
-                {
+                if (buff_sz < (vid_data.length + PKT_MJPG_LENGTH)) {
                     free(jpg_buf);
                     buff_sz = vid_data.length + PKT_MJPG_LENGTH;
                     jpg_buf = (uint32_t *)malloc(buff_sz);
@@ -274,8 +273,7 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_SET_CTL_MODE:
                 // interpret client's request for input mode change
-                switch (cmd_buffer[PKT_VCM_TYPE])
-                {
+                switch (cmd_buffer[PKT_VCM_TYPE]) {
                 case VCM_TYPE_RADIO:
                     syslog(LOG_DEBUG, "switching to radio control\n");
                     vcm_type = VCM_TYPE_RADIO;
@@ -388,6 +386,7 @@ void print_usage()
            "  -V [ --verbose ]        : enable verbose logging\n"
            "  -h [ --help ]           : display this usage message\n"
            "  --no-video              : do not capture video from webcam\n"
+           "  --no-track              : do not perform color tracking\n"
            "  --no-gpio               : do not perform any gpio processing\n");
 }
 
@@ -396,7 +395,8 @@ void print_usage()
 int main(int argc, char *argv[])
 {
     int index, opt, log_opt, baud = B57600;
-    int flag_verbose = 0, flag_daemonize = 0, flag_novideo = 0, flag_nogpio = 0;
+    int flag_verbose = 0, flag_daemonize = 0;
+    int flag_no_video = 0, flag_no_gpio = 0, flag_no_track = 0;
     int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
     char port_str[DEV_LEN];
@@ -416,8 +416,9 @@ int main(int argc, char *argv[])
         { "daemonize",  no_argument,       NULL, 'D' },
         { "verbose",    no_argument,       NULL, 'V' },
         { "help",       no_argument,       NULL, 'h' },
-        { "no-video",   no_argument,       &flag_novideo, 1 },
-        { "no-gpio",    no_argument,       &flag_nogpio,  1 },
+        { "no-video",   no_argument,       &flag_no_video, 1 },
+        { "no-track",   no_argument,       &flag_no_track, 1 },
+        { "no-gpio",    no_argument,       &flag_no_gpio,  1 },
         { 0, 0, 0, 0 }
     };
 
@@ -498,8 +499,7 @@ int main(int argc, char *argv[])
     }
 
     // initialize the gpio subsystem(s) unless specified not to (no-gpio)
-    if (!flag_nogpio)
-    {
+    if (!flag_no_gpio) {
         // initialize gpio event monitors
         if (!gpio_event_init()) {
             syslog(LOG_ERR, "failed to initialize gpio event subsystem");
@@ -535,10 +535,20 @@ int main(int argc, char *argv[])
     }
 
     // initialize video subsystem unless specified not to (no-video)
-    if (!flag_novideo) {
+    if (!flag_no_video) {
         syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
         video_init(v4l_dev, arg_width, arg_height, arg_fps);
-        colordetect_init();
+    }
+
+    // initialize color tracking subsystem
+    if (!flag_no_track) {
+        if (!flag_no_video) {
+            // make a note that tracking isn't possible with video
+            colordetect_init();
+        }
+        else {
+            syslog(LOG_INFO, "color tracking not possible without video");
+        }
     }
 
     // open PWM ports for mixed controlling

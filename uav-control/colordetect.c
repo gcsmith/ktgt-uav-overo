@@ -31,7 +31,7 @@ void *color_detect_thread(void *arg)
     video_data_t vid_data;
     uint8_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
-    unsigned char * rgb_buff;
+    uint8_t *rgb_buff = NULL;
 
     for (;;) {
         //pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
@@ -46,16 +46,18 @@ void *color_detect_thread(void *arg)
             buff_sz = (vid_data.length);
             jpg_buf = (uint8_t *)malloc(buff_sz);
         }
-        memcpy(jpg_buf, vid_data.data, vid_data.length);     
-        video_unlock();
 
-        buff_sz = vid_data.length;
+        memcpy(jpg_buf, vid_data.data, vid_data.length);     
+        fprintf(stderr, "img %d x %d (sz %d)\n",
+                vid_data.width, vid_data.height, (int)vid_data.length);
+        video_unlock();
 
         jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box.width, &box.height);
         color_detect_rgb(rgb_buff, &color, &box);
         
         free(rgb_buff);
         
+
         //runColorDetectionMemory(jpg_buf, &buff_sz, &color, &box);
         if (box.detected) {
             printf("Bounding box: (%d,%d) (%d,%d)\n",
