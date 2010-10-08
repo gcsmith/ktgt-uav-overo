@@ -127,6 +127,13 @@ int recv_packet(client_info_t *client, uint32_t *cmd_buffer)
 
     // read in the rest of the packet
     bytes_left = cmd_buffer[PKT_LENGTH] - PKT_BASE_LENGTH;
+    if (bytes_left > PKT_BUFF_LEN) {
+        // disconnect the client if the packet size exceeds the buffer size
+        // there's no reason we should ever exceed the maximum limit
+        syslog(LOG_ERR, "encountered invalid packet size (%d)\n", bytes_left);
+        return 0;
+    }
+
     while (bytes_left > 0) {
         if (1 > (rc = recv(client->fd, (void *)ptr, bytes_left, 0))) {
             // assume client disconnected for now
@@ -230,7 +237,7 @@ void run_server(imu_data_t *imu, const char *port)
         send_simple_packet(&g_client, SERVER_REQ_IDENT);
 
         if (!recv_packet(&g_client, cmd_buffer)) {
-            syslog(LOG_INFO, "read failed -- client disconnected?");
+            syslog(LOG_INFO, "recv unsuccessful -- disconnecting client");
             goto client_disconnect;
         }
 
@@ -248,7 +255,7 @@ void run_server(imu_data_t *imu, const char *port)
         for (;;) {
             // read until we've consumed an entire packet
             if (!recv_packet(&g_client, cmd_buffer)) {
-                syslog(LOG_INFO, "read failed -- client disconnected?");
+                syslog(LOG_INFO, "recv unsuccessful -- disconnecting client");
                 goto client_disconnect;
             }
 
