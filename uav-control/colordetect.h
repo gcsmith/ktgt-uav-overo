@@ -26,7 +26,7 @@ void color_detect_rgb(const uint8_t *rgb_in,
         track_color_t *color, track_coords_t *box);
 
 // determine color bounding box using more complex red/green/blue thresholding
-void color_detect_rgb_sqrt(const uint8_t *rgb_in, real_t threshold,
+void color_detect_rgb_dist(const uint8_t *rgb_in, real_t threshold,
         track_color_t *color, track_coords_t *box);
 
 // determine color bounding box using hue/saturation/lightness thresholding
@@ -42,7 +42,7 @@ void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
 void findColorRGB(const uint8_t *rgb_in,
         track_color_t *color, track_coords_t *box);
 
-void findColorRGB_sqrt(const uint8_t *rgb_in, real_t threshold,
+void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
         track_color_t *color, track_coords_t *box);
 
 void findColorHSL(const uint16_t *hsl_in, uint16_t h, uint16_t s, uint16_t l,

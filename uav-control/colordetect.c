@@ -87,10 +87,10 @@ void color_detect_rgb(const uint8_t *rgb_in,
 }
 
 // -----------------------------------------------------------------------------
-void color_detect_rgb_sqrt(const uint8_t *rgb_in, real_t threshold,
+void color_detect_rgb_dist(const uint8_t *rgb_in, real_t threshold,
         track_color_t *color, track_coords_t *box)
 {
-    findColorRGB_sqrt(rgb_in, threshold, color, box);
+    findColorRGB_dist(rgb_in, threshold, color, box);
 }
 
 // -----------------------------------------------------------------------------
@@ -321,7 +321,7 @@ void findColorRGB(const uint8_t *rgb_in,
 }
 
 // -----------------------------------------------------------------------------
-void findColorRGB_sqrt(const uint8_t *rgb_in, real_t threshold,
+void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
         track_color_t *color, track_coords_t *box)
 {
     int x = 0, y = 0, consec = 0, noise_filter = 5;
@@ -329,7 +329,10 @@ void findColorRGB_sqrt(const uint8_t *rgb_in, real_t threshold,
     int img_pitch = img_width * 3, scan_start = 0, pix_start = 0;
     int r_track = color->r, g_track = color->g, b_track = color->b;
     int r_diff, g_diff, b_diff;
-    real_t dist;
+    int dist;
+
+    // square the input threshold value
+    threshold *= threshold;
 
     // initialize box to obviously invalid state so we know if we didn't detect
     int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
@@ -348,7 +351,7 @@ void findColorRGB_sqrt(const uint8_t *rgb_in, real_t threshold,
             r_diff = rgb_in[pix_start + 0] - r_track;
             g_diff = rgb_in[pix_start + 1] - g_track;
             b_diff = rgb_in[pix_start + 2] - b_track;
-            dist = sqrt(r_diff * r_diff + g_diff * g_diff + b_diff * b_diff);
+            dist = r_diff * r_diff + g_diff * g_diff + b_diff * b_diff;
 
             // if within threshold, update the bounding box
             if (dist < (real_t)threshold) {

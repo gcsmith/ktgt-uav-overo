@@ -96,7 +96,7 @@ float test_rgb2_stream_loop(int iterations, const uint8_t *stream_in,
     clock_gettime(CLOCK_REALTIME, &t0);
     for (j = 0; j < iterations; j++) {
         jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
-        color_detect_rgb_sqrt(rgb_buff, (real_t)15, color, &box);
+        color_detect_rgb_dist(rgb_buff, (real_t)15, color, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
