@@ -37,9 +37,9 @@ void *color_detect_thread(void *arg)
         //pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
         if (!video_lock(&vid_data, 1)) {
             // video disabled, non-functioning, or frame not ready
+             //printf("FAILURE TO LOCK\n"); fflush(stdout);
             continue;
         }
-
         // copy the jpeg to our buffer now that we're safely locked
         if (buff_sz < vid_data.length) {
             free(jpg_buf);
@@ -52,10 +52,13 @@ void *color_detect_thread(void *arg)
                 vid_data.width, vid_data.height, (int)vid_data.length);
         video_unlock();
 
-        jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box.width, &box.height);
-        color_detect_rgb(rgb_buff, &color, &box);
-        
-        free(rgb_buff);
+        if(jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box.width, &box.height)
+            != 0){
+            color_detect_rgb(rgb_buff, &color, &box);
+        }
+        //if(rgb_buff != NULL){
+        //    free(rgb_buff);
+        //}
         
 
         //runColorDetectionMemory(jpg_buf, &buff_sz, &color, &box);

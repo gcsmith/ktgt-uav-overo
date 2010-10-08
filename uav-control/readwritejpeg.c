@@ -433,19 +433,19 @@ int jpeg_rd_mem(const uint8_t *stream_in, unsigned long length,
 
     /* We set up the normal JPEG error routines, then override error_exit. */
     cinfo.err = jpeg_std_error(&jerr.pub);
-    //jerr.pub.error_exit = my_error_exit;
+    jerr.pub.error_exit = my_error_exit;
     /* Establish the setjmp return context for my_error_exit to use. */
 
-    // if (setjmp(jerr.setjmp_buffer)) {
+     if (setjmp(jerr.setjmp_buffer)) {
     /* If we get here, the JPEG code has signaled an error.
      * We need to clean up the JPEG object, close the input file, and return.
      */
-    /*
+    
        jpeg_destroy_decompress(&cinfo);
-       fclose(infile);
+       //fclose(infile);
        return 0;
        }
-       */
+     //  */
     /* Now we can initialize the JPEG decompression object. */
     jpeg_create_decompress(&cinfo);
 
