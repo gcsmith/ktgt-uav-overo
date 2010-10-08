@@ -151,6 +151,18 @@ size_t send_packet(client_info_t *client, uint32_t *cmd_buffer, size_t length)
 }
 
 // -----------------------------------------------------------------------------
+// Send a simple packet without any arguments.
+size_t send_simple_packet(client_info_t *client, uint32_t command)
+{
+    size_t bytes_written = 0;
+    uint32_t cmd_buffer[] = { command, PKT_BASE_LENGTH };
+    pthread_mutex_lock(&client->lock);
+    bytes_written = send(client->fd, (void *)cmd_buffer, sizeof(cmd_buffer), 0);
+    pthread_mutex_unlock(&client->lock);
+    return bytes_written;
+}
+
+// -----------------------------------------------------------------------------
 // Server entry-point. Sits in a loop accepting and processing incoming client
 // connections until terminated.
 void run_server(imu_data_t *imu, const char *port)
@@ -215,11 +227,9 @@ void run_server(imu_data_t *imu, const char *port)
         syslog(LOG_INFO, "established connection to client (%s)", ip4);
 
         // send request for client identification
-        cmd_buffer[PKT_COMMAND] = SERVER_REQ_IDENT;
-        cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-        send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
+        send_simple_packet(&g_client, SERVER_REQ_IDENT);
 
-        if (1 > recv(g_client.fd, (void *)cmd_buffer, PKT_BUFF_LEN, 0)) {
+        if (!recv_packet(&g_client, cmd_buffer)) {
             syslog(LOG_INFO, "read failed -- client disconnected?");
             goto client_disconnect;
         }
@@ -246,16 +256,12 @@ void run_server(imu_data_t *imu, const char *port)
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
                 fc_takeoff();
-                cmd_buffer[PKT_COMMAND] = SERVER_ACK_TAKEOFF;
-                cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-                send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
+                send_simple_packet(&g_client, SERVER_ACK_TAKEOFF);
                 break;
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
                 fc_land();
-                cmd_buffer[PKT_COMMAND] = SERVER_ACK_LANDING;
-                cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-                send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
+                send_simple_packet(&g_client, SERVER_ACK_LANDING);
                 break;
             case CLIENT_REQ_TELEMETRY:
                 // syslog(LOG_INFO, "user requested telemetry - sending...\n");
@@ -341,9 +347,7 @@ void run_server(imu_data_t *imu, const char *port)
                     break;
                 default:
                     syslog(LOG_DEBUG, "bad control mode requested. ignoring\n");
-                    cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
-                    cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-                    send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
+                    send_simple_packet(&g_client, SERVER_ACK_IGNORED);
                     continue;
                 }
 
@@ -390,10 +394,7 @@ void run_server(imu_data_t *imu, const char *port)
                        cmd_buffer[PKT_LENGTH],
                        cmd_buffer[PKT_BASE + 0],
                        cmd_buffer[PKT_BASE + 1]);
-
-                cmd_buffer[PKT_COMMAND] = SERVER_ACK_IGNORED;
-                cmd_buffer[PKT_LENGTH]  = PKT_BASE_LENGTH;
-                send_packet(&g_client, cmd_buffer, PKT_BASE_LENGTH);
+                send_simple_packet(&g_client, SERVER_ACK_IGNORED);
                 goto client_disconnect;
             }
         }
@@ -585,7 +586,7 @@ int main(int argc, char *argv[])
     if (!flag_no_track) {
         if (!flag_no_video) {
             // make a note that tracking isn't possible with video
-            syslog(LOG_INFO, "initialized color tracking subsystem\n");
+            syslog(LOG_INFO, "initializing color tracking subsystem\n");
             if (!colordetect_init()) {
                 syslog(LOG_ERR, "failed to initialize tracking subsystem\n");
                 uav_shutdown(EXIT_FAILURE);
