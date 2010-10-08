@@ -354,7 +354,7 @@ void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
             dist = r_diff * r_diff + g_diff * g_diff + b_diff * b_diff;
 
             // if within threshold, update the bounding box
-            if (dist < (real_t)threshold) {
+            if (dist < threshold) {
 
                 // only update bounding box of consecutive pixels >= "filter"
                 if (++consec >= noise_filter) {
