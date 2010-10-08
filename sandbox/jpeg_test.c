@@ -7,17 +7,22 @@
 #include "readwritejpeg.h"
 #include "colordetect.h"
 
-unsigned long compute_delta(struct timespec *t0, struct timespec *t1) {
+// -----------------------------------------------------------------------------
+// Return the difference from (t1 - t0) in microseconds.
+unsigned long compute_delta(struct timespec *t0, struct timespec *t1)
+{
     unsigned long delta = (t1->tv_nsec / 1000) - (t0->tv_nsec / 1000);
     if (t1->tv_sec > t0->tv_sec) {
-        // add x second
         delta += 1000000 * (t1->tv_sec - t0->tv_sec);
     }
     return delta;
 }
 
+// -----------------------------------------------------------------------------
+// Benchmark jpeg decompression from memory stream.
 float test_decompress_loop(int iterations, const uint8_t *stream_in,
-                           unsigned long length) {
+        unsigned long length)
+{
     struct timespec t0, t1;
     track_coords_t box = { 0 };
     unsigned long j;
@@ -33,8 +38,11 @@ float test_decompress_loop(int iterations, const uint8_t *stream_in,
     return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
 }
 
+// -----------------------------------------------------------------------------
+// Benchmark jpeg decompression and color tracking from memory stream.
 float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
-                           unsigned long length, track_color_t *color) {
+        unsigned long length, track_color_t *color)
+{
     struct timespec t0, t1;
     track_coords_t box = { 0 };
     unsigned long j;
@@ -50,7 +58,9 @@ float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
     return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
 }
 
-int main(int argc, char *argv[]) {
+// -----------------------------------------------------------------------------
+int main(int argc, char *argv[])
+{
     track_color_t color = { 0 };
     unsigned long img_size, bytes_read;
     uint8_t *stream_in;
@@ -89,13 +99,13 @@ int main(int argc, char *argv[]) {
     }
     
     // populate color track structure with specified thresholds
-    color.R = track_rgb[0];
-    color.G = track_rgb[1];
-    color.B = track_rgb[2];
-    color.Ht = track_hsl[0];
-    color.St = track_hsl[1];
-    color.Lt = track_hsl[2];
-    color.quality = 25;
+    color.r = track_rgb[0];
+    color.g = track_rgb[1];
+    color.b = track_rgb[2];
+    color.h = track_hsl[0];
+    color.s = track_hsl[1];
+    color.l = track_hsl[2];
+    color.filter = 5;
 
     // open the jpeg image, determine its length in bytes
     jpeg_fd = fopen(filename,"r");
