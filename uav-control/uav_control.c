@@ -94,6 +94,22 @@ void signal_handler(int sig)
 }
 
 // -----------------------------------------------------------------------------
+void close_client(client_info_t *client)
+{
+    pthread_mutex_lock(&client->lock);
+    if (client->fd < 0) {
+        // we should never get here...
+        syslog(LOG_ERR, "calling close_client on closed client\n");
+    }
+    else {
+        shutdown(client->fd, SHUT_RDWR);
+        close(client->fd);
+        client->fd = -1;
+    }
+    pthread_mutex_unlock(&client->lock);
+}
+
+// -----------------------------------------------------------------------------
 // Receive a single packet. Blocks until the entire message has been consumed.
 int recv_packet(client_info_t *client, uint32_t *cmd_buffer)
 {
@@ -385,9 +401,7 @@ void run_server(imu_data_t *imu, const char *port)
         // perform cleanup -- disconnect and wait for next connection
 client_disconnect:
         syslog(LOG_INFO, "disconnected from client (%d)", g_client.fd);
-        shutdown(g_client.fd, SHUT_RDWR);
-        close(g_client.fd);
-        g_client.fd = -1;
+        close_client(&g_client);
     }
 }
 
@@ -561,14 +575,21 @@ int main(int argc, char *argv[])
     // initialize video subsystem unless specified not to (no-video)
     if (!flag_no_video) {
         syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
-        video_init(v4l_dev, arg_width, arg_height, arg_fps);
+        if (!video_init(v4l_dev, arg_width, arg_height, arg_fps)) {
+            syslog(LOG_ERR, "failed to initialize video subsystem\n");
+            uav_shutdown(EXIT_FAILURE);
+        }
     }
 
     // initialize color tracking subsystem
     if (!flag_no_track) {
         if (!flag_no_video) {
             // make a note that tracking isn't possible with video
-            colordetect_init();
+            syslog(LOG_INFO, "initialized color tracking subsystem\n");
+            if (!colordetect_init()) {
+                syslog(LOG_ERR, "failed to initialize tracking subsystem\n");
+                uav_shutdown(EXIT_FAILURE);
+            }
         }
         else {
             syslog(LOG_INFO, "color tracking not possible without video");

@@ -77,17 +77,19 @@ void *color_detect_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-void colordetect_init(void)
+int colordetect_init(void)
 {   
     running =  1;
     if (g_vision_init) {
         syslog(LOG_INFO, "attempting multiple colordetect_init calls\n");
-        return;
+        return 0;
     }
 
     g_vision_init = 1;
     pthread_create(&g_color_thread, 0, color_detect_thread, NULL);
     pthread_detach(g_color_thread);
+
+    return 1;
 }
 
 // -----------------------------------------------------------------------------
