@@ -12,6 +12,7 @@
 // -----------------------------------------------------------------------------
 #ifndef STANDALONE_DEMO
 static pthread_t g_color_thread;
+static int g_vision_init = 0;
 
 void *color_detect_thread(void *arg)
 {
@@ -68,14 +69,31 @@ void *color_detect_thread(void *arg)
 
     pthread_exit(NULL);
 }
-void colordetect_init(void){    
+
+// -----------------------------------------------------------------------------
+void colordetect_init(void)
+{
+    if (g_vision_init) {
+        syslog(LOG_INFO, "attempting multiple colordetect_init calls\n");
+        return;
+    }
+
+    g_vision_init = 1;
     pthread_create(&g_color_thread, 0, color_detect_thread, NULL);
     pthread_detach(g_color_thread);
 }
-void colordetect_shutdown(void){
+
+// -----------------------------------------------------------------------------
+void colordetect_shutdown(void)
+{
+    if (!g_vision_init) {
+        syslog(LOG_INFO, "calling colordetect_shutdown prior to init\n");
+        return;
+    }
+
+    g_vision_init = 0;
     pthread_cancel(g_color_thread);
 }
-
 
 #endif
 

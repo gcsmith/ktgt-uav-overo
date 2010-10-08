@@ -10,10 +10,11 @@ TOOLDIR       ?= ${OETMP}/sysroots/`uname -m`-linux/usr/armv7a/bin
 STAGEDIR      ?= ${OETMP}/sysroots/armv7a-angstrom-linux-gnueabi/usr
 CROSS_COMPILE ?= ${TOOLDIR}/arm-angstrom-linux-gnueabi-
 CC            = @${CROSS_COMPILE}gcc
+PROFILE       ?= "release"
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
 
-CFLAGS += -Wall -Werror -O2 -D_GNU_SOURCE \
+CFLAGS += -Wall -Werror -D_GNU_SOURCE \
           -I../pwm-module \
           -I../pwm-lib \
           -I../gpio-event-module \
@@ -23,6 +24,19 @@ LFLAGS += $(LDFLAGS) \
           -L../pwm-lib \
           -L../gpio-lib \
           -lpthread -ljpeg -lpwm -lgpio -lm
+
+ifeq ("$(PROFILE)", "gprof")
+	CFLAGS += -O0 -ggdb -pg
+	LFLAGS += -O0 -ggdb -pg
+else
+ifeq ("$(PROFILE)", "debug")
+	CFLAGS += -O0 -ggdb
+	LFLAGS += -O0 -ggdb
+else
+	CFLAGS += -O2
+	LFLAGS += -O2
+endif
+endif
 
 OBJ_FILES = colordetect.o \
             flight_control.o \
