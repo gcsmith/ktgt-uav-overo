@@ -22,9 +22,9 @@ void *color_detect_thread(void *arg)
         .r = 151,
         .g = 242,
         .b = 192,
-        .ht = 30,
-        .st = 100,
-        .lt = 360,
+        .ht = 22, //30,
+        .st = 71, //100,
+        .lt = 255, //360,
         .filter = 5    
     };
     track_coords_t box = {};
@@ -113,33 +113,24 @@ void color_detect_rgb(const uint8_t *rgb_in,
 }
 
 // -----------------------------------------------------------------------------
-void color_detect_rgb_dist(const uint8_t *rgb_in, real_t threshold,
+void color_detect_rgb_dist (const uint8_t *rgb_in, real_t threshold,
         track_color_t *color, track_coords_t *box)
 {
     findColorRGB_dist(rgb_in, threshold, color, box);
 }
 
 // -----------------------------------------------------------------------------
-void color_detect_hsl(const uint8_t *rgb_in, uint16_t **hsl_buff,
-        track_color_t *color, track_coords_t *box)
+void color_detect_hsl (uint8_t *rgb_in, 
+        track_color_t *color, track_coords_t *box) 
 {
-
-    // color to look for in HSL (will be calculated from RGB)
-    uint16_t h = 0, s = 0, l = 0;                   
-
-    if (NULL == *hsl_buff) {
-        // TODO: GET RID OF THIS
-        *hsl_buff = malloc(sizeof(uint16_t) * box->height * box->width * 3);
-    }
-
     // convert detect color from RGB to HSL
-    RGB2HSL(color->r, color->g, color->b, &h, &s, &l);                     
+    RGB2HSL(&color->r, &color->g, &color->b);                     
                         
     // convert the image to HSL
-    COLORimageRGBtoHSL(rgb_in, *hsl_buff, box->width, box->height);
+    COLORimageRGBtoHSL(rgb_in, box->width, box->height);
 
     // find HSL values in image 
-    findColorHSL(*hsl_buff, h, s, l, color, box);
+    findColorHSL(rgb_in, color, box);
 }
 
 // -----------------------------------------------------------------------------
@@ -147,11 +138,10 @@ void runColorDetectionFile(const char *infile, const char *outfile,
         track_color_t *color, track_coords_t *box)
 {
     uint8_t *rgb = NULL;
-    uint16_t *hsl = NULL;
 
     // decode image from file, run color detection algorithm, write it back out
     jpeg_rd_file(infile, &rgb, &box->width, &box->height);    
-    color_detect_hsl(rgb, &hsl, color, box);
+    color_detect_hsl(rgb, color, box);
 #if 0
     jpeg_wr_file(outfile, color->quality, rgb, box->width, box->height);
 #endif
@@ -162,20 +152,18 @@ void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
         track_color_t *color, track_coords_t *box)
 {
     uint8_t *rgb = NULL;
-    uint16_t *hsl = NULL;
 
     // decode image from mem, run color detection algorithm, write it back out
     jpeg_rd_mem(stream_in, *length, &rgb, &box->width, &box->height);    
-    color_detect_hsl(rgb, &hsl, color, box);
+    color_detect_hsl(rgb, color, box);
 #if 0
     jpeg_wr_mem(&stream_in, length, color->quality, rgb, &box->width, &box->height);
 #endif
 }
 
 // -----------------------------------------------------------------------------
-void findColorHSL(const uint16_t *hsl_in, uint16_t h, uint16_t s, uint16_t l,
-        track_color_t *color, track_coords_t *box)
-{
+void findColorHSL (const uint8_t *hsl_in, 
+        track_color_t *color, track_coords_t *box) {
     int x = 0, y = 0, consec = 0, noise_filter = color->filter;
     int img_pitch = box->width * 3, scan_start = 0, pix_start = 0;
 
@@ -197,9 +185,10 @@ void findColorHSL(const uint16_t *hsl_in, uint16_t h, uint16_t s, uint16_t l,
 
             // if within threshold, update the bounding box
             pix_start = scan_start + x * 3;
-            if (abs((hsl_in[pix_start + 0]) - h) < color->ht &&
-                abs((hsl_in[pix_start + 1]) - s) < color->st &&
-                abs((hsl_in[pix_start + 2]) - l) < color->lt) {
+            if (abs((hsl_in[pix_start + 0]) - color->r) < color->ht &&
+                abs((hsl_in[pix_start + 1]) - color->g) < color->st &&
+                abs((hsl_in[pix_start + 2]) - color->b) < color->lt) {
+                //color->r is the h value
 
                 // only update bounding box of consecutive pixels >= "filter"
                 if (++consec >= noise_filter) {
@@ -228,30 +217,25 @@ void findColorHSL(const uint16_t *hsl_in, uint16_t h, uint16_t s, uint16_t l,
 }
 
 // -----------------------------------------------------------------------------
-void COLORimageRGBtoHSL(const uint8_t *rgb_in, uint16_t *hsl_out,
-        int width, int height)
+void COLORimageRGBtoHSL (uint8_t *rgb_in, int width, int height)
 {
     int i = 0, j = 0;
     for (i = 0; i < height; i++) {
         for (j = 0; j < width; j++) {
             // convert single rgb pixel to hsl color space
-            RGB2HSL(rgb_in[(i * width * 3) + (j * 3) + 0],
-                    rgb_in[(i * width * 3) + (j * 3) + 1],
-                    rgb_in[(i * width * 3) + (j * 3) + 2],
-                    &hsl_out[(i * width * 3) + (j * 3) + 0],
-                    &hsl_out[(i * width * 3) + (j * 3) + 1],
-                    &hsl_out[(i * width * 3) + (j * 3) + 2]);
+            RGB2HSL(&(rgb_in[(i * width * 3) + (j * 3) + 0]),
+                    &(rgb_in[(i * width * 3) + (j * 3) + 1]),
+                    &(rgb_in[(i * width * 3) + (j * 3) + 2]));
         }
     }
 }
 
 // -----------------------------------------------------------------------------
-void RGB2HSL(uint8_t r_in, uint8_t g_in, uint8_t b_in,
-        uint16_t *h_out, uint16_t *s_out, uint16_t *l_out)
+void RGB2HSL(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
 {
-    real_t r = r_in / 255.0f;
-    real_t g = g_in / 255.0f;
-    real_t b = b_in / 255.0f;
+    real_t r = *r_h / 255.0f;
+    real_t g = *g_s / 255.0f;
+    real_t b = *b_l / 255.0f;
     real_t max;
     real_t min;
 
@@ -281,9 +265,9 @@ void RGB2HSL(uint8_t r_in, uint8_t g_in, uint8_t b_in,
 
     h /= 6.0f;
 
-    (*h_out) = h * 360.0f;
-    (*s_out) = s * 360.0f;
-    (*l_out) = l * 360.0f;
+    (*r_h) = h * 255.0f;
+    (*g_s) = s * 255.0f;
+    (*b_l) = l * 255.0f;
 }
 
 // -----------------------------------------------------------------------------
