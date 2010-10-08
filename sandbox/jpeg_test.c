@@ -3,6 +3,12 @@
 #include <math.h>
 #include <time.h>
 #include <jpeglib.h>
+#include <getopt.h>
+#include <syslog.h>
+#include <errno.h>
+#include <assert.h>
+#include <string.h>
+
 
 #include "readwritejpeg.h"
 #include "colordetect.h"
@@ -27,11 +33,13 @@ float test_decompress_loop(int iterations, const uint8_t *stream_in,
     track_coords_t box = { 0 };
     unsigned long j;
     uint8_t *rgb_buff = NULL;
+    uint8_t img_in[length];
 
     clock_gettime(CLOCK_REALTIME, &t0);
     for (j = 0; j < iterations; j++) {
         // simply decompress the jpeg stream each iteration
-        jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
+        memcpy(img_in, stream_in, length);
+        jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
         printf("."); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -47,12 +55,15 @@ float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
     track_coords_t box = { 0 };
     unsigned long j;
     uint8_t *rgb_buff = NULL;
-    uint16_t *hsl_buff = NULL;
+    uint8_t img_in[length];
+    track_color_t temp;
 
     clock_gettime(CLOCK_REALTIME, &t0);
     for (j = 0; j < iterations; j++) {
-        jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
-        color_detect_hsl(rgb_buff, &hsl_buff, color, &box);
+        memcpy(&temp, color, sizeof(track_color_t));
+        memcpy(img_in, stream_in, length);
+        jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
+        color_detect_hsl(rgb_buff, &temp, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -68,6 +79,7 @@ float test_rgb1_stream_loop(int iterations, const uint8_t *stream_in,
     track_coords_t box = { 0 };
     unsigned long j;
     uint8_t *rgb_buff = NULL;
+    uint8_t img_in[length];
 
     color->ht = 10;
     color->st = 10;
@@ -75,7 +87,8 @@ float test_rgb1_stream_loop(int iterations, const uint8_t *stream_in,
 
     clock_gettime(CLOCK_REALTIME, &t0);
     for (j = 0; j < iterations; j++) {
-        jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
+        memcpy(img_in, stream_in, length);
+        jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
         color_detect_rgb(rgb_buff, color, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
@@ -92,10 +105,12 @@ float test_rgb2_stream_loop(int iterations, const uint8_t *stream_in,
     track_coords_t box = { 0 };
     unsigned long j;
     uint8_t *rgb_buff = NULL;
+    uint8_t img_in[length];
 
     clock_gettime(CLOCK_REALTIME, &t0);
     for (j = 0; j < iterations; j++) {
-        jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
+        memcpy(img_in, stream_in, length);
+        jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
         color_detect_rgb_dist(rgb_buff, (real_t)15, color, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
@@ -104,8 +119,22 @@ float test_rgb2_stream_loop(int iterations, const uint8_t *stream_in,
 }
 
 // -----------------------------------------------------------------------------
+// Information about command line arguments
+void print_usage()
+{
+    printf("usage: jpeg_test [options]\n\n"
+           "Program options:\n"
+           "  -h [ --help ]           : display this usage message\n"
+           "  --no-decompress         : do not run the decompression benchmark\n"
+           "  --no-hsl                : do not run the hsl benchmark\n"
+           "  --no-rgb1               : do not run the rgb1 benchmark\n"
+           "  --no-rgb2               : do not run the rgb2 benchmark\n");
+}
+
+// -----------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+    int flag_decompress = 0, flag_hsl = 0, flag_rgb1 = 0, flag_rgb2 = 0, opt, index;
     unsigned long img_size, bytes_read, i;
     uint8_t *stream_in;
     FILE *jpeg_fd;
@@ -118,31 +147,43 @@ int main(int argc, char *argv[])
     };
 
     // default jpeg image file path to load
-    const char *filename = "./Data/frisbee.jpg";
+    char filename[256] = "./Data/frisbee.jpg";
 
-    if (argc!= 1 && argc != 2 && argc != 5 && argc != 8) {
-        printf("Usage: %s filename R G B\n or \n %s filename"
-               "R G B Ht St Lt\n *t -> threshold value\n", argv[0], argv[0]);
-        return 0;
-    }
+    struct option long_options[] = {
+        { "file",           required_argument, NULL,            'f' },
+        { "rgb",            required_argument, NULL,            'r' },
+        { "thresh",         required_argument, NULL,            't' },
+        { "no-decompress",  no_argument,       &flag_decompress, 1 },
+        { "no-hsl",         no_argument,       &flag_hsl,        1 },
+        { "no-rgb1",        no_argument,       &flag_rgb1,       1 },
+        { "no-rgb2",        no_argument,       &flag_rgb2,       1 },
+        { 0, 0, 0, 0 }
+    };
 
-    if (argc >= 2) {
-        // open user-specified jpeg image
-        filename = argv[1];
-    }
+    static const char *str = "frth?";
 
-    if (argc >= 5) {
-        // define target rgb color channels
-        color.r = (uint8_t)atoi(argv[2]);
-        color.g = (uint8_t)atoi(argv[3]);
-        color.b = (uint8_t)atoi(argv[4]);
-    }
-
-    if (argc == 8) {    
-        // define hsl thresholds
-        color.ht = (short)atoi(argv[5]);
-        color.st = (short)atoi(argv[6]);
-        color.lt = (short)atoi(argv[7]);
+    while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
+        switch (opt) {
+        case 'f':
+            strncpy(filename, optarg, 256);
+            break;
+        case 'r':
+            sscanf(optarg,"%c,%c,%c",&color.r,&color.g,&color.b);
+            break;
+        case 't':
+            sscanf(optarg,"%c,%c,%c",&color.ht,&color.st,&color.lt);
+            break;
+        case 'h': // fall through
+        case '?':
+            print_usage();
+            exit(EXIT_SUCCESS);
+        case 0:
+            break;
+        default:
+            syslog(LOG_ERR, "unexpected argument '%c'\n", opt);
+            assert(!"unhandled case in option handling -- this is an error");
+            break;
+        }
     }
     
     // open the jpeg image, determine its length in bytes
@@ -155,6 +196,7 @@ int main(int argc, char *argv[])
     stream_in = (uint8_t *)malloc(img_size);
     bytes_read = fread(stream_in, 1, img_size, jpeg_fd);
     fclose(jpeg_fd);
+    
 
     if (bytes_read != img_size) {
         fprintf(stderr, "expected %lu bytes, read %lu\n", img_size, bytes_read);
@@ -163,14 +205,22 @@ int main(int argc, char *argv[])
     printf("successfully read %lu bytes from \"%s\"\n", img_size, filename);
 
     for (i = 0; i < 80; ++i) printf("-"); printf("\n");
-    printf("Decompress loop  : ");
-    printf(" %f FPS\n", test_decompress_loop(40, stream_in, img_size));
-    printf("HSL stream loop  : ");
-    printf(" %f FPS\n", test_hsl_stream_loop(40, stream_in, img_size, &color));
-    printf("RGB1 stream loop : ");
-    printf(" %f FPS\n", test_rgb1_stream_loop(40, stream_in, img_size, &color));
-    printf("RGB2 stream loop : ");
-    printf(" %f FPS\n", test_rgb2_stream_loop(40, stream_in, img_size, &color));
+    if(!flag_decompress){
+        printf("Decompress loop  : ");
+        printf(" %f FPS\n", test_decompress_loop(40, stream_in, img_size));
+    }
+    if(!flag_hsl){
+        printf("HSL stream loop  : ");
+        printf(" %f FPS\n", test_hsl_stream_loop(40, stream_in, img_size, &color));
+    }
+    if(!flag_rgb1){
+        printf("RGB1 stream loop : ");
+        printf(" %f FPS\n", test_rgb1_stream_loop(40, stream_in, img_size, &color));
+    }
+    if(!flag_rgb2){
+        printf("RGB2 stream loop : ");
+        printf(" %f FPS\n", test_rgb2_stream_loop(40, stream_in, img_size, &color));
+    }
     for (i = 0; i < 80; ++i) printf("-"); printf("\n");
 
     return 0;

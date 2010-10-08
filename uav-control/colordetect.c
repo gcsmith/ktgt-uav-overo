@@ -233,6 +233,46 @@ void COLORimageRGBtoHSL (uint8_t *rgb_in, int width, int height)
 }
 
 // -----------------------------------------------------------------------------
+void RGB2HSL2(uint8_t * r, uint8_t * g, uint8_t * b, uint8_t * h, uint8_t * s, uint8_t * l)
+{
+    real_t _r = *r / 255.0f;
+    real_t _g = *g / 255.0f;
+    real_t _b = *b / 255.0f;
+    real_t max;
+    real_t min;
+
+    real_t vm;
+    real_t _h = 0.0f, _s = 0.0f, _l = 0.0f; // set to black by default
+
+    max = MAX(MAX(_r, _g), _b);
+    min = MIN(MIN(_r, _g), _b);
+    _l = (max + min) / 2.0f;
+
+    if (max == min) {
+        return;
+    }
+
+    vm = max - min;
+    _s = _l > 0.5f ? vm / (2.0f - max - min) : vm / (max + min);
+
+    if (max == _r) {
+        _h = (_g - _b) / vm + (_g < _b ? 6.0f : 0.0f);
+    }
+    else if (max == _g) {
+        _h = (_b - _r) / vm + 2.0f;
+    }
+    else {
+        _h = (_r - _g) / vm + 4.0f;
+    }
+
+    _h /= 6.0f;
+
+    (*h) = _h * 255.0f;
+    (*s) = _s * 255.0f;
+    (*l) = _l * 255.0f;
+}
+
+// -----------------------------------------------------------------------------
 void RGB2HSL(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
 {
     real_t r = *r_h / 255.0f;
