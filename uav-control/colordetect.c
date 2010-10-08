@@ -13,6 +13,7 @@
 #ifndef STANDALONE_DEMO
 static pthread_t g_color_thread;
 static int g_vision_init = 0;
+static int running = 0;
 
 void *color_detect_thread(void *arg)
 {
@@ -33,7 +34,7 @@ void *color_detect_thread(void *arg)
     unsigned long buff_sz = 0;
     uint8_t *rgb_buff = NULL;
 
-    for (;;) {
+    while (running) {
         //pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
         if (!video_lock(&vid_data, 1)) {
             // video disabled, non-functioning, or frame not ready
@@ -77,7 +78,8 @@ void *color_detect_thread(void *arg)
 
 // -----------------------------------------------------------------------------
 void colordetect_init(void)
-{
+{   
+    running =  1;
     if (g_vision_init) {
         syslog(LOG_INFO, "attempting multiple colordetect_init calls\n");
         return;
@@ -90,7 +92,8 @@ void colordetect_init(void)
 
 // -----------------------------------------------------------------------------
 void colordetect_shutdown(void)
-{
+{   
+    running = 0;
     if (!g_vision_init) {
         syslog(LOG_INFO, "calling colordetect_shutdown prior to init\n");
         return;

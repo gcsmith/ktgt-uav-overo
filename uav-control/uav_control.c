@@ -60,8 +60,9 @@ void uav_shutdown(int rc)
     imu_shutdown(&g_imu);
 
     syslog(LOG_INFO, "shutting down video subsystem...\n");
-    video_shutdown();
     colordetect_shutdown();
+    video_shutdown();
+    
 
     syslog(LOG_INFO, "shutting down uav control...\n");
     // pthread_exit(NULL);
