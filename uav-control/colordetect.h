@@ -4,19 +4,31 @@
 #include "utility.h"
 
 typedef struct track_color {
-    uint8_t r, g, b;    // red/green/blue channels (why is this here?)
-    uint16_t h, s, l;   // hue/saturation/lightness channels
-    int filter;         // simple filter (consecutive pixels)
+    uint8_t r, g, b;        // red/green/blue channels (why not hsl?)
+    uint16_t ht, st, lt;    // hue/saturation/lightness thresholds
+    int filter;             // simple filter (consecutive pixels)
 } track_color_t;
 
 typedef struct {
-    int width;          // width of image in pixels
-    int height;         // height of image in pixels
-    int x1, y1;         // top-left coordinate of bounding box
-    int x2, y2;         // bottom-right coordinate of bounding box
-    int xc, yc;         // centroid coordinate of tracked color blob
-    int detected;       // 0 if color not detected, 1 if detected
+    int width;      // width of image in pixels
+    int height;     // height of image in pixels
+    int x1, y1;     // top-left coordinate of bounding box
+    int x2, y2;     // bottom-right coordinate of bounding box
+    int xc, yc;     // centroid coordinate of tracked color blob
+    int detected;   // 0 if color not detected, 1 if detected
 } track_coords_t;
+
+// determine color bounding box using simple red/green/blue thresholding
+void color_detect_rgb(const uint8_t *rgb_in,
+        track_color_t *color, track_coords_t *box);
+
+// determine color bounding box using more complex red/green/blue thresholding
+void color_detect_rgb_sqrt(const uint8_t *rgb_in, real_t threshold,
+        track_color_t *color, track_coords_t *box);
+
+// determine color bounding box using hue/saturation/lightness thresholding
+void color_detect_hsl(const uint8_t *rgb_in, uint16_t **hsl_buff,
+        track_color_t *color, track_coords_t *box);
 
 void runColorDetectionFile(const char *infile, const char *outfile,
         track_color_t *color, track_coords_t *box);
@@ -24,11 +36,11 @@ void runColorDetectionFile(const char *infile, const char *outfile,
 void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
         track_color_t *color, track_coords_t *box);
 
-void runColorDetection(const uint8_t *rgb_in, uint16_t **hsl_buff,
+void findColorRGB(const uint8_t *rgb_in,
         track_color_t *color, track_coords_t *box);
 
-void findColorRGB(const uint8_t *rgb_in, int width, int height,
-        uint8_t R, uint8_t G, uint8_t B, int thresh);
+void findColorRGB_sqrt(const uint8_t *rgb_in, real_t threshold,
+        track_color_t *color, track_coords_t *box);
 
 void findColorHSL(const uint16_t *hsl_in, uint16_t h, uint16_t s, uint16_t l,
         track_color_t *color, track_coords_t *box);

@@ -39,7 +39,7 @@ float test_decompress_loop(int iterations, const uint8_t *stream_in,
 }
 
 // -----------------------------------------------------------------------------
-// Benchmark jpeg decompression and color tracking from memory stream.
+// Benchmark jpeg decompression and hsl color tracking from memory stream.
 float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
         unsigned long length, track_color_t *color)
 {
@@ -52,7 +52,51 @@ float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
     clock_gettime(CLOCK_REALTIME, &t0);
     for (j = 0; j < iterations; j++) {
         jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
-        runColorDetection(rgb_buff, &hsl_buff, color, &box);
+        color_detect_hsl(rgb_buff, &hsl_buff, color, &box);
+        printf(box.detected ? "." : "?"); fflush(stdout);
+    }
+    clock_gettime(CLOCK_REALTIME, &t1);
+    return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
+}
+
+// -----------------------------------------------------------------------------
+// Benchmark jpeg decompression and rgb color tracking from memory stream.
+float test_rgb1_stream_loop(int iterations, const uint8_t *stream_in,
+        unsigned long length, track_color_t *color)
+{
+    struct timespec t0, t1;
+    track_coords_t box = { 0 };
+    unsigned long j;
+    uint8_t *rgb_buff = NULL;
+
+    color->ht = 10;
+    color->st = 10;
+    color->lt = 10;
+
+    clock_gettime(CLOCK_REALTIME, &t0);
+    for (j = 0; j < iterations; j++) {
+        jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
+        color_detect_rgb(rgb_buff, color, &box);
+        printf(box.detected ? "." : "?"); fflush(stdout);
+    }
+    clock_gettime(CLOCK_REALTIME, &t1);
+    return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
+}
+
+// -----------------------------------------------------------------------------
+// Benchmark jpeg decompression and rgb color tracking from memory stream.
+float test_rgb2_stream_loop(int iterations, const uint8_t *stream_in,
+        unsigned long length, track_color_t *color)
+{
+    struct timespec t0, t1;
+    track_coords_t box = { 0 };
+    unsigned long j;
+    uint8_t *rgb_buff = NULL;
+
+    clock_gettime(CLOCK_REALTIME, &t0);
+    for (j = 0; j < iterations; j++) {
+        jpeg_rd_mem(stream_in, length, &rgb_buff, &box.width, &box.height);
+        color_detect_rgb_sqrt(rgb_buff, (real_t)15, color, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -62,14 +106,16 @@ float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
 // -----------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    track_color_t color = { 0 };
-    unsigned long img_size, bytes_read;
+    unsigned long img_size, bytes_read, i;
     uint8_t *stream_in;
     FILE *jpeg_fd;
 
     // default values for rgb/hsl color tracking
-    uint8_t track_rgb[] = { 151, 242, 192 };
-    uint8_t track_hsl[] = { 21, 71, 255 };
+    track_color_t color = {
+        151, 242, 192,  // rgb target color
+        21, 71, 255,    // hsl thresholds
+        5               // filter consecutive pixels
+    };
 
     // default jpeg image file path to load
     const char *filename = "./Data/frisbee.jpg";
@@ -86,28 +132,19 @@ int main(int argc, char *argv[])
     }
 
     if (argc >= 5) {
-        // define RGB color channels
-        track_rgb[0] = (uint8_t)atoi(argv[2]);
-        track_rgb[1] = (uint8_t)atoi(argv[3]);
-        track_rgb[2] = (uint8_t)atoi(argv[4]);
+        // define target rgb color channels
+        color.r = (uint8_t)atoi(argv[2]);
+        color.g = (uint8_t)atoi(argv[3]);
+        color.b = (uint8_t)atoi(argv[4]);
     }
 
     if (argc == 8) {    
-        // define HSL channels
-        track_hsl[0] = (short)atoi(argv[5]);
-        track_hsl[1] = (short)atoi(argv[6]);
-        track_hsl[2] = (short)atoi(argv[7]);
+        // define hsl thresholds
+        color.ht = (short)atoi(argv[5]);
+        color.st = (short)atoi(argv[6]);
+        color.lt = (short)atoi(argv[7]);
     }
     
-    // populate color track structure with specified thresholds
-    color.r = track_rgb[0];
-    color.g = track_rgb[1];
-    color.b = track_rgb[2];
-    color.h = track_hsl[0];
-    color.s = track_hsl[1];
-    color.l = track_hsl[2];
-    color.filter = 5;
-
     // open the jpeg image, determine its length in bytes
     jpeg_fd = fopen(filename,"r");
     fseek(jpeg_fd, 0, SEEK_END);
@@ -125,14 +162,16 @@ int main(int argc, char *argv[])
     }
     printf("successfully read %lu bytes from \"%s\"\n", img_size, filename);
 
-    // jpeg_rd_file(filename, &rgb_out, &box.width, &box.height);
-    
-    printf("---------------------------------------------------------------\n");
-    printf("Decompress loop : ");
-    printf(" %f FPS\n", test_decompress_loop(30, stream_in, img_size));
-    printf("HSL stream loop : ");
-    printf(" %f FPS\n", test_hsl_stream_loop(30, stream_in, img_size, &color));
-    printf("---------------------------------------------------------------\n");
+    for (i = 0; i < 80; ++i) printf("-"); printf("\n");
+    printf("Decompress loop  : ");
+    printf(" %f FPS\n", test_decompress_loop(40, stream_in, img_size));
+    printf("HSL stream loop  : ");
+    printf(" %f FPS\n", test_hsl_stream_loop(40, stream_in, img_size, &color));
+    printf("RGB1 stream loop : ");
+    printf(" %f FPS\n", test_rgb1_stream_loop(40, stream_in, img_size, &color));
+    printf("RGB2 stream loop : ");
+    printf(" %f FPS\n", test_rgb2_stream_loop(40, stream_in, img_size, &color));
+    for (i = 0; i < 80; ++i) printf("-"); printf("\n");
 
     return 0;
 }

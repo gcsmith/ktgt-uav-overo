@@ -61,37 +61,21 @@ void *color_detect_thread(void *arg)
 #endif
 
 // -----------------------------------------------------------------------------
-void runColorDetectionFile(const char *infile, const char *outfile,
+void color_detect_rgb(const uint8_t *rgb_in,
         track_color_t *color, track_coords_t *box)
 {
-    uint8_t *rgb = NULL;
-    uint16_t *hsl = NULL;
-
-    // decode image from file, run color detection algorithm, write it back out
-    jpeg_rd_file(infile, &rgb, &box->width, &box->height);    
-    runColorDetection(rgb, &hsl, color, box);
-#if 0
-    jpeg_wr_file(outfile, color->quality, rgb, box->width, box->height);
-#endif
+    findColorRGB(rgb_in, color, box);
 }
 
 // -----------------------------------------------------------------------------
-void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
+void color_detect_rgb_sqrt(const uint8_t *rgb_in, real_t threshold,
         track_color_t *color, track_coords_t *box)
 {
-    uint8_t *rgb = NULL;
-    uint16_t *hsl = NULL;
-
-    // decode image from mem, run color detection algorithm, write it back out
-    jpeg_rd_mem(stream_in, *length, &rgb, &box->width, &box->height);    
-    runColorDetection(rgb, &hsl, color, box);
-#if 0
-    jpeg_wr_mem(&stream_in, length, color->quality, rgb, &box->width, &box->height);
-#endif
+    findColorRGB_sqrt(rgb_in, threshold, color, box);
 }
 
 // -----------------------------------------------------------------------------
-void runColorDetection(const uint8_t *rgb_in, uint16_t **hsl_buff,
+void color_detect_hsl(const uint8_t *rgb_in, uint16_t **hsl_buff,
         track_color_t *color, track_coords_t *box)
 {
 
@@ -111,6 +95,36 @@ void runColorDetection(const uint8_t *rgb_in, uint16_t **hsl_buff,
 
     // find HSL values in image 
     findColorHSL(*hsl_buff, h, s, l, color, box);
+}
+
+// -----------------------------------------------------------------------------
+void runColorDetectionFile(const char *infile, const char *outfile,
+        track_color_t *color, track_coords_t *box)
+{
+    uint8_t *rgb = NULL;
+    uint16_t *hsl = NULL;
+
+    // decode image from file, run color detection algorithm, write it back out
+    jpeg_rd_file(infile, &rgb, &box->width, &box->height);    
+    color_detect_hsl(rgb, &hsl, color, box);
+#if 0
+    jpeg_wr_file(outfile, color->quality, rgb, box->width, box->height);
+#endif
+}
+
+// -----------------------------------------------------------------------------
+void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
+        track_color_t *color, track_coords_t *box)
+{
+    uint8_t *rgb = NULL;
+    uint16_t *hsl = NULL;
+
+    // decode image from mem, run color detection algorithm, write it back out
+    jpeg_rd_mem(stream_in, *length, &rgb, &box->width, &box->height);    
+    color_detect_hsl(rgb, &hsl, color, box);
+#if 0
+    jpeg_wr_mem(&stream_in, length, color->quality, rgb, &box->width, &box->height);
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -138,9 +152,9 @@ void findColorHSL(const uint16_t *hsl_in, uint16_t h, uint16_t s, uint16_t l,
 
             // if within threshold, update the bounding box
             pix_start = scan_start + x * 3;
-            if (abs((hsl_in[pix_start + 0]) - h) < color->h &&
-                abs((hsl_in[pix_start + 1]) - s) < color->s &&
-                abs((hsl_in[pix_start + 2]) - l) < color->l) {
+            if (abs((hsl_in[pix_start + 0]) - h) < color->ht &&
+                abs((hsl_in[pix_start + 1]) - s) < color->st &&
+                abs((hsl_in[pix_start + 2]) - l) < color->lt) {
 
                 // only update bounding box of consecutive pixels >= "filter"
                 if (++consec >= noise_filter) {
@@ -228,29 +242,93 @@ void RGB2HSL(uint8_t r_in, uint8_t g_in, uint8_t b_in,
 }
 
 // -----------------------------------------------------------------------------
-void findColorRGB(const uint8_t *rgb_in, int width, int height,
-        uint8_t r, uint8_t g, uint8_t b, int threshold)
+void findColorRGB(const uint8_t *rgb_in,
+        track_color_t *color, track_coords_t *box)
 {
     int x = 0, y = 0, consec = 0, noise_filter = 5;
-    int x1 = width, x2 = 0, y1 = height, y2 = 0;
-    int img_pitch = width * 3, scan_start = 0, pix_start = 0;
-    int r_diff, g_diff, b_diff;
-    real_t dist;
+    int img_width = box->width, img_height = box->height;
+    int img_pitch = img_width * 3, scan_start = 0, pix_start = 0;
+    int r_track = color->r, g_track = color->g, b_track = color->b;
+    int r_thresh = color->ht, g_thresh = color->st, b_thresh = color->lt;
+
+    // initialize box to obviously invalid state so we know if we didn't detect
+    int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
 
     // iterate over each scanline in the source image
-    for (y = 0; y < height; ++y) {
+    for (y = 0; y < img_height; ++y) {
 
         // reset consecutive pixel count and calculate scanline start offset
         consec = 0;
         scan_start = y * img_pitch;
 
         // iterate over each pixel in the source scanline
-        for (x = 0; x < width; ++x) {
+        for (x = 0; x < img_width; ++x) {
 
             pix_start = scan_start + x * 3;
-            r_diff = rgb_in[pix_start + 0];
-            g_diff = rgb_in[pix_start + 1];
-            b_diff = rgb_in[pix_start + 2];
+            // if within threshold, update the bounding box
+            if (abs(rgb_in[pix_start + 0] - r_track) < r_thresh &&
+                abs(rgb_in[pix_start + 1] - g_track) < g_thresh &&
+                abs(rgb_in[pix_start + 2] - b_track) < b_thresh) {
+
+                // only update bounding box of consecutive pixels >= "filter"
+                if (++consec >= noise_filter) {
+                    if (x < x1) x1 = x;
+                    if (x > x2) x2 = x;
+                    if (y < y1) y1 = y;
+                    if (y > y2) y2 = y; 
+                }
+            }
+            else {
+                // reset number of consecutive pixels if we didn't match
+                consec = 0;
+            }
+        }
+    }
+
+    box->x1 = x1;
+    box->y1 = y1;
+    box->x2 = x2;
+    box->y2 = y2;
+
+    if ((0 == box->x2 && box->x1 == box->width) && 
+        (0 == box->y2 && box->y1 == box->height)) {
+        // color was not detected
+        box->detected = 0;
+    }
+    else {
+        // color was detected
+        box->detected = 1;
+    }
+}
+
+// -----------------------------------------------------------------------------
+void findColorRGB_sqrt(const uint8_t *rgb_in, real_t threshold,
+        track_color_t *color, track_coords_t *box)
+{
+    int x = 0, y = 0, consec = 0, noise_filter = 5;
+    int img_width = box->width, img_height = box->height;
+    int img_pitch = img_width * 3, scan_start = 0, pix_start = 0;
+    int r_track = color->r, g_track = color->g, b_track = color->b;
+    int r_diff, g_diff, b_diff;
+    real_t dist;
+
+    // initialize box to obviously invalid state so we know if we didn't detect
+    int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
+
+    // iterate over each scanline in the source image
+    for (y = 0; y < img_height; ++y) {
+
+        // reset consecutive pixel count and calculate scanline start offset
+        consec = 0;
+        scan_start = y * img_pitch;
+
+        // iterate over each pixel in the source scanline
+        for (x = 0; x < img_width; ++x) {
+
+            pix_start = scan_start + x * 3;
+            r_diff = rgb_in[pix_start + 0] - r_track;
+            g_diff = rgb_in[pix_start + 1] - g_track;
+            b_diff = rgb_in[pix_start + 2] - b_track;
             dist = sqrt(r_diff * r_diff + g_diff * g_diff + b_diff * b_diff);
 
             // if within threshold, update the bounding box
@@ -270,6 +348,20 @@ void findColorRGB(const uint8_t *rgb_in, int width, int height,
             }
         }
     }
-    printf("(%d,%d) (%d,%d)\n",x1,y1,x2,y2);
+
+    box->x1 = x1;
+    box->y1 = y1;
+    box->x2 = x2;
+    box->y2 = y2;
+
+    if ((0 == box->x2 && box->x1 == box->width) && 
+        (0 == box->y2 && box->y1 == box->height)) {
+        // color was not detected
+        box->detected = 0;
+    }
+    else {
+        // color was detected
+        box->detected = 1;
+    }
 }
 
