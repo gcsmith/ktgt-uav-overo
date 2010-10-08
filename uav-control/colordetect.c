@@ -48,7 +48,7 @@ void *color_detect_thread(void *arg)
         memcpy(jpg_buf, vid_data.data, vid_data.length);     
         video_unlock();
 
-        buff_sz = 4 * vid_data.length;
+        buff_sz = vid_data.length;
 
         jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box.width, &box.height);
         color_detect_rgb(rgb_buff, &color, &box);
