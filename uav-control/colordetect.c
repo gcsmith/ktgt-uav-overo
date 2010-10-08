@@ -11,6 +11,8 @@
 
 // -----------------------------------------------------------------------------
 #ifndef STANDALONE_DEMO
+static pthread_t g_color_thread;
+
 void *color_detect_thread(void *arg)
 {
     printf("IMAGE PROC\n");
@@ -28,6 +30,7 @@ void *color_detect_thread(void *arg)
     video_data_t vid_data;
     uint8_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
+    unsigned char * rgb_buff;
 
     for (;;) {
         //pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
@@ -42,22 +45,38 @@ void *color_detect_thread(void *arg)
             buff_sz = (vid_data.length);
             jpg_buf = (uint8_t *)malloc(buff_sz);
         }
-
-        memcpy(jpg_buf, vid_data.data, vid_data.length);
+        memcpy(jpg_buf, vid_data.data, vid_data.length);     
         video_unlock();
 
-        runColorDetectionMemory(jpg_buf, &buff_sz, &color, &box);
+        buff_sz = 4 * vid_data.length;
+
+        jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box.width, &box.height);
+        color_detect_rgb(rgb_buff, &color, &box);
+        
+        free(rgb_buff);
+        
+        //runColorDetectionMemory(jpg_buf, &buff_sz, &color, &box);
         if (box.detected) {
-            printf("HSL Bounding box: (%d,%d) (%d,%d)\n",
+            printf("Bounding box: (%d,%d) (%d,%d)\n",
                    box.x1, box.y1, box.x2, box.y2);
         }
         else {
             printf("Target object not found!\n");
         }
+        fflush(stdout);
     }
 
     pthread_exit(NULL);
 }
+void colordetect_init(void){    
+    pthread_create(&g_color_thread, 0, color_detect_thread, NULL);
+    pthread_detach(g_color_thread);
+}
+void colordetect_shutdown(void){
+    pthread_cancel(g_color_thread);
+}
+
+
 #endif
 
 // -----------------------------------------------------------------------------

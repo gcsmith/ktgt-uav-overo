@@ -24,6 +24,7 @@
 #include "gpio_event.h"
 #include "uav_protocol.h"
 #include "video_uvc.h"
+#include "colordetect.h"
 #include "user-gpio.h"
 #include "utility.h"
 
@@ -60,6 +61,7 @@ void uav_shutdown(int rc)
 
     syslog(LOG_INFO, "shutting down video subsystem...\n");
     video_shutdown();
+    colordetect_shutdown();
 
     syslog(LOG_INFO, "shutting down uav control...\n");
     // pthread_exit(NULL);
@@ -536,6 +538,7 @@ int main(int argc, char *argv[])
     if (!flag_novideo) {
         syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
         video_init(v4l_dev, arg_width, arg_height, arg_fps);
+        colordetect_init();
     }
 
     // open PWM ports for mixed controlling

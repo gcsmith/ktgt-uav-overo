@@ -18,6 +18,9 @@ typedef struct {
     int detected;   // 0 if color not detected, 1 if detected
 } track_coords_t;
 
+void colordetect_init(void);
+void colordetect_shutdown(void);
+
 // determine color bounding box using simple red/green/blue thresholding
 void color_detect_rgb(const uint8_t *rgb_in,
         track_color_t *color, track_coords_t *box);
