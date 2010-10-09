@@ -351,9 +351,10 @@ void print_usage()
            "  -D [ --daemonize ]      : run as a background process\n"
            "  -V [ --verbose ]        : enable verbose logging\n"
            "  -h [ --help ]           : display this usage message\n"
-           "  --no-video              : do not capture video from webcam\n"
+           "  --no-adc                : do not capture data from adc\n"
+           "  --no-gpio               : do not perform any gpio processing\n"
            "  --no-track              : do not perform color tracking\n"
-           "  --no-gpio               : do not perform any gpio processing\n");
+           "  --no-video              : do not capture video from webcam\n");
 }
 
 // -----------------------------------------------------------------------------
@@ -362,7 +363,7 @@ int main(int argc, char *argv[])
 {
     int index, opt, log_opt, baud = B57600;
     int flag_verbose = 0, flag_daemonize = 0;
-    int flag_no_video = 0, flag_no_gpio = 0, flag_no_track = 0;
+    int flag_no_adc = 0, flag_no_video = 0, flag_no_gpio = 0, flag_no_track = 0;
     int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
     char port_str[DEV_LEN];
@@ -382,9 +383,10 @@ int main(int argc, char *argv[])
         { "daemonize",  no_argument,       NULL, 'D' },
         { "verbose",    no_argument,       NULL, 'V' },
         { "help",       no_argument,       NULL, 'h' },
-        { "no-video",   no_argument,       &flag_no_video, 1 },
-        { "no-track",   no_argument,       &flag_no_track, 1 },
+        { "no-adc",     no_argument,       &flag_no_adc,   1 },
         { "no-gpio",    no_argument,       &flag_no_gpio,  1 },
+        { "no-track",   no_argument,       &flag_no_track, 1 },
+        { "no-video",   no_argument,       &flag_no_video, 1 },
         { 0, 0, 0, 0 }
     };
 
@@ -524,14 +526,14 @@ int main(int argc, char *argv[])
         }
     }
 
-    // open ADC ports for battery monitoring
-    if (adc_open_channels() == -1)
-    {
-        syslog(LOG_ERR, "failed to open adc channels\n");
-        uav_shutdown(EXIT_FAILURE);
+    // initialize adc channels for battery monitoring
+    if (!flag_no_adc) {
+        syslog(LOG_INFO, "opening adc channels for battery monitoring\n");
+        if (0 > adc_open_channels()) {
+            syslog(LOG_ERR, "failed to open adc channels\n");
+            uav_shutdown(EXIT_FAILURE);
+        }
     }
-    else
-        syslog(LOG_INFO, "opened adc channels for battery monitoring\n");
 
     // open PWM ports for mixed controlling
     fc_open_controls(&g_gpio_alt);
