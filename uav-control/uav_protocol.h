@@ -8,6 +8,7 @@
 
 #define IDENT_MAGIC     0x09291988  // identification number
 #define IDENT_VERSION   0x00000003  // software version
+#define PKT_BUFF_LEN    2048        // max possible packet length
 
 // Packet commands from server to client
 

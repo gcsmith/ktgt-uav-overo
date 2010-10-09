@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <syslog.h>
 #include <pthread.h>
-#include "jpeglib.h"
+
 #include "readwritejpeg.h"
 #include "colordetect.h"
 #include "utility.h"
