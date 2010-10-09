@@ -19,6 +19,7 @@
 #define SERVER_ACK_TELEMETRY    4   // acknowledge request for telemetry (+data)
 #define SERVER_ACK_MJPG_FRAME   5   // transmit a single frame of video
 #define SERVER_ACK_SET_CTL_MODE 6   // acknowledge control mode
+#define SERVER_UPDATE_TRACKING  7   // send updated tracking state information
 
 // Packet commands from client to server
 
@@ -89,8 +90,23 @@
 #define PKT_MCM_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 4))
 
 // Throttle event packet offsets
+
 #define PKT_THRO_EVT_VALUE  PKT_BASE + 0
 #define PKT_THRO_EVT_LENGTH (sizeof(uint32_t) * (PKT_BASE + 1))
+
+// Color tracking state
+
+#define CTS_STATE_SEARCH    0x00000001      // no detected object in view
+#define CTS_STATE_DETECTED  0x00000002      // detected matching object
+
+#define PKT_CTS_STATE       PKT_BASE + 0
+#define PKT_CTS_X1          PKT_BASE + 1
+#define PKT_CTS_Y1          PKT_BASE + 2
+#define PKT_CTS_X2          PKT_BASE + 3
+#define PKT_CTS_Y2          PKT_BASE + 4
+#define PKT_CTS_XC          PKT_BASE + 5
+#define PKT_CTS_YC          PKT_BASE + 6
+#define PKT_CTS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 7))
 
 #endif // _UAV_PROTOCOL__H_
 

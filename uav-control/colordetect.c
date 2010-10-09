@@ -3,6 +3,7 @@
 #include <syslog.h>
 #include <pthread.h>
 
+#include "uav_protocol.h"
 #include "readwritejpeg.h"
 #include "colordetect.h"
 #include "utility.h"
@@ -10,30 +11,32 @@
 
 // -----------------------------------------------------------------------------
 #ifndef STANDALONE_DEMO
-static pthread_t g_color_thread;
-static int g_vision_init = 0;
-static int running = 0;
+
+typedef struct color_detect_args
+{
+    client_info_t *client;      // connect client handle
+    track_color_t  color;       // current color to track
+    track_coords_t box;         // bounding box of tracked color 
+    unsigned int   running;     // subsystem is currently running
+    pthread_t      thread;      // handle to color detect thread
+} color_detect_args_t;
+
+static color_detect_args_t g_globals;
 
 void *color_detect_thread(void *arg)
 {
+    color_detect_args_t *data = (color_detect_args_t *)arg;
+    uint32_t cmd_buffer[16];
     printf("IMAGE PROC\n");
-    track_color_t color = {
-        .r = 170,
-        .g = 42,
-        .b = 119,
-        .ht = 15,
-        .st = 15,
-        .lt = 15,
-        .filter = 5    
-    };
-    track_coords_t box = {};
+    track_color_t *color = &data->color;
+    track_coords_t *box = &data->box;
 
     video_data_t vid_data;
     uint8_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
     uint8_t *rgb_buff = NULL;
 
-    while (running) {
+    while (data->running) {
         //pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
         if (!video_lock(&vid_data, 1)) {
             // video disabled, non-functioning, or frame not ready
@@ -52,19 +55,31 @@ void *color_detect_thread(void *arg)
                 vid_data.width, vid_data.height, (int)vid_data.length);
         video_unlock();
 
-        if(jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box.width, &box.height)
-            != 0){
-            color_detect_rgb(rgb_buff, &color, &box);
+        if(jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height) != 0) {
+            color_detect_rgb(rgb_buff, color, box);
         }
         //if(rgb_buff != NULL){
         //    free(rgb_buff);
         //}
         
 
-        //runColorDetectionMemory(jpg_buf, &buff_sz, &color, &box);
-        if (box.detected) {
+        //runColorDetectionMemory(jpg_buf, &buff_sz, color, box);
+        if (box->detected) {
+
+            cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
+            cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
+            cmd_buffer[PKT_CTS_STATE] = CTS_STATE_DETECTED;
+            cmd_buffer[PKT_CTS_X1]    = (uint32_t)box->x1;
+            cmd_buffer[PKT_CTS_Y1]    = (uint32_t)box->y1;
+            cmd_buffer[PKT_CTS_X2]    = (uint32_t)box->x2;
+            cmd_buffer[PKT_CTS_Y2]    = (uint32_t)box->y2;
+            cmd_buffer[PKT_CTS_XC]    = (uint32_t)box->xc;
+            cmd_buffer[PKT_CTS_YC]    = (uint32_t)box->yc;
+
+            send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
+
             printf("Bounding box: (%d,%d) (%d,%d)\n",
-                   box.x1, box.y1, box.x2, box.y2);
+                   box->x1, box->y1, box->x2, box->y2);
         }
         else {
             printf("Target object not found!\n");
@@ -76,17 +91,25 @@ void *color_detect_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-int colordetect_init(void)
+int colordetect_init(client_info_t *client)
 {   
-    running =  1;
-    if (g_vision_init) {
+    if (g_globals.running) {
         syslog(LOG_INFO, "attempting multiple colordetect_init calls\n");
         return 0;
     }
 
-    g_vision_init = 1;
-    pthread_create(&g_color_thread, 0, color_detect_thread, NULL);
-    pthread_detach(g_color_thread);
+    g_globals.running = 1;
+    g_globals.client = client;
+    g_globals.color.r = 170;
+    g_globals.color.g = 42;
+    g_globals.color.b = 119;
+    g_globals.color.ht = 15;
+    g_globals.color.st = 15;
+    g_globals.color.lt = 15;
+    g_globals.color.filter = 5;
+
+    pthread_create(&g_globals.thread, 0, color_detect_thread, &g_globals);
+    pthread_detach(g_globals.thread);
 
     return 1;
 }
@@ -94,14 +117,13 @@ int colordetect_init(void)
 // -----------------------------------------------------------------------------
 void colordetect_shutdown(void)
 {   
-    running = 0;
-    if (!g_vision_init) {
+    if (!g_globals.running) {
         syslog(LOG_INFO, "calling colordetect_shutdown prior to init\n");
         return;
     }
 
-    g_vision_init = 0;
-    pthread_cancel(g_color_thread);
+    g_globals.running = 0;
+    pthread_cancel(g_globals.thread);
 }
 
 #endif

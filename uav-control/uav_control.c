@@ -512,7 +512,7 @@ int main(int argc, char *argv[])
         if (!flag_no_video) {
             // make a note that tracking isn't possible with video
             syslog(LOG_INFO, "initializing color tracking subsystem\n");
-            if (!colordetect_init()) {
+            if (!colordetect_init(&g_client)) {
                 syslog(LOG_ERR, "failed to initialize tracking subsystem\n");
                 uav_shutdown(EXIT_FAILURE);
             }
