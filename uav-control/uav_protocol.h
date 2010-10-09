@@ -7,7 +7,7 @@
 #define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x00000003  // software version
+#define IDENT_VERSION   0x00000004  // software version
 #define PKT_BUFF_LEN    2048        // max possible packet length
 
 // Packet commands from server to client
@@ -96,7 +96,7 @@
 
 // Color tracking state
 
-#define CTS_STATE_SEARCH    0x00000001      // no detected object in view
+#define CTS_STATE_SEARCHING 0x00000001      // no detected object in view
 #define CTS_STATE_DETECTED  0x00000002      // detected matching object
 
 #define PKT_CTS_STATE       PKT_BASE + 0

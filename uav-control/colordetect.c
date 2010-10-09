@@ -19,6 +19,7 @@ typedef struct color_detect_args
     track_color_t  color;       // current color to track
     track_coords_t box;         // bounding box of tracked color 
     unsigned int   running;     // subsystem is currently running
+    unsigned int   tracking;
     pthread_t      thread;      // handle to color detect thread
 } color_detect_args_t;
 
@@ -27,15 +28,12 @@ static color_detect_args_t g_globals;
 void *color_detect_thread(void *arg)
 {
     color_detect_args_t *data = (color_detect_args_t *)arg;
-    uint32_t cmd_buffer[16];
-    printf("IMAGE PROC\n");
     track_color_t *color = &data->color;
     track_coords_t *box = &data->box;
-
     video_data_t vid_data;
-    uint8_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
-    uint8_t *rgb_buff = NULL;
+    uint8_t *jpg_buf = NULL, *rgb_buff = NULL;
+    uint32_t cmd_buffer[16];
 
     while (data->running) {
         //pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
@@ -52,19 +50,12 @@ void *color_detect_thread(void *arg)
         }
 
         memcpy(jpg_buf, vid_data.data, vid_data.length);     
-        fprintf(stderr, "img %d x %d (sz %d)\n",
-                vid_data.width, vid_data.height, (int)vid_data.length);
         video_unlock();
 
-        if(jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height) != 0) {
+        if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height)) {
             color_detect_rgb(rgb_buff, color, box);
         }
-        //if(rgb_buff != NULL){
-        //    free(rgb_buff);
-        //}
-        
 
-        //runColorDetectionMemory(jpg_buf, &buff_sz, color, box);
         if (box->detected) {
 
             cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
@@ -78,12 +69,27 @@ void *color_detect_thread(void *arg)
             cmd_buffer[PKT_CTS_YC]    = (uint32_t)box->yc;
 
             send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
+            data->tracking = 1;
 
             printf("Bounding box: (%d,%d) (%d,%d)\n",
                    box->x1, box->y1, box->x2, box->y2);
         }
-        else {
-            printf("Target object not found!\n");
+        else if (data->tracking) {
+
+            cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
+            cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
+            cmd_buffer[PKT_CTS_STATE] = CTS_STATE_SEARCHING;
+            cmd_buffer[PKT_CTS_X1]    = 0;
+            cmd_buffer[PKT_CTS_Y1]    = 0;
+            cmd_buffer[PKT_CTS_X2]    = 0;
+            cmd_buffer[PKT_CTS_Y2]    = 0;
+            cmd_buffer[PKT_CTS_XC]    = 0;
+            cmd_buffer[PKT_CTS_YC]    = 0;
+
+            send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
+            data->tracking = 0;
+
+            printf("lost target...\n");
         }
         fflush(stdout);
     }
@@ -100,15 +106,22 @@ int colordetect_init(client_info_t *client)
     }
 
     g_globals.running = 1;
+    g_globals.tracking = 0;
     g_globals.client = client;
-    g_globals.color.r = 170;
-    g_globals.color.g = 42;
-    g_globals.color.b = 119;
-    g_globals.color.ht = 15;
-    g_globals.color.st = 15;
-    g_globals.color.lt = 15;
+
+    // set initial color value to track
+    g_globals.color.r = 159;
+    g_globals.color.g = 39;
+    g_globals.color.b = 100;
+
+    // set initial tracking threshold values
+    g_globals.color.ht = 30;
+    g_globals.color.st = 30;
+    g_globals.color.lt = 30;
+
     g_globals.color.filter = 5;
 
+    // create and kick off the color tracking thread
     pthread_create(&g_globals.thread, 0, color_detect_thread, &g_globals);
     pthread_detach(g_globals.thread);
 
@@ -144,7 +157,7 @@ void color_detect_rgb_dist (const uint8_t *rgb_in, real_t threshold,
 }
 
 // -----------------------------------------------------------------------------
-void color_detect_hsl (uint8_t *rgb_in, 
+void color_detect_hsl(uint8_t *rgb_in, 
         track_color_t *color, track_coords_t *box) 
 {
     // convert detect color from RGB to HSL
@@ -158,7 +171,7 @@ void color_detect_hsl (uint8_t *rgb_in,
 }
 
 // -----------------------------------------------------------------------------
-void color_detect_hsl_fp (uint8_t *rgb_in, 
+void color_detect_hsl_fp(uint8_t *rgb_in, 
         track_color_t *color, track_coords_t *box) 
 {
     // convert detect color from RGB to HSL
@@ -200,66 +213,7 @@ void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
 }
 
 // -----------------------------------------------------------------------------
-void findColorHSL (const uint8_t *hsl_in, 
-        track_color_t *color, track_coords_t *box) {
-    int x = 0, y = 0, consec = 0, noise_filter = color->filter;
-    int img_width = box->width, img_height = box->height;
-    int img_pitch = img_width * 3, scan_start = 0, pix_start = 0;
-    int h_track = color->r, s_track = color->g, l_track = color->b;
-    int h_thresh = color->ht, s_thresh = color->st, l_thresh = color->lt;
-
-    // initialize box to obviously invalid state so we know if we didn't detect
-    int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
-
-    // iterate over each scanline in the source image
-    for (y = 0; y < img_height; ++y) {
-
-        // reset consecutive pixel count and calculate scanline start offset
-        consec = 0;
-        scan_start = y * img_pitch;
-
-        // iterate over each pixel in the source scanline
-        for (x = 0; x < img_width; ++x) {
-
-            pix_start = scan_start + x * 3;
-            // if within threshold, update the bounding box
-            if (abs(hsl_in[pix_start + 0] - h_track) < h_thresh &&
-                abs(hsl_in[pix_start + 1] - s_track) < s_thresh &&
-                abs(hsl_in[pix_start + 2] - l_track) < l_thresh) {
-
-                // only update bounding box of consecutive pixels >= "filter"
-                if (++consec >= noise_filter) {
-                    if (x < x1) x1 = x;
-                    if (x > x2) x2 = x;
-                    if (y < y1) y1 = y;
-                    if (y > y2) y2 = y; 
-                }
-            }
-            else {
-                // reset number of consecutive pixels if we didn't match
-                consec = 0;
-            }
-        }
-    }
-
-    box->x1 = x1;
-    box->y1 = y1;
-    box->x2 = x2;
-    box->y2 = y2;
-
-    if ((0 == box->x2 && box->x1 == box->width) && 
-        (0 == box->y2 && box->y1 == box->height)) {
-        // color was not detected
-        box->detected = 0;
-    }
-    else {
-        // color was detected
-        box->detected = 1;
-    }
-}
-
-// -----------------------------------------------------------------------------
-void COLORimageRGBtoHSL (uint8_t *rgb_in, int width, int height)
+void COLORimageRGBtoHSL(uint8_t *rgb_in, int width, int height)
 {
     int i = 0, j = 0;
     for (i = 0; i < height; i++) {
@@ -273,7 +227,7 @@ void COLORimageRGBtoHSL (uint8_t *rgb_in, int width, int height)
 }
 
 // -----------------------------------------------------------------------------
-void COLORimageRGBtoHSLfixed (uint8_t *rgb_in, int width, int height)
+void COLORimageRGBtoHSLfixed(uint8_t *rgb_in, int width, int height)
 {
     int i = 0, j = 0;
     for (i = 0; i < height; i++) {
@@ -287,7 +241,7 @@ void COLORimageRGBtoHSLfixed (uint8_t *rgb_in, int width, int height)
 }
 
 // -----------------------------------------------------------------------------
-void RGB2HSL2(uint8_t * r, uint8_t * g, uint8_t * b, uint8_t * h, uint8_t * s, uint8_t * l)
+void RGB2HSL2(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *h, uint8_t *s, uint8_t *l)
 {
     real_t _r = *r / 255.0f;
     real_t _g = *g / 255.0f;
@@ -325,8 +279,9 @@ void RGB2HSL2(uint8_t * r, uint8_t * g, uint8_t * b, uint8_t * h, uint8_t * s, u
     (*s) = _s * 255.0f;
     (*l) = _l * 255.0f;
 }
+
 // -----------------------------------------------------------------------------
-void RGB2HSLfixed(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
+void RGB2HSLfixed(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 {
     uint32_t fix255 = INT_2_FIX(255);
     //0.5 is 128
@@ -369,8 +324,9 @@ void RGB2HSLfixed(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
     (*g_s) = (uint8_t)FIX_2_INT(FIX_MULT(s , fix255));
     (*b_l) = (uint8_t)FIX_2_INT(FIX_MULT(l , fix255));
 }
+
 // -----------------------------------------------------------------------------
-void RGB2HSL(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
+void RGB2HSL(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 {
     real_t r = *r_h / 255.0f;
     real_t g = *g_s / 255.0f;
@@ -410,10 +366,68 @@ void RGB2HSL(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
 }
 
 // -----------------------------------------------------------------------------
+void findColorHSL(const uint8_t *hsl_in, 
+        track_color_t *color, track_coords_t *box) {
+    int x = 0, y = 0, consec = 0, noise_filter = color->filter;
+    int img_width = box->width, img_height = box->height;
+    int img_pitch = box->width * 3, scan_start = 0, pix_start = 0;
+
+    // initialize box to obviously invalid state so we know if we didn't detect
+    int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
+
+    // iterate over each scanline in the source image
+    for (y = 0; y < img_height; ++y) {
+
+        // reset consecutive pixel count and calculate scanline start offset
+        consec = 0;
+        scan_start = y * img_pitch;
+
+        // iterate over each pixel in the source scanline
+        for (x = 0; x < img_width; ++x) {
+
+            // if within threshold, update the bounding box
+            pix_start = scan_start + x * 3;
+            if (abs((hsl_in[pix_start + 0]) - color->r) < color->ht &&
+                abs((hsl_in[pix_start + 1]) - color->g) < color->st &&
+                abs((hsl_in[pix_start + 2]) - color->b) < color->lt) {
+                //color->r is the h value
+
+                // only update bounding box of consecutive pixels >= "filter"
+                if (++consec >= noise_filter) {
+                    if (x < x1) x1 = x;
+                    if (x > x2) x2 = x;
+                    if (y < y1) y1 = y;
+                    if (y > y2) y2 = y; 
+                }
+            }
+            else {
+                // reset number of consecutive pixels if we didn't match
+                consec = 0;
+            }
+        }
+    }
+
+    // initialize box to obviously invalid state so we know if we didn't detect
+    box->x1 = x1;
+    box->y1 = y1;
+    box->x2 = x2;
+    box->y2 = y2;
+
+    if ((0 == x2) && (x1 == img_width) && (0 == y2) && (y1 == img_height)) {
+        // color was not detected
+        box->detected = 0;
+    }
+    else {
+        // color was detected
+        box->detected = 1;
+    }
+}
+
+// -----------------------------------------------------------------------------
 void findColorRGB(const uint8_t *rgb_in,
         track_color_t *color, track_coords_t *box)
 {
-    int x = 0, y = 0, consec = 0, noise_filter = 5;
+    int x = 0, y = 0, consec = 0, noise_filter = color->filter;
     int img_width = box->width, img_height = box->height;
     int img_pitch = img_width * 3, scan_start = 0, pix_start = 0;
     int r_track = color->r, g_track = color->g, b_track = color->b;
@@ -458,8 +472,7 @@ void findColorRGB(const uint8_t *rgb_in,
     box->x2 = x2;
     box->y2 = y2;
 
-    if ((0 == box->x2 && box->x1 == box->width) && 
-        (0 == box->y2 && box->y1 == box->height)) {
+    if ((0 == x2) && (x1 == img_width) && (0 == y2) && (y1 == img_height)) {
         // color was not detected
         box->detected = 0;
     }
@@ -473,18 +486,18 @@ void findColorRGB(const uint8_t *rgb_in,
 void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
         track_color_t *color, track_coords_t *box)
 {
-    int x = 0, y = 0, consec = 0, noise_filter = 5;
+    int x = 0, y = 0, consec = 0, noise_filter = color->filter;
     int img_width = box->width, img_height = box->height;
     int img_pitch = img_width * 3, scan_start = 0, pix_start = 0;
     int r_track = color->r, g_track = color->g, b_track = color->b;
     int r_diff, g_diff, b_diff;
     int dist;
 
-    // square the input threshold value
-    threshold *= threshold;
-
     // initialize box to obviously invalid state so we know if we didn't detect
     int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
+
+    // square the input threshold value
+    threshold *= threshold;
 
     // iterate over each scanline in the source image
     for (y = 0; y < img_height; ++y) {
@@ -525,8 +538,7 @@ void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
     box->x2 = x2;
     box->y2 = y2;
 
-    if ((0 == box->x2 && box->x1 == box->width) && 
-        (0 == box->y2 && box->y1 == box->height)) {
+    if ((0 == x2) && (x1 == img_width) && (0 == y2) && (y1 == img_height)) {
         // color was not detected
         box->detected = 0;
     }
