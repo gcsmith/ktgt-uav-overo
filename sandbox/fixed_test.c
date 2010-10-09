@@ -17,24 +17,29 @@ int main(){
     uint8_t r_f = 255;
     uint8_t g_f = 0;
     uint8_t b_f = 0;
+    int i, j;
+    float x, y;
+    for(i=1; i<256; i++){
+        for(j=1; j<256; j++) {
+            x = 1.0/i;
+            y = 1.0/j;
+            xf = 
+            yf = 
+            if( abs(FIX_DIV(x,y) - x/y) > 0 ){
+                printf(abs(FIX_DIV(x,y) - x/y));
+            }
+            if( abs(FIX_MULT(x,y) - x/y) > 0 ){
+                printf(abs(FIX_DIV(x,y) - x/y));
+            }        
+        }
+    }
     
     uint8_t r_d = 255;
     uint8_t g_d = 0;
     uint8_t b_d = 0;
     
     
-    double average_r = 0;
-    double average_g = 0;
-    double average_b = 0;
-    /*
-    double max_r = 0;
-    double max_b = 0;
-    double max_g = 0;
-    
-    double min_r = 255;
-    double min_b = 255;
-    double min_g = 255;
-    */
+   // RGB2HSLfixed(&r,&g,&b);
     
     int i = 0;
     int j = 0;

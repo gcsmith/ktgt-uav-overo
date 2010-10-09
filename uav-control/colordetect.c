@@ -158,6 +158,20 @@ void color_detect_hsl (uint8_t *rgb_in,
 }
 
 // -----------------------------------------------------------------------------
+void color_detect_hsl_fp (uint8_t *rgb_in, 
+        track_color_t *color, track_coords_t *box) 
+{
+    // convert detect color from RGB to HSL
+    RGB2HSLfixed(&color->r, &color->g, &color->b);                     
+                        
+    // convert the image to HSL
+    COLORimageRGBtoHSLfixed(rgb_in, box->width, box->height);
+
+    // find HSL values in image 
+    findColorHSL(rgb_in, color, box);
+}
+
+// -----------------------------------------------------------------------------
 void runColorDetectionFile(const char *infile, const char *outfile,
         track_color_t *color, track_coords_t *box)
 {
@@ -255,6 +269,20 @@ void COLORimageRGBtoHSL (uint8_t *rgb_in, int width, int height)
 }
 
 // -----------------------------------------------------------------------------
+void COLORimageRGBtoHSLfixed (uint8_t *rgb_in, int width, int height)
+{
+    int i = 0, j = 0;
+    for (i = 0; i < height; i++) {
+        for (j = 0; j < width; j++) {
+            // convert single rgb pixel to hsl color space
+            RGB2HSLfixed(&(rgb_in[(i * width * 3) + (j * 3) + 0]),
+                    &(rgb_in[(i * width * 3) + (j * 3) + 1]),
+                    &(rgb_in[(i * width * 3) + (j * 3) + 2]));
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
 void RGB2HSL2(uint8_t * r, uint8_t * g, uint8_t * b, uint8_t * h, uint8_t * s, uint8_t * l)
 {
     real_t _r = *r / 255.0f;
@@ -296,12 +324,12 @@ void RGB2HSL2(uint8_t * r, uint8_t * g, uint8_t * b, uint8_t * h, uint8_t * s, u
 // -----------------------------------------------------------------------------
 void RGB2HSLfixed(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
 {
-    uint32_t fix255 = int2fix(255);
+    uint32_t fix255 = INT_2_FIX(255);
     //0.5 is 128
     
-    uint32_t r = fixdiv(int2fix(*r_h),fix255);
-    uint32_t g = fixdiv(int2fix(*g_s),fix255);
-    uint32_t b = fixdiv(int2fix(*b_l),fix255);
+    uint32_t r = FIX_DIV(INT_2_FIX(*r_h),fix255);
+    uint32_t g = FIX_DIV(INT_2_FIX(*g_s),fix255);
+    uint32_t b = FIX_DIV(INT_2_FIX(*b_l),fix255);
     
     
     uint32_t max;
@@ -312,30 +340,30 @@ void RGB2HSLfixed(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
 
     max = MAX(MAX(r, g), b);
     min = MIN(MIN(r, g), b);
-    l = fixdiv( (max + min), int2fix(2));
+    l = FIX_DIV( (max + min), INT_2_FIX(2));
 
     if (max == min) {
         return;
     }
 
     vm = max - min;
-    s = l > 128 ? fixdiv(vm ,(int2fix(2) - max - min)) : fixdiv(vm , (max + min));
+    s = l > 128 ? FIX_DIV(vm ,(INT_2_FIX(2) - max - min)) : FIX_DIV(vm , (max + min));
 
     if (max == r) {
-        h = fixdiv((g - b) , vm + (g < b ? int2fix(6) : 0));
+        h = FIX_DIV((g - b) , vm + (g < b ? INT_2_FIX(6) : 0));
     }
     else if (max == g) {
-        h = fixdiv((b - r) , vm + int2fix(2));
+        h = FIX_DIV((b - r) , vm + INT_2_FIX(2));
     }
     else {
-        h = fixdiv((r - g) , vm + int2fix(2));
+        h = FIX_DIV((r - g) , vm + INT_2_FIX(2));
     }
 
-    h = fixdiv(h, int2fix(6));
+    h = FIX_DIV(h, INT_2_FIX(6));
 
-    (*r_h) = (uint8_t)fix2int(fixmul(h , fix255));
-    (*g_s) = (uint8_t)fix2int(fixmul(s , fix255));
-    (*b_l) = (uint8_t)fix2int(fixmul(l , fix255));
+    (*r_h) = (uint8_t)FIX_2_INT(FIX_MULT(h , fix255));
+    (*g_s) = (uint8_t)FIX_2_INT(FIX_MULT(s , fix255));
+    (*b_l) = (uint8_t)FIX_2_INT(FIX_MULT(l , fix255));
 }
 // -----------------------------------------------------------------------------
 void RGB2HSL(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)

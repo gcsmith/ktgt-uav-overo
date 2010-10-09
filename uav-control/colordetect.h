@@ -32,6 +32,9 @@ void color_detect_rgb_dist(const uint8_t *rgb_in, real_t threshold,
 // determine color bounding box using hue/saturation/lightness thresholding
 void color_detect_hsl( uint8_t *rgb_in, 
         track_color_t *color, track_coords_t *box);
+        
+void color_detect_hsl_fp( uint8_t *rgb_in, 
+        track_color_t *color, track_coords_t *box);
 
 void runColorDetectionFile(const char *infile, const char *outfile,
         track_color_t *color, track_coords_t *box);
@@ -49,6 +52,7 @@ void findColorHSL (const uint8_t *hsl_in,
         track_color_t *color, track_coords_t *box);
 
 void COLORimageRGBtoHSL( uint8_t *rgb_in, int width, int height);
+void COLORimageRGBtoHSLfixed( uint8_t *rgb_in, int width, int height);
 
 void RGB2HSL(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
 

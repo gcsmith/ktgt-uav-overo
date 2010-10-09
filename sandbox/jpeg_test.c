@@ -71,6 +71,30 @@ float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
 }
 
 // -----------------------------------------------------------------------------
+// Benchmark jpeg decompression and hsl color tracking from memory stream.
+float test_hsl_fp_stream_loop(int iterations, const uint8_t *stream_in,
+        unsigned long length, track_color_t *color)
+{
+    struct timespec t0, t1;
+    track_coords_t box = { 0 };
+    unsigned long j;
+    uint8_t *rgb_buff = NULL;
+    uint8_t img_in[length];
+    track_color_t temp;
+
+    clock_gettime(CLOCK_REALTIME, &t0);
+    for (j = 0; j < iterations; j++) {
+        memcpy(&temp, color, sizeof(track_color_t));
+        memcpy(img_in, stream_in, length);
+        jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
+        color_detect_hsl_fp(rgb_buff, &temp, &box);
+        printf(box.detected ? "." : "?"); fflush(stdout);
+    }
+    clock_gettime(CLOCK_REALTIME, &t1);
+    return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
+}
+
+// -----------------------------------------------------------------------------
 // Benchmark jpeg decompression and rgb color tracking from memory stream.
 float test_rgb1_stream_loop(int iterations, const uint8_t *stream_in,
         unsigned long length, track_color_t *color)
@@ -209,19 +233,23 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < 80; ++i) printf("-"); printf("\n");
     if(!flag_decompress){
-        printf("Decompress loop  : ");
+        printf("Decompress loop   : ");
         printf(" %f FPS\n", test_decompress_loop(40, stream_in, img_size));
     }
     if(!flag_hsl){
-        printf("HSL stream loop  : ");
+        printf("HSL stream loop   : ");
         printf(" %f FPS\n", test_hsl_stream_loop(40, stream_in, img_size, &color));
     }
+    if(!flag_hsl){
+        printf("HSL fp stream loop: ");
+        printf(" %f FPS\n", test_hsl_fp_stream_loop(40, stream_in, img_size, &color));
+    }
     if(!flag_rgb1){
-        printf("RGB1 stream loop : ");
+        printf("RGB1 stream loop  : ");
         printf(" %f FPS\n", test_rgb1_stream_loop(40, stream_in, img_size, &color));
     }
     if(!flag_rgb2){
-        printf("RGB2 stream loop : ");
+        printf("RGB2 stream loop  : ");
         printf(" %f FPS\n", test_rgb2_stream_loop(40, stream_in, img_size, &color));
     }
     for (i = 0; i < 80; ++i) printf("-"); printf("\n");

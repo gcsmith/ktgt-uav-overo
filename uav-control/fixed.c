@@ -1,6 +1,12 @@
 //#include <stdio.h>
 //#define FIXED_Y 8
 
+#define INT_2_FIX (int fixed) (fixed << 8)
+#define FIX_2_INT (int myInt) (myInt >> 8)
+#define FIX_DECIMALS (int fixed) (fixed & 0xff)
+#define FIX_MULT (int x, int y) ((x * y + 128) >> 8)
+#define FIX _DIV (int x, int y) ((x << 8)/y)
+
 int int2fix(int fixed){
     return fixed << 8;
 }
