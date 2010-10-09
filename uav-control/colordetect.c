@@ -8,6 +8,7 @@
 #include "colordetect.h"
 #include "utility.h"
 #include "video_uvc.h"
+#include "fixed.h"
 
 // -----------------------------------------------------------------------------
 #ifndef STANDALONE_DEMO
@@ -292,7 +293,50 @@ void RGB2HSL2(uint8_t * r, uint8_t * g, uint8_t * b, uint8_t * h, uint8_t * s, u
     (*s) = _s * 255.0f;
     (*l) = _l * 255.0f;
 }
+// -----------------------------------------------------------------------------
+void RGB2HSLfixed(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
+{
+    uint32_t fix255 = int2fix(255);
+    //0.5 is 128
+    
+    uint32_t r = fixdiv(int2fix(*r_h),fix255);
+    uint32_t g = fixdiv(int2fix(*g_s),fix255);
+    uint32_t b = fixdiv(int2fix(*b_l),fix255);
+    
+    
+    uint32_t max;
+    uint32_t min;
 
+    uint32_t vm;
+    uint32_t h = 0, s = 0, l = 0; // set to black by default
+
+    max = MAX(MAX(r, g), b);
+    min = MIN(MIN(r, g), b);
+    l = fixdiv( (max + min), int2fix(2));
+
+    if (max == min) {
+        return;
+    }
+
+    vm = max - min;
+    s = l > 128 ? fixdiv(vm ,(int2fix(2) - max - min)) : fixdiv(vm , (max + min));
+
+    if (max == r) {
+        h = fixdiv((g - b) , vm + (g < b ? int2fix(6) : 0));
+    }
+    else if (max == g) {
+        h = fixdiv((b - r) , vm + int2fix(2));
+    }
+    else {
+        h = fixdiv((r - g) , vm + int2fix(2));
+    }
+
+    h = fixdiv(h, int2fix(6));
+
+    (*r_h) = (uint8_t)fix2int(fixmul(h , fix255));
+    (*g_s) = (uint8_t)fix2int(fixmul(s , fix255));
+    (*b_l) = (uint8_t)fix2int(fixmul(l , fix255));
+}
 // -----------------------------------------------------------------------------
 void RGB2HSL(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l)
 {

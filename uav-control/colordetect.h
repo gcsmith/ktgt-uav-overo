@@ -53,6 +53,6 @@ void COLORimageRGBtoHSL( uint8_t *rgb_in, int width, int height);
 void RGB2HSL(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
 
 void RGB2HSL2(uint8_t * r, uint8_t * g, uint8_t * b, uint8_t * h, uint8_t * s, uint8_t * l);
-
+void RGB2HSLfixed(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
 #endif // _UAV_COLORDETECT__H_
 

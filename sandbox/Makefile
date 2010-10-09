@@ -38,6 +38,7 @@ endif
 APP_NAMES = evnt_test \
             gles_test \
             gpio_test \
+            fixed_test \
             jpeg_test \
             madc_test \
             mjpg_test \
@@ -47,6 +48,10 @@ APP_NAMES = evnt_test \
 EVNT_OBJS = evnt_test.o
 GLES_OBJS = gles_test.o
 GPIO_OBJS = gpio_test.o
+FIXED_OBJS = fixed_test.o \
+            $(UC)/colordetect.o \
+            $(UC)/readwritejpeg.o \
+            $(UC)/fixed.o
 JPEG_OBJS = jpeg_test.o \
             $(UC)/colordetect.o \
             $(UC)/readwritejpeg.o
@@ -63,6 +68,7 @@ RSSI_OBJS = rssi_test.o
 OBJ_FILES = ${EVNT_OBJS} \
             ${GLES_OBJS} \
             ${GPIO_OBJS} \
+            ${FIXED_OBJS} \
             ${JPEG_OBJS} \
             ${MADC_OBJS} \
             ${MJPG_OBJS} \
@@ -83,6 +89,10 @@ gles_test: ${GLES_OBJS}
 gpio_test: ${GPIO_OBJS}
 	@echo "[LD] $@"
 	$(CC) $(LDFLAGS) -lpthread -o $@ $^ -L../gpio-lib -lgpio
+	
+fixed_test: ${FIXED_OBJS}
+	@echo "[LD] $@"
+	$(CC) $(LDFLAGS) -lpthread -ljpeg -lm -lrt -o $@ $^ 
 
 jpeg_test: ${JPEG_OBJS}
 	@echo "[LD] $@"
