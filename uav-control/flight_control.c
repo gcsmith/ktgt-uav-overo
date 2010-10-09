@@ -76,6 +76,9 @@ void *takeoff()
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
 
+    // We'll need the pitch controller for takeoff as well to account for the
+    // helicopter being front or back heavy, this will ensure the helicopter
+    // goes straight up
     while (!stable)
     {
         pthread_mutex_lock(&usrf->lock);
@@ -360,13 +363,15 @@ void fc_close_controls()
 // -----------------------------------------------------------------------------
 void fc_takeoff()
 {
-    pthread_create(&takeoff_thrd, NULL, takeoff, NULL);
+    if (fc_alive)
+        pthread_create(&takeoff_thrd, NULL, takeoff, NULL);
 }
 
 // -----------------------------------------------------------------------------
 void fc_land()
 {
-    pthread_create(&land_thrd, NULL, land, NULL);
+    if (fc_alive)
+        pthread_create(&land_thrd, NULL, land, NULL);
 }
 
 // -----------------------------------------------------------------------------
@@ -424,28 +429,31 @@ void flight_control(ctl_sigs_t *sigs, int chnl_flags)
     pthread_mutex_unlock(&fc_signals_event);
 #endif
 
-    // adjust altitude if specified
-    if (chnl_flags & VCM_AXIS_ALT)
+    if (fc_alive)
     {
-        assign_value(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt);
-    }
-
-    // adjust pitch if specified
-    if (chnl_flags & VCM_AXIS_PITCH)
-    {
-        assign_value(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch);
-    }
-
-    // adjust roll if specified
-    if (chnl_flags & VCM_AXIS_ROLL)
-    {
-        assign_value(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll);
-    }
-
-    // adjust yaw if specified
-    if (chnl_flags & VCM_AXIS_YAW)
-    {
-        assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw);
+        // adjust altitude if specified
+        if (chnl_flags & VCM_AXIS_ALT)
+        {
+            assign_value(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt);
+        }
+       
+        // adjust pitch if specified
+        if (chnl_flags & VCM_AXIS_PITCH)
+        {
+            assign_value(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch);
+        }
+       
+        // adjust roll if specified
+        if (chnl_flags & VCM_AXIS_ROLL)
+        {
+            assign_value(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll);
+        }
+       
+        // adjust yaw if specified
+        if (chnl_flags & VCM_AXIS_YAW)
+        {
+            assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw);
+        }
     }
 }
 

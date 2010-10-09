@@ -122,8 +122,10 @@ int read_vbatt(void)
     memset(&parms, 0, sizeof(parms));
     parms.channel = ADC_VBATT_PORT;
 
-    ioctl(adc_fd, TWL4030_MADC_IOCX_ADC_RAW_READ, &parms);
-    voltage = ((unsigned int)parms.result) / 1024.f * ADC_INPUT_RANGE;
+    if (ioctl(adc_fd, TWL4030_MADC_IOCX_ADC_RAW_READ, &parms) != -1)
+        voltage = ((unsigned int)parms.result) / 1024.f * ADC_INPUT_RANGE;
+    else
+        voltage = VBATT_MIN;
 
     if (voltage > VBATT_MAX)
         voltage = VBATT_MAX;

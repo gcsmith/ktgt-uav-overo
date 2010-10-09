@@ -364,6 +364,7 @@ int main(int argc, char *argv[])
     int index, opt, log_opt, baud = B57600;
     int flag_verbose = 0, flag_daemonize = 0;
     int flag_no_adc = 0, flag_no_video = 0, flag_no_gpio = 0, flag_no_track = 0;
+    int flag_no_fc = 0;
     int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
     char port_str[DEV_LEN];
@@ -387,6 +388,7 @@ int main(int argc, char *argv[])
         { "no-gpio",    no_argument,       &flag_no_gpio,  1 },
         { "no-track",   no_argument,       &flag_no_track, 1 },
         { "no-video",   no_argument,       &flag_no_video, 1 },
+        { "no-fc",      no_argument,       &flag_no_fc,    1 },
         { 0, 0, 0, 0 }
     };
 
@@ -536,7 +538,15 @@ int main(int argc, char *argv[])
     }
 
     // open PWM ports for mixed controlling
-    fc_open_controls(&g_gpio_alt);
+    if (!flag_no_fc)
+    {
+        syslog(LOG_INFO, "opening flight control\n");
+        if (fc_open_controls(&g_gpio_alt) > 0)
+        {
+            syslog(LOG_ERR, "failed to open flight control\n");
+            uav_shutdown(EXIT_FAILURE);
+        }
+    } 
 
     // server entry point
     run_server(&g_imu, port_str);
