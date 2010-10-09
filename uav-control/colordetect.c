@@ -203,37 +203,36 @@ void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
 void findColorHSL (const uint8_t *hsl_in, 
         track_color_t *color, track_coords_t *box) {
     int x = 0, y = 0, consec = 0, noise_filter = color->filter;
-    int img_pitch = box->width * 3, scan_start = 0, pix_start = 0;
+    int img_width = box->width, img_height = box->height;
+    int img_pitch = img_width * 3, scan_start = 0, pix_start = 0;
+    int h_track = color->r, s_track = color->g, l_track = color->b;
+    int h_thresh = color->ht, s_thresh = color->st, l_thresh = color->lt;
 
     // initialize box to obviously invalid state so we know if we didn't detect
-    box->x1 = box->width;
-    box->y1 = box->height;
-    box->x2 = 0;
-    box->y2 = 0;
+    int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
 
     // iterate over each scanline in the source image
-    for (y = 0; y < box->height; ++y) {
+    for (y = 0; y < img_height; ++y) {
 
         // reset consecutive pixel count and calculate scanline start offset
         consec = 0;
         scan_start = y * img_pitch;
 
         // iterate over each pixel in the source scanline
-        for (x = 0; x < box->width; ++x) {
+        for (x = 0; x < img_width; ++x) {
 
-            // if within threshold, update the bounding box
             pix_start = scan_start + x * 3;
-            if (abs((hsl_in[pix_start + 0]) - color->r) < color->ht &&
-                abs((hsl_in[pix_start + 1]) - color->g) < color->st &&
-                abs((hsl_in[pix_start + 2]) - color->b) < color->lt) {
-                //color->r is the h value
+            // if within threshold, update the bounding box
+            if (abs(hsl_in[pix_start + 0] - h_track) < h_thresh &&
+                abs(hsl_in[pix_start + 1] - s_track) < s_thresh &&
+                abs(hsl_in[pix_start + 2] - l_track) < l_thresh) {
 
                 // only update bounding box of consecutive pixels >= "filter"
                 if (++consec >= noise_filter) {
-                    if (x < box->x1) box->x1 = x;
-                    if (x > box->x2) box->x2 = x;
-                    if (y < box->y1) box->y1 = y;
-                    if (y > box->y2) box->y2 = y; 
+                    if (x < x1) x1 = x;
+                    if (x > x2) x2 = x;
+                    if (y < y1) y1 = y;
+                    if (y > y2) y2 = y; 
                 }
             }
             else {
@@ -242,6 +241,11 @@ void findColorHSL (const uint8_t *hsl_in,
             }
         }
     }
+
+    box->x1 = x1;
+    box->y1 = y1;
+    box->x2 = x2;
+    box->y2 = y2;
 
     if ((0 == box->x2 && box->x1 == box->width) && 
         (0 == box->y2 && box->y1 == box->height)) {
