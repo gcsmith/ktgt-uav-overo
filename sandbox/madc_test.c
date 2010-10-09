@@ -71,6 +71,7 @@ int main (int argc, char *argv[])
 {
     int fd, rc;
     struct twl4030_madc_user_parms parms;
+    float result;
 
     if (0 > (fd = open("/dev/twl4030-madc", O_RDWR | O_NONBLOCK))) {
         perror("failed to open /dev/twl4030-madc\n");
@@ -82,7 +83,8 @@ int main (int argc, char *argv[])
         parms.channel = channels[2].number;
 
         rc = ioctl(fd, TWL4030_MADC_IOCX_ADC_RAW_READ, &parms);
-        printf("read %x from %s\n", parms.result, channels[2].name);
+        result = ((unsigned int)parms.result) / 1024.f * channels[2].input_range; 
+        printf("read %x from %s, (%f V)\n", parms.result, channels[2].name, result);
     }
 
     close(fd);

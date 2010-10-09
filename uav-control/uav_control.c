@@ -43,6 +43,7 @@ static int g_muxsel = -1;
 // Perform final shutdown and cleanup.
 void uav_shutdown(int rc)
 {
+    adc_close_channels();
     fc_close_controls();
 
     syslog(LOG_INFO, "shutting down gpio user space subsystem...\n");
@@ -200,7 +201,8 @@ void run_server(imu_data_t *imu, const char *port)
                 pthread_mutex_unlock(&imu->lock);
 
                 cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
-                cmd_buffer[PKT_VTI_BATT] = 100;
+
+                cmd_buffer[PKT_VTI_BATT] = read_vbatt();
 
                 pthread_mutex_lock(&g_gpio_alt.lock);
                 // taken from maxbotix from spec: 147 us == 1 inch
@@ -521,6 +523,15 @@ int main(int argc, char *argv[])
             syslog(LOG_INFO, "color tracking not possible without video");
         }
     }
+
+    // open ADC ports for battery monitoring
+    if (adc_open_channels() == -1)
+    {
+        syslog(LOG_ERR, "failed to open adc channels\n");
+        uav_shutdown(EXIT_FAILURE);
+    }
+    else
+        syslog(LOG_INFO, "opened adc channels for battery monitoring\n");
 
     // open PWM ports for mixed controlling
     fc_open_controls(&g_gpio_alt);

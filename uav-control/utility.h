@@ -21,6 +21,12 @@ typedef struct client_info
 
 void daemonize(void);
 
+int adc_open_channels(void);
+
+void adc_close_channels(void);
+
+int read_vbatt(void);
+
 uint32_t read_wlan_rssi(int sock);
 
 int recv_packet(client_info_t *client, uint32_t *cmd_buffer);

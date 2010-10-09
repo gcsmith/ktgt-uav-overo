@@ -10,11 +10,28 @@
 #include <linux/wireless.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <string.h>
 
 #include "utility.h"
 #include "uav_protocol.h"
+
+typedef uint8_t u8;
+typedef uint16_t u16;
+
+#include "twl4030-madc.h"
+
+struct twl4030_madc_user_parms parms;
+int adc_fd;
+
+#define ADC_INPUT_RANGE 2.5f
+#define ADC_VBATT_PORT  4
+
+#define VBATT_MIN       1.0f // needs to be verified as the minimum
+#define VBATT_MAX       2.0f
+#define VBATT_RANGE     (VBATT_MAX - VBATT_MIN)
 
 // -----------------------------------------------------------------------------
 // Daemonize the process by forking from init and chdir-ing to /.
@@ -82,6 +99,41 @@ uint32_t read_wlan_rssi(int sock)
     }
 
     return rssi;
+}
+
+// -----------------------------------------------------------------------------
+int adc_open_channels(void)
+{
+    adc_fd = open("/dev/twl4030-madc", O_RDWR | O_NONBLOCK);
+    return adc_fd;
+}
+
+// -----------------------------------------------------------------------------
+void adc_close_channels(void)
+{
+    close(adc_fd);
+}
+
+// -----------------------------------------------------------------------------
+int read_vbatt(void)
+{
+    float voltage;
+
+    memset(&parms, 0, sizeof(parms));
+    parms.channel = ADC_VBATT_PORT;
+
+    ioctl(adc_fd, TWL4030_MADC_IOCX_ADC_RAW_READ, &parms);
+    voltage = ((unsigned int)parms.result) / 1024.f * ADC_INPUT_RANGE;
+
+    if (voltage > VBATT_MAX)
+        voltage = VBATT_MAX;
+    if (voltage < VBATT_MIN)
+        voltage = VBATT_MIN;
+
+    voltage = (voltage - VBATT_MIN) / VBATT_RANGE;
+    voltage = (int)(voltage * 100);
+    
+    return (int)voltage;
 }
 
 // -----------------------------------------------------------------------------
