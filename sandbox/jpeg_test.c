@@ -9,24 +9,23 @@
 #include <assert.h>
 #include <string.h>
 
-
 #include "readwritejpeg.h"
 #include "colordetect.h"
+
+#define MAX_PATH 256
+#define PUT_BANNER(c) for (i = 0; i < c; ++i) printf("-"); printf("\n");
 
 // -----------------------------------------------------------------------------
 // Return the difference from (t1 - t0) in microseconds.
 unsigned long compute_delta(struct timespec *t0, struct timespec *t1)
 {
-    unsigned long delta = (t1->tv_nsec / 1000) - (t0->tv_nsec / 1000);
-    if (t1->tv_sec > t0->tv_sec) {
-        delta += 1000000 * (t1->tv_sec - t0->tv_sec);
-    }
-    return delta;
+    return (t1->tv_nsec / 1000) - (t0->tv_nsec / 1000) +
+           (t1->tv_sec - t0->tv_sec) * 1000000;
 }
 
 // -----------------------------------------------------------------------------
 // Benchmark jpeg decompression from memory stream.
-float test_decompress_loop(int iterations, const uint8_t *stream_in,
+float test_decompress(int iterations, const uint8_t *stream_in,
         unsigned long length)
 {
     struct timespec t0, t1;
@@ -48,7 +47,7 @@ float test_decompress_loop(int iterations, const uint8_t *stream_in,
 
 // -----------------------------------------------------------------------------
 // Benchmark jpeg decompression and hsl color tracking from memory stream.
-float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
+float test_hsl_stream(int iterations, const uint8_t *stream_in,
         unsigned long length, track_color_t *color)
 {
     struct timespec t0, t1;
@@ -72,7 +71,7 @@ float test_hsl_stream_loop(int iterations, const uint8_t *stream_in,
 
 // -----------------------------------------------------------------------------
 // Benchmark jpeg decompression and hsl color tracking from memory stream.
-float test_hsl_fp_stream_loop(int iterations, const uint8_t *stream_in,
+float test_hsl_fp_stream(int iterations, const uint8_t *stream_in,
         unsigned long length, track_color_t *color)
 {
     struct timespec t0, t1;
@@ -96,7 +95,7 @@ float test_hsl_fp_stream_loop(int iterations, const uint8_t *stream_in,
 
 // -----------------------------------------------------------------------------
 // Benchmark jpeg decompression and rgb color tracking from memory stream.
-float test_rgb1_stream_loop(int iterations, const uint8_t *stream_in,
+float test_rgb1_stream(int iterations, const uint8_t *stream_in,
         unsigned long length, track_color_t *color)
 {
     struct timespec t0, t1;
@@ -122,7 +121,7 @@ float test_rgb1_stream_loop(int iterations, const uint8_t *stream_in,
 
 // -----------------------------------------------------------------------------
 // Benchmark jpeg decompression and rgb color tracking from memory stream.
-float test_rgb2_stream_loop(int iterations, const uint8_t *stream_in,
+float test_rgb2_stream(int iterations, const uint8_t *stream_in,
         unsigned long length, track_color_t *color)
 {
     struct timespec t0, t1;
@@ -161,7 +160,8 @@ void print_usage()
 // -----------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    int flag_decompress = 0, flag_hsl = 0, flag_rgb1 = 0, flag_rgb2 = 0, opt, index;
+    int flag_decompress = 0, flag_hsl = 0, flag_rgb1 = 0, flag_rgb2 = 0;
+    int opt, index;
     unsigned long img_size, bytes_read, i;
     uint8_t *stream_in;
     FILE *jpeg_fd;
@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
     };
 
     // default jpeg image file path to load
-    char filename[256] = "./Data/frisbee.jpg";
+    char filename[MAX_PATH] = "./Data/frisbee.jpg";
 
     struct option long_options[] = {
         { "file",           required_argument, NULL,            'f' },
@@ -192,13 +192,13 @@ int main(int argc, char *argv[])
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
         case 'f':
-            strncpy(filename, optarg, 256);
+            strncpy(filename, optarg, MAX_PATH);
             break;
         case 'r':
-            sscanf(optarg,"%c,%c,%c",&color.r,&color.g,&color.b);
+            sscanf(optarg, "%c,%c,%c", &color.r, &color.g, &color.b);
             break;
         case 't':
-            sscanf(optarg,"%c,%c,%c",&color.ht,&color.st,&color.lt);
+            sscanf(optarg, "%c,%c,%c", &color.ht, &color.st, &color.lt);
             break;
         case 'h': // fall through
         case '?':
@@ -231,29 +231,34 @@ int main(int argc, char *argv[])
     }
     printf("successfully read %lu bytes from \"%s\"\n", img_size, filename);
 
-    for (i = 0; i < 80; ++i) printf("-"); printf("\n");
-    if(!flag_decompress){
-        printf("Decompress loop   : ");
-        printf(" %f FPS\n", test_decompress_loop(40, stream_in, img_size));
-    }
-    if(!flag_hsl){
-        printf("HSL stream loop   : ");
-        printf(" %f FPS\n", test_hsl_stream_loop(40, stream_in, img_size, &color));
-    }
-    if(!flag_hsl){
-        printf("HSL fp stream loop: ");
-        printf(" %f FPS\n", test_hsl_fp_stream_loop(40, stream_in, img_size, &color));
-    }
-    if(!flag_rgb1){
-        printf("RGB1 stream loop  : ");
-        printf(" %f FPS\n", test_rgb1_stream_loop(40, stream_in, img_size, &color));
-    }
-    if(!flag_rgb2){
-        printf("RGB2 stream loop  : ");
-        printf(" %f FPS\n", test_rgb2_stream_loop(40, stream_in, img_size, &color));
-    }
-    for (i = 0; i < 80; ++i) printf("-"); printf("\n");
+    PUT_BANNER(80);
 
+    if (!flag_decompress) {
+        printf("Decompress loop    : ");
+        printf(" %f FPS\n", test_decompress(40, stream_in, img_size));
+    }
+
+    if (!flag_hsl) {
+        printf("HSL stream loop    : ");
+        printf(" %f FPS\n", test_hsl_stream(40, stream_in, img_size, &color));
+    }
+
+    if (!flag_hsl) {
+        printf("HSL fp stream loop : ");
+        printf(" %f FPS\n", test_hsl_fp_stream(40, stream_in, img_size, &color));
+    }
+
+    if (!flag_rgb1) {
+        printf("RGB1 stream loop   : ");
+        printf(" %f FPS\n", test_rgb1_stream(40, stream_in, img_size, &color));
+    }
+
+    if (!flag_rgb2) {
+        printf("RGB2 stream loop   : ");
+        printf(" %f FPS\n", test_rgb2_stream(40, stream_in, img_size, &color));
+    }
+
+    PUT_BANNER(80);
     return 0;
 }
 
