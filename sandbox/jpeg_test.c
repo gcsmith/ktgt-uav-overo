@@ -124,6 +124,9 @@ void print_usage()
 {
     printf("usage: jpeg_test [options]\n\n"
            "Program options:\n"
+           "  -f [ --file ] arg       : specify a path to an image file\n"
+           "  -r [ --rgb ] arg        : specify an rgb color value\n"
+           "  -t [ --thresh ] arg     : specify a set of HSL thresholds\n"
            "  -h [ --help ]           : display this usage message\n"
            "  --no-decompress         : do not run the decompression benchmark\n"
            "  --no-hsl                : do not run the hsl benchmark\n"
@@ -160,7 +163,7 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "frth?";
+    static const char *str = ":f:r:th?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
