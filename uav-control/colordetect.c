@@ -341,9 +341,6 @@ void RGB2HSL(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 
     h /= 6.0f;
 
-    printf("%f %f %f\n",h,s,l);
-
-
     (*r_h) = h * 255.0f;
     (*g_s) = s * 255.0f;
     (*b_l) = l * 255.0f;
