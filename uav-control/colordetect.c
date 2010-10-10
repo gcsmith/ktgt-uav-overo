@@ -250,10 +250,6 @@ void RGB2HSL2(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *h, uint8_t *s, uint8_
     min = MIN(MIN(_r, _g), _b);
     _l = (max + min) / 2.0f;
 
-    if (max == min) {
-        return;
-    }
-
     vm = max - min;
     _s = _l > 0.5f ? vm / (2.0f - max - min) : vm / (max + min);
 
@@ -284,7 +280,6 @@ void RGB2HSLfixed(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
     uint32_t g = FIX_DIV(INT_2_FIX(*g_s),fix255);
     uint32_t b = FIX_DIV(INT_2_FIX(*b_l),fix255);
     
-    
     uint32_t max;
     uint32_t min;
 
@@ -294,10 +289,6 @@ void RGB2HSLfixed(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
     max = MAX(MAX(r, g), b);
     min = MIN(MIN(r, g), b);
     l = FIX_DIV( (max + min), INT_2_FIX(2));
-
-    if (max == min) {
-        return;
-    }
 
     vm = max - min;
     s = l > 128 ? FIX_DIV(vm ,(INT_2_FIX(2) - max - min)) : FIX_DIV(vm , (max + min));
@@ -335,10 +326,6 @@ void RGB2HSL(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
     min = MIN(MIN(r, g), b);
     l = (max + min) / 2.0f;
 
-    if (max == min) {
-        return;
-    }
-
     vm = max - min;
     s = l > 0.5f ? vm / (2.0f - max - min) : vm / (max + min);
 
@@ -353,6 +340,9 @@ void RGB2HSL(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
     }
 
     h /= 6.0f;
+
+    printf("%f %f %f\n",h,s,l);
+
 
     (*r_h) = h * 255.0f;
     (*g_s) = s * 255.0f;
