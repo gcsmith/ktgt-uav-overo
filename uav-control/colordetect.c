@@ -104,14 +104,20 @@ int colordetect_init(client_info_t *client)
     g_globals.client = client;
 
     // set initial color value to track
-    g_globals.color.r = 159;
-    g_globals.color.g = 39;
-    g_globals.color.b = 100;
+    g_globals.color.r = 144;
+    g_globals.color.g = 46;
+    g_globals.color.b = 69;
 
     // set initial tracking threshold values
+#if 0
+    g_globals.color.ht = 21;
+    g_globals.color.st = 71;
+    g_globals.color.lt = 30;
+#else
     g_globals.color.ht = 30;
     g_globals.color.st = 30;
     g_globals.color.lt = 30;
+#endif
 
     g_globals.color.filter = 5;
 
@@ -132,6 +138,11 @@ void colordetect_shutdown(void)
 
     g_globals.running = 0;
     pthread_cancel(g_globals.thread);
+}
+
+void colordetect_set_track_color(track_color_t *color)
+{
+    g_globals.color = *color;
 }
 
 #endif

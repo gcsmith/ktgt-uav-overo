@@ -104,6 +104,7 @@ void run_server(imu_data_t *imu, const char *port)
     uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
+    track_color_t tc;
 
     union {
         float f;
@@ -313,6 +314,16 @@ void run_server(imu_data_t *imu, const char *port)
                 client_sigs.alt = temp.f;
                 fprintf(stderr, "received throttle event %f\n", client_sigs.alt);
                 flight_control(&client_sigs, VCM_AXIS_ALT);
+                break;
+            case CLIENT_REQ_TRACK_COLOR:
+                tc.r = cmd_buffer[PKT_TC_CHANNEL_0];
+                tc.g = cmd_buffer[PKT_TC_CHANNEL_1];
+                tc.b = cmd_buffer[PKT_TC_CHANNEL_2];
+                tc.ht = cmd_buffer[PKT_TC_THRESH_0];
+                tc.st = cmd_buffer[PKT_TC_THRESH_1];
+                tc.lt = cmd_buffer[PKT_TC_THRESH_2];
+                tc.filter = 5;
+                colordetect_set_track_color(&tc);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes
