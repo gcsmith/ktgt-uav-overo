@@ -76,16 +76,10 @@ void *color_detect_thread(void *arg)
         }
         else if (data->tracking) {
 
+            memset(cmd_buffer, 0, PKT_CTS_LENGTH);
             cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
             cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
             cmd_buffer[PKT_CTS_STATE] = CTS_STATE_SEARCHING;
-            cmd_buffer[PKT_CTS_X1]    = 0;
-            cmd_buffer[PKT_CTS_Y1]    = 0;
-            cmd_buffer[PKT_CTS_X2]    = 0;
-            cmd_buffer[PKT_CTS_Y2]    = 0;
-            cmd_buffer[PKT_CTS_XC]    = 0;
-            cmd_buffer[PKT_CTS_YC]    = 0;
-
             send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
             data->tracking = 0;
 

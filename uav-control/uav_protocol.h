@@ -20,6 +20,7 @@
 #define SERVER_ACK_MJPG_FRAME   5   // transmit a single frame of video
 #define SERVER_ACK_SET_CTL_MODE 6   // acknowledge control mode
 #define SERVER_UPDATE_TRACKING  7   // send updated tracking state information
+#define SERVER_ACK_TRACK_COLOR  8
 
 // Packet commands from client to server
 
@@ -31,6 +32,7 @@
 #define CLIENT_REQ_SET_CTL_MODE 5   // request a change in control mode
 #define CLIENT_REQ_FLIGHT_CTL   6   // command the helicopter's flight
 #define CLIENT_REQ_THRO_EVT     7   // command helicopter to adjust throttle
+#define CLIENT_REQ_TRACK_COLOR  8
 
 // General packet offsets
 
@@ -107,6 +109,18 @@
 #define PKT_CTS_XC          PKT_BASE + 5
 #define PKT_CTS_YC          PKT_BASE + 6
 #define PKT_CTS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 7))
+
+#define TC_COLOR_FMT_RGB    0x00000001      // red/green/blue channels
+#define TC_COLOR_FMT_HSL    0x00000002      // hue/saturation/lightness channels
+
+#define PKT_TC_COLOR_FMT    PKT_BASE + 0
+#define PKT_TC_CHANNEL_0    PKT_BASE + 1
+#define PKT_TC_CHANNEL_1    PKT_BASE + 2
+#define PKT_TC_CHANNEL_2    PKT_BASE + 3
+#define PKT_TC_THRESH_0     PKT_BASE + 4
+#define PKT_TC_THRESH_1     PKT_BASE + 5
+#define PKT_TC_THRESH_2     PKT_BASE + 6
+#define PKT_TC_LENGTH       (sizeof(uint32_t) * (PKT_BASE + 7))
 
 #endif // _UAV_PROTOCOL__H_
 
