@@ -9,6 +9,10 @@
 #include <termios.h>
 #include <pthread.h>
 
+#define IMU_DATA_YAW   0
+#define IMU_DATA_PITCH 1
+#define IMU_DATA_ROLL  2
+
 typedef struct imu_data
 {
     int running;

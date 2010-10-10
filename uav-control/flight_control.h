@@ -2,9 +2,10 @@
 #define FLIGHT_CONTROL__H_
 
 #include <pthread.h>
-#include "uav_protocol.h"
 #include "gpio_event.h"
 #include "pwm_lib.h"
+#include "razor_imu.h"
+#include "uav_protocol.h"
 
 #define PWM_ALT     0
 #define PWM_PITCH   1
@@ -32,11 +33,11 @@ typedef struct pwm_channel
     unsigned int rng_min, rng_max;
 } pwm_channel_t;
 
-int fc_open_controls(gpio_event_t *pwm_usrf);
+int fc_open_controls(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu);
 void fc_close_controls();
 void fc_takeoff();
 void fc_land();
-void fc_update_axes(int chnl_flags);
+void fc_update_vcm(int axes, int type);
 void flight_control(ctl_sigs_t *sigs, int chnl_flags);
 
 #endif // FLIGHT_CONTROL__H_

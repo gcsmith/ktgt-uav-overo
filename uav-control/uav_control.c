@@ -278,7 +278,7 @@ void run_server(imu_data_t *imu, const char *port)
                     continue;
                 }
 
-                fc_update_axes(vcm_axes);
+                fc_update_vcm(vcm_axes, vcm_type);
 
                 cmd_buffer[PKT_COMMAND]  = SERVER_ACK_SET_CTL_MODE;
                 cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
@@ -540,7 +540,7 @@ int main(int argc, char *argv[])
     // open PWM ports for mixed controlling
     if (!flag_no_fc) {
         syslog(LOG_INFO, "opening flight control\n");
-        if (0 > fc_open_controls(&g_gpio_alt)) {
+        if (0 > fc_open_controls(&g_gpio_alt, &g_imu)) {
             syslog(LOG_ERR, "failed to open flight control\n");
             uav_shutdown(EXIT_FAILURE);
         }
