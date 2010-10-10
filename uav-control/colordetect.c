@@ -113,7 +113,7 @@ int colordetect_init(client_info_t *client)
     g_globals.color.st = 30;
     g_globals.color.lt = 30;
 
-    g_globals.color.filter = 5;
+    g_globals.color.filter = 15;
 
     // create and kick off the color tracking thread
     pthread_create(&g_globals.thread, 0, color_detect_thread, &g_globals);
@@ -257,6 +257,13 @@ void RGB2HSL2(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *h, uint8_t *s, uint8_
     min = MIN(MIN(_r, _g), _b);
     _l = (max + min) / 2.0f;
 
+    if (min == max) {
+        *h = 0;
+        *s = 0;
+        *l = _l * 255.0f;
+        return;
+    }
+
     vm = max - min;
     _s = _l > 0.5f ? vm / (2.0f - max - min) : vm / (max + min);
 
@@ -272,9 +279,9 @@ void RGB2HSL2(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *h, uint8_t *s, uint8_
 
     _h /= 6.0f;
 
-    (*h) = _h * 255.0f;
-    (*s) = _s * 255.0f;
-    (*l) = _l * 255.0f;
+    *h = _h * 255.0f;
+    *s = _s * 255.0f;
+    *l = _l * 255.0f;
 }
 
 // -----------------------------------------------------------------------------
@@ -296,6 +303,13 @@ void RGB2HSLfixed(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
     max = MAX(MAX(r, g), b);
     min = MIN(MIN(r, g), b);
     l = FIX_DIV( (max + min), INT_2_FIX(2));
+
+    if (min == max) {
+        *r_h = 0;
+        *g_s = 0;
+        *b_l = (uint8_t)FIX_2_INT(FIX_MULT(l, fix255));
+        return;
+    }
 
     vm = max - min;
     s = l > 128 ? FIX_DIV(vm ,(INT_2_FIX(2) - max - min)) : FIX_DIV(vm , (max + min));
@@ -332,6 +346,13 @@ void RGB2HSL(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
     max = MAX(MAX(r, g), b);
     min = MIN(MIN(r, g), b);
     l = (max + min) / 2.0f;
+
+    if (min == max) {
+        *r_h = 0;
+        *g_s = 0;
+        *b_l = l * 255.0f;
+        return;
+    }
 
     vm = max - min;
     s = l > 0.5f ? vm / (2.0f - max - min) : vm / (max + min);
