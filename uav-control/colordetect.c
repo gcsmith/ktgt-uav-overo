@@ -53,7 +53,7 @@ void *color_detect_thread(void *arg)
         video_unlock();
 
         if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height)) {
-            color_detect_rgb(rgb_buff, color, box);
+            color_detect_hsl(rgb_buff, color, box);
         }
 
         if (box->detected) {
@@ -104,20 +104,14 @@ int colordetect_init(client_info_t *client)
     g_globals.client = client;
 
     // set initial color value to track
-    g_globals.color.r = 144;
-    g_globals.color.g = 46;
-    g_globals.color.b = 69;
+    g_globals.color.r = 159;
+    g_globals.color.g = 39;
+    g_globals.color.b = 100;
 
     // set initial tracking threshold values
-#if 0
-    g_globals.color.ht = 21;
-    g_globals.color.st = 71;
-    g_globals.color.lt = 30;
-#else
-    g_globals.color.ht = 30;
+    g_globals.color.ht = 5;
     g_globals.color.st = 30;
     g_globals.color.lt = 30;
-#endif
 
     g_globals.color.filter = 5;
 
@@ -149,44 +143,46 @@ void colordetect_set_track_color(track_color_t *color)
 
 // -----------------------------------------------------------------------------
 void color_detect_rgb(const uint8_t *rgb_in,
-        track_color_t *color, track_coords_t *box)
+        const track_color_t *color, track_coords_t *box)
 {
     findColorRGB(rgb_in, color, box);
 }
 
 // -----------------------------------------------------------------------------
 void color_detect_rgb_dist (const uint8_t *rgb_in, real_t threshold,
-        track_color_t *color, track_coords_t *box)
+        const track_color_t *color, track_coords_t *box)
 {
     findColorRGB_dist(rgb_in, threshold, color, box);
 }
 
 // -----------------------------------------------------------------------------
 void color_detect_hsl(uint8_t *rgb_in, 
-        track_color_t *color, track_coords_t *box) 
+        const track_color_t *color, track_coords_t *box) 
 {
+    track_color_t track_color = *color;
     // convert detect color from RGB to HSL
-    RGB2HSL(&color->r, &color->g, &color->b);                     
-                        
+    RGB2HSL(&track_color.r, &track_color.g, &track_color.b);                     
+                
     // convert the image to HSL
     COLORimageRGBtoHSL(rgb_in, box->width, box->height);
 
     // find HSL values in image 
-    findColorHSL(rgb_in, color, box);
+    findColorHSL(rgb_in, &track_color, box);
 }
 
 // -----------------------------------------------------------------------------
 void color_detect_hsl_fp(uint8_t *rgb_in, 
-        track_color_t *color, track_coords_t *box) 
+        const track_color_t *color, track_coords_t *box) 
 {
+    track_color_t track_color = *color;
     // convert detect color from RGB to HSL
-    RGB2HSLfixed(&color->r, &color->g, &color->b);                     
+    RGB2HSLfixed(&track_color.r, &track_color.g, &track_color.b);                     
                         
     // convert the image to HSL
     COLORimageRGBtoHSLfixed(rgb_in, box->width, box->height);
 
     // find HSL values in image 
-    findColorHSL(rgb_in, color, box);
+    findColorHSL(rgb_in, &track_color, box);
 }
 
 // -----------------------------------------------------------------------------
@@ -360,7 +356,7 @@ void RGB2HSL(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 // -----------------------------------------------------------------------------
 void findColorHSL(const uint8_t *hsl_in, 
         track_color_t *color, track_coords_t *box) {
-    int x = 0, y = 0, consec = 0, noise_filter = color->filter;
+    int x = 0, y = 0, h = 0, s = 0, l = 0, consec = 0, noise_filter = color->filter;
     int img_width = box->width, img_height = box->height;
     int img_pitch = box->width * 3, scan_start = 0, pix_start = 0;
 
@@ -379,17 +375,21 @@ void findColorHSL(const uint8_t *hsl_in,
 
             // if within threshold, update the bounding box
             pix_start = scan_start + x * 3;
-            if (abs((hsl_in[pix_start + 0]) - color->r) < color->ht &&
-                (hsl_in[pix_start + 1] > 125) &&
-                (hsl_in[pix_start + 2] > 75) && 
-                (hsl_in[pix_start + 2] < 180)) {
+            h = hsl_in[pix_start + 0];
+            s = hsl_in[pix_start + 1];
+            l = hsl_in[pix_start + 2];   
+            
+            if (abs(h - (int)color->r) < (int)color->ht &&
+                (s > 100) &&
+                (l > 75) && 
+                (l < 180)) {
 
                 // only update bounding box of consecutive pixels >= "filter"
                 if (++consec >= noise_filter) {
                     if (x < x1) x1 = x;
                     if (x > x2) x2 = x;
                     if (y < y1) y1 = y;
-                    if (y > y2) y2 = y; 
+                    if (y > y2) y2 = y;
                 }
             }
             else {
@@ -417,7 +417,7 @@ void findColorHSL(const uint8_t *hsl_in,
 
 // -----------------------------------------------------------------------------
 void findColorRGB(const uint8_t *rgb_in,
-        track_color_t *color, track_coords_t *box)
+        const track_color_t *color, track_coords_t *box)
 {
     int x = 0, y = 0, consec = 0, noise_filter = color->filter;
     int img_width = box->width, img_height = box->height;
@@ -476,7 +476,7 @@ void findColorRGB(const uint8_t *rgb_in,
 
 // -----------------------------------------------------------------------------
 void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
-        track_color_t *color, track_coords_t *box)
+        const track_color_t *color, track_coords_t *box)
 {
     int x = 0, y = 0, consec = 0, noise_filter = color->filter;
     int img_width = box->width, img_height = box->height;
