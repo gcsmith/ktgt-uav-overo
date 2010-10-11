@@ -294,11 +294,11 @@ void RGB2HSLfixed(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
     uint32_t g = FP32_DIV(INT_TO_FP32(*g_s),fix255);
     uint32_t b = FP32_DIV(INT_TO_FP32(*b_l),fix255);
     
-    uint32_t max;
-    uint32_t min;
+    int32_t max;
+    int32_t min;
 
-    uint32_t vm;
-    uint32_t h = 0, s = 0, l = 0; // set to black by default
+    int32_t vm;
+    int32_t h = 0, s = 0, l = 0; // set to black by default
 
     max = MAX(MAX(r, g), b);
     min = MIN(MIN(r, g), b);
