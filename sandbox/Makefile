@@ -50,8 +50,7 @@ GLES_OBJS = gles_test.o
 GPIO_OBJS = gpio_test.o
 FIXED_OBJS = fixed_test.o \
             $(UC)/colordetect.o \
-            $(UC)/readwritejpeg.o \
-            $(UC)/fixed.o
+            $(UC)/readwritejpeg.o
 JPEG_OBJS = jpeg_test.o \
             $(UC)/colordetect.o \
             $(UC)/readwritejpeg.o

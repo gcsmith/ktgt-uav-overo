@@ -8,12 +8,14 @@
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
-#include <../uav-control/colordetect.h>
-#include <../uav-control/fixed.h>
+
+#include "../uav-control/colordetect.h"
+#include "../uav-control/fp32.h"
+
 //#define FIXED_Y 8
 
-
-int main(){
+int main(int argc, char *argv[])
+{
         
     uint8_t r_f = 255;
     uint8_t g_f = 0;
@@ -48,14 +50,14 @@ int main(){
         for(j=1; j<256; j++) {
             x = 1.0/i;
             y = 1.0/j;
-            xf = FIX_DIV((INT_2_FIX((int)1)),(INT_2_FIX((int)i)));
-            yf = FIX_DIV((INT_2_FIX((int)1)),(INT_2_FIX((int)j)));
+            xf = FP32_DIV((INT_TO_FP32((int)1)),(INT_TO_FP32((int)i)));
+            yf = FP32_DIV((INT_TO_FP32((int)1)),(INT_TO_FP32((int)j)));
             
-            result_fix = FIX_DIV(xf,yf);
-            fix_integer = FIX_2_INT(result_fix);
+            result_fix = FP32_DIV(xf,yf);
+            fix_integer = FP32_TO_INT(result_fix);
             //printf("fixint: %d\n", fix_integer);
-            fix_decimals_double = (FIX_DECIMALS(result_fix));
-            //printf("fixdec: %d",FIX_DECIMALS(result_fix));
+            fix_decimals_double = (FP32_DECIMALS(result_fix));
+            //printf("fixdec: %d",FP32_DECIMALS(result_fix));
             fix_decimals_double /= 255.0;
             //printf("fixdoub: %f\n",fix_decimals_double);
             fix_result_as_double = (double)fix_decimals_double + (double)fix_integer;
@@ -70,8 +72,8 @@ int main(){
                     x,y, fix_integer,fix_decimals_double,fix_result_as_double,double_result,fix_dif);
             }
             /*
-            if( abs(FIX_MULT(xf,yf) - x/y) > 0 ){
-               printf("MUL x:%f  y:%f   dif:%d\n", x,y,abs(FIX_MULT(xf,yf) - x/y));
+            if( abs(FP32_MUL(xf,yf) - x/y) > 0 ){
+               printf("MUL x:%f  y:%f   dif:%d\n", x,y,abs(FP32_MUL(xf,yf) - x/y));
             }  
             */      
         }
@@ -132,7 +134,7 @@ double min_b = 255;
     printf("min: r: %f g:%f b:%f\n", min_r, min_b, min_g);
     printf("r_h: %f, g_s: %f, b_l: %f\n",average_r,average_g,average_b);
     
-    printf("divtest: %d\n",FIX_2_INT(FIX_DIV(INT_2_FIX(100),INT_2_FIX(1))));
+    printf("divtest: %d\n",FP32_TO_INT(FP32_DIV(INT_TO_FP32(100),INT_TO_FP32(1))));
 
     return 0;
 }
