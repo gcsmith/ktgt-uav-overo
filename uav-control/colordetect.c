@@ -404,7 +404,7 @@ void findColorHSL(const uint8_t *hsl_in,
             if (abs(h - (int)color->r) < (int)color->ht &&
                 (s > 100) &&
                 (l > 75) && 
-                (l < 180)) {
+                (l < 200)) {
 
                 // only update bounding box of consecutive pixels >= "filter"
                 if (++consec >= noise_filter) {
