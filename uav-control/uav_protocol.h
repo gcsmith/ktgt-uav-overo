@@ -18,7 +18,7 @@
 #define SERVER_ACK_LANDING      3   // acknowledge request to land
 #define SERVER_ACK_TELEMETRY    4   // acknowledge request for telemetry (+data)
 #define SERVER_ACK_MJPG_FRAME   5   // transmit a single frame of video
-#define SERVER_ACK_SET_CTL_MODE 6   // acknowledge control mode
+#define SERVER_UPDATE_CTL_MODE  6   // update (or acknowledge) control mode
 #define SERVER_UPDATE_TRACKING  7   // send updated tracking state information
 #define SERVER_ACK_TRACK_COLOR  8
 
@@ -109,6 +109,8 @@
 #define PKT_CTS_XC          PKT_BASE + 5
 #define PKT_CTS_YC          PKT_BASE + 6
 #define PKT_CTS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 7))
+
+// Set tracking color, format, and thresholds
 
 #define TC_COLOR_FMT_RGB    0x00000001      // red/green/blue channels
 #define TC_COLOR_FMT_HSL    0x00000002      // hue/saturation/lightness channels

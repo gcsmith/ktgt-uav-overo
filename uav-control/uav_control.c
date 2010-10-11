@@ -35,9 +35,50 @@ gpio_event_t g_gpio_alt; // ultrasonic PWM
 gpio_event_t g_gpio_aux; // auxiliary PWM
 client_info_t g_client;
 
+static pthread_t g_aux_thread;
 static ctl_sigs_t client_sigs = { 0 };
 static char autonomous = 1;
 static int g_muxsel = -1;
+
+// -----------------------------------------------------------------------------
+void *aux_trigger_thread(void *arg)
+{
+    uint32_t cmd_buffer[16];
+    int pulse = 0;
+    int auto_control = 0;
+
+    for (;;) {
+        // go to sleep until we're pinged by the gpio_event subsystem
+        pthread_mutex_lock(&g_gpio_aux.lock);
+        pthread_cond_wait(&g_gpio_aux.cond, &g_gpio_aux.lock);
+        pulse = g_gpio_aux.pulsewidth;
+        pthread_mutex_unlock(&g_gpio_aux.lock);
+
+        // determine if we need to perform a state transition
+        if (auto_control && pulse > 1475) {
+            fprintf(stderr, "AUX: switch from autonomous to manual\n");
+            auto_control = 0;
+
+            cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
+            cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
+            cmd_buffer[PKT_VCM_TYPE] = VCM_TYPE_RADIO;
+            cmd_buffer[PKT_VCM_AXES] = VCM_AXIS_ALL;
+            send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
+        }
+        else if (!auto_control && pulse <= 1475) {
+            fprintf(stderr, "AUX: switch from manual to autonomous\n");
+            auto_control = 1;
+
+            cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
+            cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
+            cmd_buffer[PKT_VCM_TYPE] = VCM_TYPE_AUTO;
+            cmd_buffer[PKT_VCM_AXES] = VCM_AXIS_ALL;
+            send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
+        }
+    }
+
+    pthread_exit(NULL);
+}
 
 // -----------------------------------------------------------------------------
 // Perform final shutdown and cleanup.
@@ -60,10 +101,11 @@ void uav_shutdown(int rc)
     syslog(LOG_INFO, "shutting down imu subsystem...\n");
     imu_shutdown(&g_imu);
 
-    syslog(LOG_INFO, "shutting down video subsystem...\n");
+    syslog(LOG_INFO, "shutting color tracking subsystem...\n");
     colordetect_shutdown();
+
+    syslog(LOG_INFO, "shutting down video subsystem...\n");
     video_shutdown();
-    
 
     syslog(LOG_INFO, "shutting down uav control...\n");
     // pthread_exit(NULL);
@@ -202,7 +244,6 @@ void run_server(imu_data_t *imu, const char *port)
                 pthread_mutex_unlock(&imu->lock);
 
                 cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
-
                 cmd_buffer[PKT_VTI_BATT] = read_vbatt();
 
                 pthread_mutex_lock(&g_gpio_alt.lock);
@@ -281,7 +322,7 @@ void run_server(imu_data_t *imu, const char *port)
 
                 fc_update_vcm(vcm_axes, vcm_type);
 
-                cmd_buffer[PKT_COMMAND]  = SERVER_ACK_SET_CTL_MODE;
+                cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
                 cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
                 cmd_buffer[PKT_VCM_TYPE] = vcm_type;
                 cmd_buffer[PKT_VCM_AXES] = vcm_axes;
@@ -497,7 +538,7 @@ int main(int argc, char *argv[])
             uav_shutdown(EXIT_FAILURE);
         }
 
-        // attempt to initialize gpio pin for multiplexer select
+        // attempt to initialize gpio pin for multiplexer select (output)
         if (0 > gpio_init()) {
             syslog(LOG_ERR, "failed to initialize gpio user space library");
             uav_shutdown(EXIT_FAILURE);
@@ -510,7 +551,13 @@ int main(int argc, char *argv[])
         }
 
         if (0 > gpio_direction_output(arg_mux, 1)) {
-            syslog(LOG_ERR, "failed to set gpio %d direction to output", arg_mux);
+            syslog(LOG_ERR, "failed to set gpio %d direction to out", arg_mux);
+            uav_shutdown(EXIT_FAILURE);
+        }
+
+        // initialize the auxiliary pwm thread
+        if (0 != pthread_create(&g_aux_thread, NULL, aux_trigger_thread, 0)) {
+            syslog(LOG_ERR, "failed to create aux trigger thread");
             uav_shutdown(EXIT_FAILURE);
         }
     }
