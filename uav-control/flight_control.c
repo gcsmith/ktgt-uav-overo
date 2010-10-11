@@ -238,7 +238,6 @@ void *takeoff()
     char stable = 0, timer_set = 0;
     ctl_sigs_t control;
     clock_t timer = 0;;
-    int ap_on = 0; // autopilot on/off flag
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
 
@@ -280,16 +279,12 @@ void *takeoff()
             last_input = input;
 
             // if the helicopter is 20 inches from the setpoint, switch to PID control
-            if (!ap_on && (error <= (setpoint - 20)) && (error >= (setpoint + 20)))
+            if ((error <= (setpoint - 20)) && (error >= (setpoint + 20)))
             {
                 // turn the altitude VCM bit off to indicate autonomous control
                 pthread_mutex_lock(&fc_vcm_event);
                 vcm_axes = vcm_axes & ~(VCM_AXIS_ALT);
                 pthread_mutex_unlock(&fc_vcm_event);
-
-                // notify the takeoff algorithm that the autopilot has been
-                // started so it doesn't try to create more than one autopilot
-                ap_on = 1;
             }
             else if (error > 0)
             {
