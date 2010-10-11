@@ -23,15 +23,12 @@
 // threads
 pthread_t takeoff_thrd;
 pthread_t land_thrd;
-pthread_t pid_thrd;
+pthread_t auto_thrd;
 
 // mutexes
 pthread_mutex_t fc_alive_event;
 pthread_mutex_t fc_vcm_event;
 pthread_mutex_t fc_cond_ap_mutex;
-
-// conditions
-pthread_cond_t fc_cond_autopilot;
 
 // pwm channels to helicopter's controls
 pwm_channel_t g_channels[4];
@@ -90,6 +87,9 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
 
     if (kill)
     {
+        // reset signals -
+        // throttle is set to minimum
+        // yaw, pitch, roll are set to their idle positions
         if (g_channels[PWM_ALT].handle == pwm->handle)
             cmp = min;
         else
@@ -97,56 +97,30 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
     }
     else if (g_channels[PWM_ALT].handle == pwm->handle)
     {
-#if 0
-        // joystick is scrolling from up to down
-        if ((thro_last_value > value) && (thro_last_value > 0) && (value > 0))
+        // on the first pass set we need to modify the current PWM signal
+        if (thro_first == 0)
         {
-            cmp = thro_last_cmp;
+            thro_first = 1;
+            cmp = min + (int)(hrange * value);
+            fprintf(stderr, "flight_control alt: value = %f, lv = %f\n", value, thro_last_value);
+            thro_last_cmp = cmp;
         }
+        else
+        {
+            cmp = thro_last_cmp + (int)(hrange * value * 0.15f);
 
-        // joystick is scrolling from down to up
-        else if ((thro_last_value < value) && (thro_last_value < 0) && (value < 0))
-        {
-            cmp = thro_last_cmp;
-        }
+            // keep signal within range
+            if (cmp > max)
+                cmp = max;
+            if (cmp < min)
+                cmp = min;
 
-        // no delta
-        else if (thro_last_value == value)
-        {
-            cmp = thro_last_cmp;
-        }
-#endif
-        //else 
-        {
-            // on the first pass set we need to modify the current PWM signal
-            if (thro_first == 0)
-            {
-                thro_first = 1;
-                cmp = min + (int)(hrange * value);
-                fprintf(stderr, "flight_control alt: value = %f, lv = %f\n", value, thro_last_value);
-                thro_last_cmp = cmp;
-            }
-            else
-            {
-                // scale the value for sensitivity
-#if 0
-                if (value < 0.0f)
-                    value = -0.10f;
-                else
-                    value = 0.10f;
-#endif
-                cmp = thro_last_cmp + (int)(hrange * value * 0.15f);
-                if (cmp > max)
-                    cmp = max;
-                if (cmp < min)
-                    cmp = min;
-                fprintf(stderr, "flight_control alt: value = %f, lv = %f, cmp = %d, lc = %d\n", 
+            fprintf(stderr, "flight_control alt: value = %f, lv = %f, cmp = %d, lc = %d\n", 
                     value, thro_last_value, cmp, thro_last_cmp);
-                thro_last_cmp = cmp;
-            }
-        }
+            thro_last_cmp = cmp;
+         }
 
-        thro_last_value = value;
+         thro_last_value = value;
     }
     else
     {
@@ -161,47 +135,161 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
 }
 
 // -----------------------------------------------------------------------------
+void *autopilot()
+{
+    int kill_reached = 0;
+    int axes, type;
+    float pid_result, curr_error;
+
+    // flight dynamics
+    float fd_pitch, fd_alt; // , fd_yaw, fd_roll;
+
+    // flight control's signal structure
+    ctl_sigs_t fc_sigs;
+    
+    // flight control's PID controllers
+    pid_ctrl_t pid_alt_ctlr, pid_pitch_ctlr;
+
+    fc_sigs.alt   = 0.0f;
+    fc_sigs.pitch = 0.0f;
+    fc_sigs.roll  = 0.0f;
+    fc_sigs.yaw   = 0.0f;
+
+    // altitude controller
+    pid_alt_ctlr.setpoint    = 42.0f;
+    pid_alt_ctlr.Kp          = 0.01f;
+    pid_alt_ctlr.Ki          = 0.01f;
+    pid_alt_ctlr.Kd          = 0.001f;
+    pid_alt_ctlr.prev_error  = 0.0f;
+    pid_alt_ctlr.last_error  = 0.0f;
+    pid_alt_ctlr.total_error = 0.0f;
+    
+    // pitch controller
+    pid_pitch_ctlr.setpoint    = 5.0f;
+    pid_pitch_ctlr.Kp          = 0.01f;
+    pid_pitch_ctlr.Ki          = 0.01f;
+    pid_pitch_ctlr.Kd          = 0.001f;
+    pid_pitch_ctlr.prev_error  = 0.0f;
+    pid_pitch_ctlr.last_error  = 0.0f;
+    pid_pitch_ctlr.total_error = 0.0f;
+
+    pthread_mutex_lock(&fc_alive_event);
+    while (fc_alive && !kill_reached)
+    {
+        pthread_mutex_unlock(&fc_alive_event);
+
+        // capture pitch
+        pthread_mutex_lock(&imu->lock);
+        //fd_yaw   = imu->angles[IMU_DATA_YAW];
+        fd_pitch = imu->angles[IMU_DATA_PITCH];
+        //fd_roll  = imu->angles[IMU_DATA_ROLL];
+        pthread_mutex_unlock(&imu->lock);
+
+        // capture altitude
+        pthread_mutex_lock(&usrf->lock);
+        fd_alt = usrf->pulsewidth / 147;
+        pthread_mutex_unlock(&usrf->lock);
+
+        // capture flight control's mode and vcm axes
+        pthread_mutex_lock(&fc_vcm_event);
+        axes = vcm_axes;
+        type = vcm_type;
+        pthread_mutex_unlock(&fc_vcm_event);
+
+        // reset all signals if flight control is of type kill
+        if (type == VCM_TYPE_KILL)
+        {
+            assign_value(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, 0, 1);
+            assign_value(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, 0, 1);
+            assign_value(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, 0, 1);
+            assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, 0, 1);
+
+            kill_reached = 1;
+        }
+        else if ((vcm_type == VCM_TYPE_AUTO) || (vcm_type == VCM_TYPE_MIXED))
+        {
+            // check pitch bit is 0 for autonomous control
+            if (!(axes & VCM_AXIS_PITCH))
+            {
+                pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
+                fc_sigs.pitch = pid_result;
+                flight_control(&fc_sigs, VCM_AXIS_PITCH);
+            }
+            
+            // check altitude bit is 0 for autonomous control
+            if (!(axes & VCM_AXIS_ALT))
+            {
+                pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
+                fc_sigs.alt = pid_result;
+                flight_control(&fc_sigs, VCM_AXIS_ALT);
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&fc_alive_event);
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
 void *takeoff()
 {
-    int error, input, last_input, dx_dt;
+    int error, input, last_input = 0, dx_dt, setpoint;
     float last_control;
     char stable = 0, timer_set = 0;
     ctl_sigs_t control;
     clock_t timer = 0;;
-
-    pid_ctrl_t pid;
-    pid.setpoint = 42;      // 42 inches ~= 1 meter
-    pid.Kp = 0.01;
-    pid.Ki = 0.1;
-    pid.Kd = 0.001;
-    pid.total_error = 0.0;
-
-    control.alt = 0.0f;
+    int ap_on = 0; // autopilot on/off flag
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
 
-    // We'll need the pitch controller for takeoff as well to account for the
+    // We'll need the pitch controller for takeoff to account for the
     // helicopter being front or back heavy, this will ensure the helicopter
     // goes straight up
+    // 
+    // We'll set the autopilot to control only the pitch - altitude will be
+    // controlled through dead reckoning. Eventually the helicopter will
+    // be high enough where we can turn on the altitude controller.
+    
+    // vcm_axes bits - 
+    // 0 is autonomous controlled
+    // 1 is manual/mixed controlled
+
+    pthread_mutex_lock(&fc_vcm_event);
+    vcm_axes = vcm_axes | VCM_AXIS_ALT;
+    vcm_axes = vcm_axes & ~(VCM_AXIS_PITCH);
+    pthread_mutex_unlock(&fc_vcm_event);
+
+    // spawn autopilot thread
+    // autopilot should get be controlling the pitch
+    pthread_create(&auto_thrd, NULL, autopilot, NULL);
+
+    setpoint = 42; // 42 inches ~= 1 meter
+
     while (!stable)
     {
         pthread_mutex_lock(&usrf->lock);
-        while ((input = (usrf->pulsewidth / 147)) != pid.setpoint)
+        while ((input = (usrf->pulsewidth / 147)) != setpoint)
         {
             pthread_mutex_unlock(&usrf->lock);
 
             // dead reckoning variables
-            error = pid.setpoint - input;
-            last_input = input;
+            error = setpoint - input;
+            if (last_input == 0)
+                last_input = input;
             dx_dt = input - last_input; // rate of climb [inches per second]
+            last_input = input;
 
             // if the helicopter is 20 inches from the setpoint, switch to PID control
-            if ((error <= 22) && (error >= -22))
+            if (!ap_on && (error <= (setpoint - 20)) && (error >= (setpoint + 20)))
             {
-                pid_compute(&pid, (float)input, (float *)&error, &control.alt);
-                // not sure how the output will look from pid controller
-                fprintf(stderr, "pid output = %f\n", control.alt);
-                //flight_control(&control, VCM_AXIS_ALT);
+                // turn the altitude VCM bit off to indicate autonomous control
+                pthread_mutex_lock(&fc_vcm_event);
+                vcm_axes = vcm_axes & ~(VCM_AXIS_ALT);
+                pthread_mutex_unlock(&fc_vcm_event);
+
+                // notify the takeoff algorithm that the autopilot has been
+                // started so it doesn't try to create more than one autopilot
+                ap_on = 1;
             }
             else if (error > 0)
             {
@@ -231,19 +319,21 @@ void *takeoff()
             usleep(1000000);
 
             // helicopter has strayed away from stability - stop timing 
-            // previous stability
+            // previous stability time
             if (timer_set)
                 timer_set = 0;
         }
 
-        if ((input == pid.setpoint) && (!timer_set))
+        pthread_mutex_unlock(&usrf->lock);
+
+        if ((input == setpoint) && (!timer_set))
         {
             // get the time from now that the helicopter should still be at 
             // the setpoint to be considered stable
             timer = clock() + 5 * CLOCKS_PER_SEC;
             timer_set = 1;
         }
-        else if ((input == pid.setpoint) && timer_set)
+        else if ((input == setpoint) && timer_set)
         {
             // helicopter has been at the setpoint for 5 seconds
             // alititude requirement has been achieved
@@ -258,99 +348,57 @@ void *takeoff()
 // -----------------------------------------------------------------------------
 void *land()
 {
-    pthread_exit(NULL);
-}
+    int i;
+    int alt, prev_alt = 0, dx_dt;
+    ctl_sigs_t landing_sigs;
 
-// -----------------------------------------------------------------------------
-void *autopilot()
-{
-    int axes, type;
-    float pid_result, curr_error;
+    landing_sigs.alt = 0.0f;
 
-    // flight dynamics
-    float fd_yaw, fd_pitch, fd_roll, fd_alt;
+    // procedure:
+    // turn autonomous pitch on
+    // turn autonomous altitude off
+    // slowly kill throttle
+    // once throttle is at minimum exit function
 
-    // flight control's signal structure
-    ctl_sigs_t fc_sigs;
-    
-    // flight control's PID controllers
-    pid_ctrl_t pid_alt_ctlr, pid_pitch_ctlr;
+    pthread_mutex_lock(&fc_vcm_event);
+    vcm_axes = vcm_axes & ~(VCM_AXIS_PITCH);
+    vcm_axes = vcm_axes | VCM_AXIS_ALT;
+    pthread_mutex_unlock(&fc_vcm_event);
 
-    fc_sigs.alt   = 0.0f;
-    fc_sigs.pitch = 0.0f;
-    fc_sigs.roll  = 0.0f;
-    fc_sigs.yaw   = 0.0f;
-
-    pid_alt_ctlr.setpoint    = 42.0f;
-    pid_alt_ctlr.Kp          = 0.01f;
-    pid_alt_ctlr.Ki          = 0.01f;
-    pid_alt_ctlr.Kd          = 0.001f;
-    pid_alt_ctlr.prev_error  = 0.0f;
-    pid_alt_ctlr.last_error  = 0.0f;
-    pid_alt_ctlr.total_error = 0.0f;
-    
-    pid_pitch_ctlr.setpoint    = 0.0f;
-    pid_pitch_ctlr.Kp          = 0.01f;
-    pid_pitch_ctlr.Ki          = 0.01f;
-    pid_pitch_ctlr.Kd          = 0.001f;
-    pid_pitch_ctlr.prev_error  = 0.0f;
-    pid_pitch_ctlr.last_error  = 0.0f;
-    pid_pitch_ctlr.total_error = 0.0f;
-
-    pthread_mutex_lock(&fc_alive_event);
-    while (fc_alive)
+    // monitor altitude
+    pthread_mutex_lock(&usrf->lock);
+    while ((alt = usrf->pulsewidth / 147) > 6)
     {
-        pthread_mutex_unlock(&fc_alive_event);
-
-        // capture attitude
-        pthread_mutex_lock(&imu->lock);
-        fd_yaw   = imu->angles[IMU_DATA_YAW];
-        fd_pitch = imu->angles[IMU_DATA_PITCH];
-        fd_roll  = imu->angles[IMU_DATA_ROLL];
-        pthread_mutex_unlock(&imu->lock);
-
-        // capture altitude
-        pthread_mutex_lock(&usrf->lock);
-        fd_alt = usrf->pulsewidth / 147;
         pthread_mutex_unlock(&usrf->lock);
 
-        // capture flight control's mode and vcm axes
-        pthread_mutex_lock(&fc_vcm_event);
-        axes = vcm_axes;
-        type = vcm_type;
-        pthread_mutex_unlock(&fc_vcm_event);
+        if (prev_alt == 0)
+            prev_alt = alt;
+        dx_dt = alt - prev_alt;
+        prev_alt = alt;
 
-        // reset all signals if flight control is of type kill
-        if (type == VCM_TYPE_KILL)
+        if (dx_dt == 0)
         {
-            assign_value(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, 0, 1);
-            assign_value(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, 0, 1);
-            assign_value(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, 0, 1);
-            assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, 0, 1);
+            landing_sigs.alt = -0.1f;
+            flight_control(&landing_sigs, VCM_AXIS_ALT);
+        }
+        else if (dx_dt <= -3) 
+        {
+            landing_sigs.alt = 0.05f;
+            flight_control(&landing_sigs, VCM_AXIS_ALT);
+        }
 
-            pthread_cond_wait(&fc_cond_autopilot, &fc_cond_ap_mutex);
-        }
-        else if ((vcm_type == VCM_TYPE_AUTO) || (vcm_type == VCM_TYPE_MIXED))
-        {
-            // check pitch
-            if (!(axes & VCM_AXIS_PITCH))
-            {
-                pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
-                fc_sigs.pitch = pid_result;
-                flight_control(&fc_sigs, VCM_AXIS_PITCH);
-            }
-            
-            // check altitude
-            if (!(axes & VCM_AXIS_ALT))
-            {
-                pid_compute(&pid_pitch_ctlr, fd_alt, &curr_error, &pid_result);
-                fc_sigs.alt = pid_result;
-                flight_control(&fc_sigs, VCM_AXIS_ALT);
-            }
-        }
+        usleep(1000000);
+    }
+    
+    pthread_mutex_unlock(&usrf->lock);
+
+    landing_sigs.alt = -0.05;
+    for (i = 0; i < 5; i++)
+    {
+        flight_control(&landing_sigs, VCM_AXIS_ALT);
+        usleep(500000);
     }
 
-    pthread_mutex_unlock(&fc_alive_event);
     pthread_exit(NULL);
 }
 
@@ -369,8 +417,6 @@ int fc_open_controls(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     pthread_mutex_init(&fc_alive_event, NULL);
     pthread_mutex_init(&fc_vcm_event, NULL);
     pthread_mutex_init(&fc_cond_ap_mutex, NULL);
-
-    pthread_cond_init(&fc_cond_autopilot, NULL);
 
     if (0 > (g_channels[PWM_ALT].handle = pwm_open_device(PWM_DEV_ALT)))
     {
@@ -446,8 +492,6 @@ void fc_close_controls()
     pthread_mutex_destroy(&fc_alive_event);
     pthread_mutex_destroy(&fc_vcm_event);
     pthread_mutex_destroy(&fc_cond_ap_mutex);
-
-    pthread_cond_destroy(&fc_cond_autopilot);
 }
 
 // -----------------------------------------------------------------------------
@@ -467,20 +511,10 @@ void fc_land()
 // -----------------------------------------------------------------------------
 void fc_update_vcm(int axes, int type)
 {
-    int prev_type;
-
     pthread_mutex_lock(&fc_vcm_event);
     vcm_axes = axes;
-    prev_type = vcm_type;
     vcm_type = type;
     pthread_mutex_unlock(&fc_vcm_event);
-
-    if ((prev_type == VCM_TYPE_KILL) && (type != VCM_TYPE_KILL))
-    {
-        pthread_mutex_lock(&fc_cond_ap_mutex);
-        pthread_cond_signal(&fc_cond_autopilot);
-        pthread_mutex_unlock(&fc_cond_ap_mutex);
-    }
 }
 
 // -----------------------------------------------------------------------------
