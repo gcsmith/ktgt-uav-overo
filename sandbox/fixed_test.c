@@ -111,13 +111,28 @@ double min_b = 255;
                 average_g += err_g;
                 average_b += err_b;
                 
+                if(err_g > max_g){
+                    printf("maxERRg: %f R:%3d G:%3d B:%3d    FP_H: %3d, FP_S: %3d FP_L: %3d    D_H: %3d, D_S: %3d D_L: %3d\n",
+                        err_g, i, j, k, r_f, g_f, b_f, r_d, g_d, b_d);
+                }
+                if(err_r> max_r){
+                    printf("maxERRr: %f R:%3d G:%3d B:%3d    FP_H: %3d, FP_S: %3d FP_L: %3d    D_H: %3d, D_S: %3d D_L: %3d\n",
+                        err_r, i, j, k, r_f, g_f, b_f, r_d, g_d, b_d);
+                }
                 max_r = (err_r > max_r) ? err_r : max_r;
-                max_g = (err_g > max_g) ? err_g : max_g;
+                max_g = (err_g > max_g) ? err_g : max_g; 
                 max_b = (err_b > max_b) ? err_b : max_b;
                 
                 min_r = (err_r < min_r) ? err_r : min_r;
                 min_g = (err_g < min_g) ? err_g : min_g;
                 min_b = (err_b < min_b) ? err_b : min_b;
+                
+                
+                if(err_b > 1.0){
+                    printf("ERRB: %f R:%d G:%d B:%d , FP_H: %d, FP_S: %d FP_L: %d D_H: %d, D_S: %d D_L: %d\n",
+                        err_b, i, j, k, r_f, g_f, b_f, r_d, g_d, b_d);
+                }
+                
                 
             
             }
@@ -130,11 +145,11 @@ double min_b = 255;
         
     
     
-    printf("max: r: %f g:%f b:%f\n", max_r, max_b, max_g);
-    printf("min: r: %f g:%f b:%f\n", min_r, min_b, min_g);
+    printf("max: r: %f g:%f b:%f\n", max_r, max_g, max_b);
+    printf("min: r: %f g:%f b:%f\n", min_r, min_g, min_b);
     printf("r_h: %f, g_s: %f, b_l: %f\n",average_r,average_g,average_b);
     
-    printf("divtest: %d\n",FP32_TO_INT(FP32_DIV(INT_TO_FP32(100),INT_TO_FP32(1))));
+    //printf("divtest: %d\n",FP32_TO_INT(FP32_DIV(INT_TO_FP32(100),INT_TO_FP32(1))));
 
     return 0;
 }
