@@ -47,7 +47,6 @@ OBJ_FILES = colordetect.o \
             uav_control.o \
             utility.o \
             video_uvc.o \
-            fixed.o\
             mjpg-streamer/v4l2uvc.o
 
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))

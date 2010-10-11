@@ -8,7 +8,7 @@
 #include "colordetect.h"
 #include "utility.h"
 #include "video_uvc.h"
-#include "fixed.h"
+#include "fp32.h"
 
 // -----------------------------------------------------------------------------
 #ifndef STANDALONE_DEMO
@@ -287,12 +287,12 @@ void RGB2HSL2(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *h, uint8_t *s, uint8_
 // -----------------------------------------------------------------------------
 void RGB2HSLfixed(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 {
-    uint32_t fix255 = INT_2_FIX(255);
+    uint32_t fix255 = INT_TO_FP32(255);
     //0.5 is 128
     
-    uint32_t r = FIX_DIV(INT_2_FIX(*r_h),fix255);
-    uint32_t g = FIX_DIV(INT_2_FIX(*g_s),fix255);
-    uint32_t b = FIX_DIV(INT_2_FIX(*b_l),fix255);
+    uint32_t r = FP32_DIV(INT_TO_FP32(*r_h),fix255);
+    uint32_t g = FP32_DIV(INT_TO_FP32(*g_s),fix255);
+    uint32_t b = FP32_DIV(INT_TO_FP32(*b_l),fix255);
     
     uint32_t max;
     uint32_t min;
@@ -302,33 +302,34 @@ void RGB2HSLfixed(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 
     max = MAX(MAX(r, g), b);
     min = MIN(MIN(r, g), b);
-    l = FIX_DIV( (max + min), INT_2_FIX(2));
+    l = FP32_DIV( (max + min), INT_TO_FP32(2));
 
     if (min == max) {
         *r_h = 0;
         *g_s = 0;
-        *b_l = (uint8_t)FIX_2_INT(FIX_MULT(l, fix255));
+        *b_l = (uint8_t)FP32_TO_INT(FP32_MUL(l, fix255));
         return;
     }
 
     vm = max - min;
-    s = l > 128 ? FIX_DIV(vm ,(INT_2_FIX(2) - max - min)) : FIX_DIV(vm , (max + min));
+    s = l > 128 ? FP32_DIV(vm, (INT_TO_FP32(2) - max - min))
+                : FP32_DIV(vm, (max + min));
 
     if (max == r) {
-        h = FIX_DIV((g - b) , vm + (g < b ? INT_2_FIX(6) : 0));
+        h = FP32_DIV((g - b) , vm + (g < b ? INT_TO_FP32(6) : 0));
     }
     else if (max == g) {
-        h = FIX_DIV((b - r) , vm + INT_2_FIX(2));
+        h = FP32_DIV((b - r) , vm + INT_TO_FP32(2));
     }
     else {
-        h = FIX_DIV((r - g) , vm + INT_2_FIX(2));
+        h = FP32_DIV((r - g) , vm + INT_TO_FP32(2));
     }
 
-    h = FIX_DIV(h, INT_2_FIX(6));
+    h = FP32_DIV(h, INT_TO_FP32(6));
 
-    (*r_h) = (uint8_t)FIX_2_INT(FIX_MULT(h , fix255));
-    (*g_s) = (uint8_t)FIX_2_INT(FIX_MULT(s , fix255));
-    (*b_l) = (uint8_t)FIX_2_INT(FIX_MULT(l , fix255));
+    (*r_h) = (uint8_t)FP32_TO_INT(FP32_MUL(h , fix255));
+    (*g_s) = (uint8_t)FP32_TO_INT(FP32_MUL(s , fix255));
+    (*b_l) = (uint8_t)FP32_TO_INT(FP32_MUL(l , fix255));
 }
 
 // -----------------------------------------------------------------------------
