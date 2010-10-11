@@ -21,38 +21,35 @@
 #define YAW_DUTY_HI 0.094f
 
 // threads
-pthread_t takeoff_thrd;
-pthread_t land_thrd;
-pthread_t auto_thrd;
+static pthread_t takeoff_thrd;
+static pthread_t land_thrd;
+static pthread_t auto_thrd;
 
 // mutexes
-pthread_mutex_t fc_alive_event;
-pthread_mutex_t fc_vcm_event;
+static pthread_mutex_t fc_alive_event;
+static pthread_mutex_t fc_vcm_event;
 
 // pwm channels to helicopter's controls
-pwm_channel_t g_channels[4];
+static pwm_channel_t g_channels[4];
 
-gpio_event_t *usrf; // ultrasonic range finder pwm
-imu_data_t *imu;    // imu sensor
+static gpio_event_t *usrf; // ultrasonic range finder pwm
+static imu_data_t *imu;    // imu sensor
 
 // axes flags
 // if an axis is set in vcm_axes, then this means that axis is not to be 
 // autonomously controlled
-int vcm_axes;
+static int vcm_axes;
 
 // vcm type
 // flight control should know how the helicopter is operating
-int vcm_type;
+static int vcm_type;
 
 // flight control's alive flag
-char fc_alive;
-
-// flight control's autonomous control flag
-char fc_allow_autonomous;
+static char fc_alive;
 
 // relative throttle control variables
-float thro_last_value = 0.0f;
-int thro_last_cmp = 0, thro_first = 0;
+static float thro_last_value = 0.0f;
+static int thro_last_cmp = 0, thro_first = 0;
 
 // -----------------------------------------------------------------------------
 void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
@@ -212,7 +209,7 @@ void *autopilot()
             {
                 pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
                 fc_sigs.pitch = pid_result;
-                flight_control(&fc_sigs, VCM_AXIS_PITCH);
+                fc_update_ctl(&fc_sigs, VCM_AXIS_PITCH);
             }
             
             // check altitude bit is 0 for autonomous control
@@ -220,7 +217,7 @@ void *autopilot()
             {
                 pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
                 fc_sigs.alt = pid_result;
-                flight_control(&fc_sigs, VCM_AXIS_ALT);
+                fc_update_ctl(&fc_sigs, VCM_AXIS_ALT);
             }
         }
     }
@@ -291,20 +288,20 @@ void *takeoff()
                 if (dx_dt < 1)
                 {
                     control.alt = 0.1f;
-                    //flight_control(&control, VCM_AXIS_ALT);
+                    //fc_update_ctl(&control, VCM_AXIS_ALT);
                 }
 
                 // need to slow the rate of climb
                 else if (dx_dt > 3)
                 {
                     control.alt = last_control * 0.5f;
-                    //flight_control(&control, VCM_AXIS_ALT);
+                    //fc_update_ctl(&control, VCM_AXIS_ALT);
                 }
             }
             else
             {
                 control.alt = -0.1f;
-                //flight_control(&control, VCM_AXIS_ALT);
+                //fc_update_ctl(&control, VCM_AXIS_ALT);
             }
 
             last_control = control.alt;
@@ -373,12 +370,12 @@ void *land()
         if (dx_dt == 0)
         {
             landing_sigs.alt = -0.1f;
-            flight_control(&landing_sigs, VCM_AXIS_ALT);
+            fc_update_ctl(&landing_sigs, VCM_AXIS_ALT);
         }
         else if (dx_dt <= -3) 
         {
             landing_sigs.alt = 0.05f;
-            flight_control(&landing_sigs, VCM_AXIS_ALT);
+            fc_update_ctl(&landing_sigs, VCM_AXIS_ALT);
         }
 
         usleep(1000000);
@@ -389,7 +386,7 @@ void *land()
     landing_sigs.alt = -0.05;
     for (i = 0; i < 5; i++)
     {
-        flight_control(&landing_sigs, VCM_AXIS_ALT);
+        fc_update_ctl(&landing_sigs, VCM_AXIS_ALT);
         usleep(500000);
     }
 
@@ -397,7 +394,7 @@ void *land()
 }
 
 // -----------------------------------------------------------------------------
-int fc_open_controls(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
+int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
 {
     thro_last_value = 0.0f;
     thro_last_cmp = 0, thro_first = 0;
@@ -466,7 +463,7 @@ int fc_open_controls(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
 }
 
 // -----------------------------------------------------------------------------
-void fc_close_controls()
+void fc_shutdown()
 {
     int i;
 
@@ -510,7 +507,7 @@ void fc_update_vcm(int axes, int type)
 }
 
 // -----------------------------------------------------------------------------
-void flight_control(ctl_sigs_t *sigs, int chnl_flags)
+void fc_update_ctl(ctl_sigs_t *sigs, int chnl_flags)
 {
     int fc_on;
 
@@ -544,5 +541,12 @@ void flight_control(ctl_sigs_t *sigs, int chnl_flags)
             assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw, 0);
         }
     }
+}
+
+// -----------------------------------------------------------------------------
+void fc_get_vcm(int *axes, int *type)
+{
+    *axes = vcm_axes;
+    *type = vcm_type;
 }
 

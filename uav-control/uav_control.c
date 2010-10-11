@@ -29,6 +29,8 @@
 #include "utility.h"
 
 #define DEV_LEN 64
+#define MUX_SEL_UPROC 0
+#define MUX_SEL_RADIO 1
 
 imu_data_t g_imu;
 gpio_event_t g_gpio_alt; // ultrasonic PWM
@@ -37,15 +39,13 @@ client_info_t g_client;
 
 static pthread_t g_aux_thread;
 static ctl_sigs_t client_sigs = { 0 };
-static char autonomous = 1;
 static int g_muxsel = -1;
 
 // -----------------------------------------------------------------------------
 void *aux_trigger_thread(void *arg)
 {
     uint32_t cmd_buffer[16];
-    int pulse = 0;
-    int auto_control = 0;
+    int pulse = 0, locked_out = 0, axes = 0, type = 0, last_type = 0;
 
     for (;;) {
         // go to sleep until we're pinged by the gpio_event subsystem
@@ -54,10 +54,15 @@ void *aux_trigger_thread(void *arg)
         pulse = g_gpio_aux.pulsewidth;
         pthread_mutex_unlock(&g_gpio_aux.lock);
 
+        fc_get_vcm(&axes, &type);
+        locked_out = (type == VCM_TYPE_LOCKOUT);
+
         // determine if we need to perform a state transition
-        if (auto_control && pulse > 1475) {
+        if (!locked_out && pulse > 1475) {
             fprintf(stderr, "AUX: switch from autonomous to manual\n");
-            auto_control = 0;
+            fc_update_vcm(axes, VCM_TYPE_LOCKOUT);
+            gpio_set_value(g_muxsel, MUX_SEL_RADIO);
+            last_type = type;
 
             cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
             cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
@@ -65,9 +70,10 @@ void *aux_trigger_thread(void *arg)
             cmd_buffer[PKT_VCM_AXES] = VCM_AXIS_ALL;
             send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
         }
-        else if (!auto_control && pulse <= 1475) {
+        else if (locked_out && pulse <= 1475) {
             fprintf(stderr, "AUX: switch from manual to autonomous\n");
-            auto_control = 1;
+            fc_update_vcm(axes, last_type);
+            gpio_set_value(g_muxsel, MUX_SEL_UPROC);
 
             cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
             cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
@@ -85,7 +91,7 @@ void *aux_trigger_thread(void *arg)
 void uav_shutdown(int rc)
 {
     adc_close_channels();
-    fc_close_controls();
+    fc_shutdown();
 
     syslog(LOG_INFO, "shutting down gpio user space subsystem...\n");
     if (g_muxsel > 0) {
@@ -291,28 +297,26 @@ void run_server(imu_data_t *imu, const char *port)
                 case VCM_TYPE_RADIO:
                     syslog(LOG_DEBUG, "switching to radio control\n");
                     vcm_type = VCM_TYPE_RADIO;
-                    vcm_axes = VCM_AXIS_ALL; // all axes radio controlled
-                    gpio_set_value(g_muxsel, 1);
+                    vcm_axes = VCM_AXIS_ALL;
+                    gpio_set_value(g_muxsel, MUX_SEL_RADIO);
                     break;
                 case VCM_TYPE_AUTO:
                     syslog(LOG_DEBUG, "switching to autonomous control\n");
                     vcm_type = VCM_TYPE_AUTO;
-                    vcm_axes = VCM_AXIS_ALL; // all axes autonomously controlled
-                    autonomous = 1;
-                    gpio_set_value(g_muxsel, 0);
+                    vcm_axes = VCM_AXIS_ALL;
+                    gpio_set_value(g_muxsel, MUX_SEL_UPROC);
                     break;
                 case VCM_TYPE_MIXED:
                     syslog(LOG_DEBUG, "switching to remote control mode\n");
                     vcm_type = VCM_TYPE_MIXED;
                     vcm_axes = cmd_buffer[PKT_VCM_AXES];
-                    autonomous = 0;
-                    gpio_set_value(g_muxsel, 0);
+                    gpio_set_value(g_muxsel, MUX_SEL_UPROC);
                     break;
                 case VCM_TYPE_KILL:
                     syslog(LOG_DEBUG, "switching to killswitch enabled mode\n");
                     vcm_type = VCM_TYPE_KILL;
-                    vcm_axes = VCM_AXIS_ALL; // all axes disabled
-                    gpio_set_value(g_muxsel, 1);
+                    vcm_axes = VCM_AXIS_ALL;
+                    gpio_set_value(g_muxsel, MUX_SEL_UPROC);
                     break;
                 case VCM_TYPE_LOCKOUT:
                     // fall through - this isn't user specified
@@ -349,14 +353,14 @@ void run_server(imu_data_t *imu, const char *port)
                         client_sigs.roll, client_sigs.yaw);
                 
                 // send signals off to PWMs
-                flight_control(&client_sigs, vcm_axes);
+                fc_update_ctl(&client_sigs, vcm_axes);
                 break;
             case CLIENT_REQ_THRO_EVT:
                 // client is telling flight control to increment the throttle signal
                 temp.i = cmd_buffer[PKT_THRO_EVT_VALUE];
                 client_sigs.alt = temp.f;
                 fprintf(stderr, "received throttle event %f\n", client_sigs.alt);
-                flight_control(&client_sigs, VCM_AXIS_ALT);
+                fc_update_ctl(&client_sigs, VCM_AXIS_ALT);
                 break;
             case CLIENT_REQ_TRACK_COLOR:
                 tc.r = cmd_buffer[PKT_TC_CHANNEL_0];
@@ -600,7 +604,7 @@ int main(int argc, char *argv[])
     // open PWM ports for mixed controlling
     if (!flag_no_fc) {
         syslog(LOG_INFO, "opening flight control\n");
-        if (0 > fc_open_controls(&g_gpio_alt, &g_imu)) {
+        if (0 > fc_init(&g_gpio_alt, &g_imu)) {
             syslog(LOG_ERR, "failed to open flight control\n");
             uav_shutdown(EXIT_FAILURE);
         }
