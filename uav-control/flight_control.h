@@ -38,7 +38,7 @@ void fc_shutdown();
 void fc_takeoff();
 void fc_land();
 void fc_update_vcm(int axes, int type);
-void fc_update_ctl(ctl_sigs_t *sigs, int chnl_flags);
+void fc_update_ctl(ctl_sigs_t *sigs);
 void fc_get_vcm(int *axes, int *type);
 
 #endif // FLIGHT_CONTROL__H_

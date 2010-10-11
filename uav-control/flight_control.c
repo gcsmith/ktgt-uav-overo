@@ -131,6 +131,43 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
 }
 
 // -----------------------------------------------------------------------------
+void flight_control(ctl_sigs_t *sigs, int chnl_flags)
+{
+    int fc_on;
+
+    pthread_mutex_lock(&fc_alive_event);
+    fc_on = fc_alive;
+    pthread_mutex_unlock(&fc_alive_event);
+
+    if (fc_on)
+    {
+        // adjust altitude if specified
+        if (chnl_flags & VCM_AXIS_ALT)
+        {
+            assign_value(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt, 0);
+        }
+       
+        // adjust pitch if specified
+        if (chnl_flags & VCM_AXIS_PITCH)
+        {
+            assign_value(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch, 0);
+        }
+       
+        // adjust roll if specified
+        if (chnl_flags & VCM_AXIS_ROLL)
+        {
+            assign_value(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll, 0);
+        }
+       
+        // adjust yaw if specified
+        if (chnl_flags & VCM_AXIS_YAW)
+        {
+            assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw, 0);
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
 void *autopilot()
 {
     int kill_reached = 0;
@@ -209,7 +246,7 @@ void *autopilot()
             {
                 pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
                 fc_sigs.pitch = pid_result;
-                fc_update_ctl(&fc_sigs, VCM_AXIS_PITCH);
+                flight_control(&fc_sigs, VCM_AXIS_PITCH);
             }
             
             // check altitude bit is 0 for autonomous control
@@ -217,7 +254,7 @@ void *autopilot()
             {
                 pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
                 fc_sigs.alt = pid_result;
-                fc_update_ctl(&fc_sigs, VCM_AXIS_ALT);
+                flight_control(&fc_sigs, VCM_AXIS_ALT);
             }
         }
     }
@@ -370,12 +407,12 @@ void *land()
         if (dx_dt == 0)
         {
             landing_sigs.alt = -0.1f;
-            fc_update_ctl(&landing_sigs, VCM_AXIS_ALT);
+            flight_control(&landing_sigs, VCM_AXIS_ALT);
         }
         else if (dx_dt <= -3) 
         {
             landing_sigs.alt = 0.05f;
-            fc_update_ctl(&landing_sigs, VCM_AXIS_ALT);
+            flight_control(&landing_sigs, VCM_AXIS_ALT);
         }
 
         usleep(1000000);
@@ -386,7 +423,7 @@ void *land()
     landing_sigs.alt = -0.05;
     for (i = 0; i < 5; i++)
     {
-        fc_update_ctl(&landing_sigs, VCM_AXIS_ALT);
+        flight_control(&landing_sigs, VCM_AXIS_ALT);
         usleep(500000);
     }
 
@@ -507,40 +544,18 @@ void fc_update_vcm(int axes, int type)
 }
 
 // -----------------------------------------------------------------------------
-void fc_update_ctl(ctl_sigs_t *sigs, int chnl_flags)
+void fc_update_ctl(ctl_sigs_t *sigs)
 {
-    int fc_on;
+    int axes;
 
-    pthread_mutex_lock(&fc_alive_event);
-    fc_on = fc_alive;
-    pthread_mutex_unlock(&fc_alive_event);
+    pthread_mutex_lock(&fc_vcm_event);
+    axes = vcm_axes;
+    pthread_mutex_unlock(&fc_vcm_event);
 
-    if (fc_on)
-    {
-        // adjust altitude if specified
-        if (chnl_flags & VCM_AXIS_ALT)
-        {
-            assign_value(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt, 0);
-        }
-       
-        // adjust pitch if specified
-        if (chnl_flags & VCM_AXIS_PITCH)
-        {
-            assign_value(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch, 0);
-        }
-       
-        // adjust roll if specified
-        if (chnl_flags & VCM_AXIS_ROLL)
-        {
-            assign_value(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll, 0);
-        }
-       
-        // adjust yaw if specified
-        if (chnl_flags & VCM_AXIS_YAW)
-        {
-            assign_value(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw, 0);
-        }
-    }
+    // if the incoming signal is a throttle event from the client, then we
+    // target just the altitude control signal so we don't disturb the other
+    // control signals
+    flight_control(sigs, axes);
 }
 
 // -----------------------------------------------------------------------------

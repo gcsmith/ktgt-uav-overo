@@ -31,8 +31,7 @@
 #define CLIENT_REQ_MJPG_FRAME   4   // request a single frame of video
 #define CLIENT_REQ_SET_CTL_MODE 5   // request a change in control mode
 #define CLIENT_REQ_FLIGHT_CTL   6   // command the helicopter's flight
-#define CLIENT_REQ_THRO_EVT     7   // command helicopter to adjust throttle
-#define CLIENT_REQ_TRACK_COLOR  8
+#define CLIENT_REQ_TRACK_COLOR  7
 
 // General packet offsets
 
@@ -91,11 +90,6 @@
 #define PKT_MCM_AXIS_ROLL   PKT_BASE + 2
 #define PKT_MCM_AXIS_YAW    PKT_BASE + 3
 #define PKT_MCM_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 4))
-
-// Throttle event packet offsets
-
-#define PKT_THRO_EVT_VALUE  PKT_BASE + 0
-#define PKT_THRO_EVT_LENGTH (sizeof(uint32_t) * (PKT_BASE + 1))
 
 // Color tracking state
 

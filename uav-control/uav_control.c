@@ -31,6 +31,8 @@
 #define DEV_LEN 64
 #define MUX_SEL_UPROC 0
 #define MUX_SEL_RADIO 1
+#define FC_TRGT_SIG_ALL  0
+#define FC_TRGT_SIG_THRO 1
 
 imu_data_t g_imu;
 gpio_event_t g_gpio_alt; // ultrasonic PWM
@@ -352,15 +354,7 @@ void run_server(imu_data_t *imu, const char *port)
                         client_sigs.alt, client_sigs.pitch,
                         client_sigs.roll, client_sigs.yaw);
                 
-                // send signals off to PWMs
-                fc_update_ctl(&client_sigs, vcm_axes);
-                break;
-            case CLIENT_REQ_THRO_EVT:
-                // client is telling flight control to increment the throttle signal
-                temp.i = cmd_buffer[PKT_THRO_EVT_VALUE];
-                client_sigs.alt = temp.f;
-                fprintf(stderr, "received throttle event %f\n", client_sigs.alt);
-                fc_update_ctl(&client_sigs, VCM_AXIS_ALT);
+                fc_update_ctl(&client_sigs);
                 break;
             case CLIENT_REQ_TRACK_COLOR:
                 tc.r = cmd_buffer[PKT_TC_CHANNEL_0];
