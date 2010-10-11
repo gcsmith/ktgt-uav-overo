@@ -61,7 +61,7 @@ void *aux_trigger_thread(void *arg)
 
             cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
             cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
-            cmd_buffer[PKT_VCM_TYPE] = VCM_TYPE_RADIO;
+            cmd_buffer[PKT_VCM_TYPE] = VCM_TYPE_LOCKOUT;
             cmd_buffer[PKT_VCM_AXES] = VCM_AXIS_ALL;
             send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
         }
@@ -314,6 +314,8 @@ void run_server(imu_data_t *imu, const char *port)
                     vcm_axes = VCM_AXIS_ALL; // all axes disabled
                     gpio_set_value(g_muxsel, 1);
                     break;
+                case VCM_TYPE_LOCKOUT:
+                    // fall through - this isn't user specified
                 default:
                     syslog(LOG_DEBUG, "bad control mode requested. ignoring\n");
                     send_simple_packet(&g_client, SERVER_ACK_IGNORED);

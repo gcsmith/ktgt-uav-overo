@@ -72,6 +72,7 @@
 #define VCM_TYPE_AUTO       0x00000001      // fully autonomously controlled
 #define VCM_TYPE_MIXED      0x00000002      // mixed auto/remote control
 #define VCM_TYPE_KILL       0x00000003      // killswitch - kill all outputs
+#define VCM_TYPE_LOCKOUT    0x00000004      // radio lockout (aux channel)
 
 #define VCM_AXIS_YAW        0x1
 #define VCM_AXIS_PITCH      0x2
