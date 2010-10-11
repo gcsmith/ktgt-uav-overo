@@ -28,7 +28,6 @@ pthread_t auto_thrd;
 // mutexes
 pthread_mutex_t fc_alive_event;
 pthread_mutex_t fc_vcm_event;
-pthread_mutex_t fc_cond_ap_mutex;
 
 // pwm channels to helicopter's controls
 pwm_channel_t g_channels[4];
@@ -411,7 +410,6 @@ int fc_open_controls(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
 
     pthread_mutex_init(&fc_alive_event, NULL);
     pthread_mutex_init(&fc_vcm_event, NULL);
-    pthread_mutex_init(&fc_cond_ap_mutex, NULL);
 
     if (0 > (g_channels[PWM_ALT].handle = pwm_open_device(PWM_DEV_ALT)))
     {
@@ -486,7 +484,6 @@ void fc_close_controls()
 
     pthread_mutex_destroy(&fc_alive_event);
     pthread_mutex_destroy(&fc_vcm_event);
-    pthread_mutex_destroy(&fc_cond_ap_mutex);
 }
 
 // -----------------------------------------------------------------------------
