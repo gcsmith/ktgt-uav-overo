@@ -34,7 +34,8 @@ static int debug = 0;
 static int init_v4l2(struct vdIn *vd);
 
 int init_videoIn(struct vdIn *vd, char *device, int width,
-                 int height, int fps, int format, int grabmethod, globals *pglobal)
+                 int height, int fps, int format, int grabmethod,
+                 uvc_globals_t *pglobal)
 {
     if (vd == NULL || device == NULL)
         return -1;

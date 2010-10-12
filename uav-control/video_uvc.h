@@ -6,10 +6,6 @@
 #ifndef _UAV_VIDEO_UVC__H_
 #define _UAV_VIDEO_UVC__H_
 
-#include "mjpg-streamer/v4l2uvc.h"
-#include "mjpg-streamer/huffman.h"
-#include "mjpg-streamer/jpeg_utils.h"
-
 typedef struct video_data
 {
     const char *data;       // global buffer

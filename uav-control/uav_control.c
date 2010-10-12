@@ -363,7 +363,7 @@ void run_server(imu_data_t *imu, const char *port)
                 tc.ht = cmd_buffer[PKT_TC_THRESH_0];
                 tc.st = cmd_buffer[PKT_TC_THRESH_1];
                 tc.lt = cmd_buffer[PKT_TC_THRESH_2];
-                tc.filter = 5;
+                tc.filter = 15;
                 colordetect_set_track_color(&tc);
                 break;
             default:

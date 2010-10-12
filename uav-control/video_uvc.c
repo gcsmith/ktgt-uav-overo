@@ -1,9 +1,10 @@
 #include <pthread.h>
 #include <syslog.h>
 #include <stdlib.h>
+#include "mjpg-streamer/v4l2uvc.h"
 #include "video_uvc.h"
 
-globals global = { 0 };
+uvc_globals_t global = { 0 };
 static struct vdIn *g_videoin;
 static pthread_t g_camthrd;
 static int g_vid_enabled = 0;
@@ -12,7 +13,7 @@ static int g_unprocessed = 0;
 
 void *cam_input_thread(void *arg) {
     // set cleanup handler to cleanup allocated ressources
-    globals *pglobal = (globals *)arg;
+    uvc_globals_t *pglobal = (uvc_globals_t *)arg;
     // pthread_cleanup_push(cam_cleanup, NULL);
 
     while (!pglobal->stop) {
@@ -22,8 +23,6 @@ void *cam_input_thread(void *arg) {
             syslog(LOG_ERR, "Error grabbing frames\n");
             exit(EXIT_FAILURE);
         }
-
-        DBG("received frame of size: %d\n", g_videoin->buf.bytesused);
 
         // Workaround for broken, corrupted frames:
         // Under low light conditions corrupted frames may get captured.
@@ -53,7 +52,6 @@ void *cam_input_thread(void *arg) {
         }
         else {
 #endif
-            DBG("copying frame\n");
             pglobal->size = memcpy_picture(pglobal->buf, g_videoin->tmpbuffer,
                                            g_videoin->buf.bytesused);
 #if 0
@@ -75,17 +73,13 @@ void *cam_input_thread(void *arg) {
         // pthread_cond_broadcast(&pglobal->db_update);
         pthread_mutex_unlock( &pglobal->db );
 
-        DBG("waiting for next frame\n");
-
         // only use usleep if the fps is below 5, otherwise the overhead is too long
         if ( g_videoin->fps < 5 ) {
             usleep(1000*1000/g_videoin->fps);
         }
     }
 
-    DBG("leaving input thread, calling cleanup function now\n");
     // pthread_cleanup_pop(1);
-
     return NULL;
 }
 
@@ -117,10 +111,10 @@ int video_lock(video_data_t *vdata, int type)
     vdata->length = (unsigned long)global.size;
     vdata->data = (const char *)global.buf;
 
-    vdata->width = global.in_param.res_width;
-    vdata->height = global.in_param.res_height;
+    vdata->width = global.width;
+    vdata->height = global.height;
+    vdata->fps = global.fps;
 
-    vdata->fps = global.in_param.fps;
     return 1;
 }
 
@@ -133,7 +127,7 @@ void video_unlock()
 int video_init(const char *dev, int width, int height, int fps)
 {
     int format = V4L2_PIX_FMT_MJPEG;
-    static globals *pglobal;
+    static uvc_globals_t *pglobal;
 
     if (g_vid_enabled) {
         syslog(LOG_INFO, "attempting to call video_init multiple times\n");
@@ -144,20 +138,18 @@ int video_init(const char *dev, int width, int height, int fps)
     global.buf  = NULL;
     global.size = 0;
 
-    global.in_param.res_width = width;
-    global.in_param.res_height = height;
-    global.in_param.fps = fps;
-    global.in_param.global = &global;
-    strcpy(global.in_param.dev, dev);
+    global.width  = width;
+    global.height = height;
+    global.fps    = fps;
 
     if (pthread_mutex_init(&global.db, NULL) != 0) {
-        LOG("could not initialize mutex variable\n");
+        syslog(LOG_ERR, "could not initialize mutex variable\n");
         closelog();
         return 0;
     }
 
     if (pthread_cond_init(&global.db_update, NULL) != 0) {
-        LOG("could not initialize condition variable\n");
+        syslog(LOG_ERR, "could not initialize condition variable\n");
         closelog();
         return 0;
     }
