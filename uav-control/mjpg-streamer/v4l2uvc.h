@@ -33,7 +33,6 @@
 #include <sys/select.h>
 #include <linux/videodev.h>
 #include <libv4l2.h>
-#include "uvcvideo.h"
 #define NB_BUFFER 4
 
 typedef struct uvc_globals {

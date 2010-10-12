@@ -2,43 +2,61 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <linux/videodev.h>
-#include <sys/ioctl.h>
-#include <errno.h>
 #include <signal.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <getopt.h>
 #include <pthread.h>
-#include <dlfcn.h>
-#include <fcntl.h>
 #include <syslog.h>
+#include <stdint.h>
+#include "video_uvc.h"
+
+int g_running = 1;
 
 void sig_handler(int id)
 {
     // Stop mjpg-streamer
     // mjpg_streamer_stop(0);
-
-    exit(0);
+    video_shutdown();
+    g_running = 0;
 }
-
-int mjpg_streamer_main(int, char *[]);
 
 int main (int argc, char **argv)
 {
-    // char *input = "input_uvc.so --resolution 640x480 --fps 15 ";
-    // char *output = "output_udp.so --port 2010";
+    const int width = 320;
+    const int height = 240;
+    const int fps = 15;
+    const char *v4l_dev = "/dev/video0";
+    uint32_t *jpg_buf = NULL;
+    unsigned long buff_sz = 0;
+    video_data_t vid_data;
 
     // register CTRL+C to exit
     signal(SIGINT, sig_handler);
 
-    // Start mjpg-streamer
-    mjpg_streamer_main(argc, argv);
+    if (!video_init(v4l_dev, width, height, fps)) {
+        fprintf(stderr, "failed to initialize video subsystem\n");
+        return EXIT_FAILURE;
+    }
 
-    // Wait for signals
-    pause();
+    while (g_running) {
+        if (!video_lock(&vid_data, 0)) {
+            // video disabled, non-functioning, or frame not ready
+            continue;
+        }
+
+        // copy the jpeg to our buffer now that we're safely locked
+        if (buff_sz < vid_data.length) {
+            free(jpg_buf);
+            buff_sz = vid_data.length;
+            jpg_buf = (uint32_t *)malloc(buff_sz);
+        }
+
+        memcpy(jpg_buf, vid_data.data, vid_data.length);
+        video_unlock();
+
+        fprintf(stderr, "read frame size %ld\n", vid_data.length);
+    }
+
+    fprintf(stderr, "freeing resources and shutting down...\n");
+    free(jpg_buf);
 
     return 0;
 }

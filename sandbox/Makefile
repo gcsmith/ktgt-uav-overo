@@ -23,15 +23,15 @@ UC = ../uav-control
 MS = ../uav-control/mjpg-streamer
 
 ifeq ("$(PROFILE)", "gprof")
-	CFLAGS += -O0 -ggdb -pg
-	LDFLAGS += -O0 -ggdb -pg
+    CFLAGS += -O0 -ggdb -pg
+    LDFLAGS += -O0 -ggdb -pg
 else
 ifeq ("$(PROFILE)", "debug")
-	CFLAGS += -O0 -ggdb
-	LDFLAGS += -O0 -ggdb
+    CFLAGS += -O0 -ggdb
+    LDFLAGS += -O0 -ggdb
 else
-	CFLAGS += -O2
-	LDFLAGS += -O2
+    CFLAGS += -O2
+    LDFLAGS += -O2
 endif
 endif
 
@@ -56,10 +56,7 @@ JPEG_OBJS = jpeg_test.o \
             $(UC)/readwritejpeg.o
 MADC_OBJS = madc_test.o
 MJPG_OBJS = mjpg_test.o \
-            $(MS)/input_uvc.o \
-            $(MS)/jpeg_utils.o \
-            $(MS)/mjpg_streamer.o \
-            $(MS)/output_udp.o \
+            $(UC)/video_uvc.o \
             $(MS)/v4l2uvc.o
 PWM_OBJS  = pwm_test.o
 RSSI_OBJS = rssi_test.o
