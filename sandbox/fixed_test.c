@@ -57,12 +57,8 @@ int main(int argc, char *argv[])
 
             result_fix = FP32_DIV(xf,yf);
             fix_integer = FP32_TO_INT(result_fix);
-            //printf("fixint: %d\n", fix_integer);
-            fix_decimals_double = (FP32_DECIMALS(result_fix));
-            //printf("fixdec: %d",FP32_DECIMALS(result_fix));
-            fix_decimals_double /= 255.0;
-            //printf("fixdoub: %f\n",fix_decimals_double);
-            fix_result_as_double = (double)fix_decimals_double + (double)fix_integer;
+            fix_decimals_double = FP32_TO_FRAC(result_fix);
+            fix_result_as_double = FP32_TO_FLOAT(result_fix);
 
             double_result = (x/y);
             fix_dif = fabs(fix_result_as_double - double_result);
