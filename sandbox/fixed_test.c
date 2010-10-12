@@ -99,9 +99,8 @@ double min_b = 255;
                 g_f = g_d = j;
                 b_f = b_d = k;
                 
-                RGB2HSLfixed(&r_f,&g_f,&b_f);
-                RGB2HSL(&r_d,&g_d, &b_d);
-                
+                rgb_to_hsl_fp32(&r_f, &g_f, &b_f);
+                rgb_to_hsl(&r_d, &g_d, &b_d);
                 
                 err_r = abs((double)r_f - (double)r_d);
                 err_g = abs((double)g_f - (double)g_d);

@@ -53,7 +53,7 @@ void *color_detect_thread(void *arg)
         video_unlock();
 
         if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height)) {
-            color_detect_hsl(rgb_buff, color, box);
+            color_detect_hsl_fp32(rgb_buff, color, box);
         }
 
         if (box->detected) {
@@ -109,7 +109,7 @@ int colordetect_init(client_info_t *client)
     g_globals.color.b = 100;
 
     // set initial tracking threshold values
-    g_globals.color.ht = 5;
+    g_globals.color.ht = 10;
     g_globals.color.st = 30;
     g_globals.color.lt = 30;
 
@@ -161,7 +161,7 @@ void color_detect_hsl(uint8_t *rgb_in,
 {
     track_color_t track_color = *color;
     // convert detect color from RGB to HSL
-    RGB2HSL(&track_color.r, &track_color.g, &track_color.b);                     
+    rgb_to_hsl(&track_color.r, &track_color.g, &track_color.b);                     
                 
     // convert the image to HSL
     COLORimageRGBtoHSL(rgb_in, box->width, box->height);
@@ -171,12 +171,12 @@ void color_detect_hsl(uint8_t *rgb_in,
 }
 
 // -----------------------------------------------------------------------------
-void color_detect_hsl_fp(uint8_t *rgb_in, 
+void color_detect_hsl_fp32(uint8_t *rgb_in, 
         const track_color_t *color, track_coords_t *box) 
 {
     track_color_t track_color = *color;
     // convert detect color from RGB to HSL
-    RGB2HSLfixed(&track_color.r, &track_color.g, &track_color.b);                     
+    rgb_to_hsl_fp32(&track_color.r, &track_color.g, &track_color.b);                     
                         
     // convert the image to HSL
     COLORimageRGBtoHSLfixed(rgb_in, box->width, box->height);
@@ -220,9 +220,9 @@ void COLORimageRGBtoHSL(uint8_t *rgb_in, int width, int height)
     for (i = 0; i < height; i++) {
         for (j = 0; j < width; j++) {
             // convert single rgb pixel to hsl color space
-            RGB2HSL(&(rgb_in[(i * width * 3) + (j * 3) + 0]),
-                    &(rgb_in[(i * width * 3) + (j * 3) + 1]),
-                    &(rgb_in[(i * width * 3) + (j * 3) + 2]));
+            rgb_to_hsl(&(rgb_in[(i * width * 3) + (j * 3) + 0]),
+                       &(rgb_in[(i * width * 3) + (j * 3) + 1]),
+                       &(rgb_in[(i * width * 3) + (j * 3) + 2]));
         }
     }
 }
@@ -234,145 +234,78 @@ void COLORimageRGBtoHSLfixed(uint8_t *rgb_in, int width, int height)
     for (i = 0; i < height; i++) {
         for (j = 0; j < width; j++) {
             // convert single rgb pixel to hsl color space
-            RGB2HSLfixed(&(rgb_in[(i * width * 3) + (j * 3) + 0]),
-                    &(rgb_in[(i * width * 3) + (j * 3) + 1]),
-                    &(rgb_in[(i * width * 3) + (j * 3) + 2]));
+            rgb_to_hsl_fp32(&(rgb_in[(i * width * 3) + (j * 3) + 0]),
+                            &(rgb_in[(i * width * 3) + (j * 3) + 1]),
+                            &(rgb_in[(i * width * 3) + (j * 3) + 2]));
         }
     }
 }
 
 // -----------------------------------------------------------------------------
-void RGB2HSL2(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *h, uint8_t *s, uint8_t *l)
+void rgb_to_hsl(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 {
-    real_t _r = *r / 255.0f;
-    real_t _g = *g / 255.0f;
-    real_t _b = *b / 255.0f;
-    real_t max;
-    real_t min;
-
-    real_t vm;
-    real_t _h = 0.0f, _s = 0.0f, _l = 0.0f; // set to black by default
-
-    max = MAX(MAX(_r, _g), _b);
-    min = MIN(MIN(_r, _g), _b);
-    _l = (max + min) / 2.0f;
-
-    if (min == max) {
-        *h = 0;
-        *s = 0;
-        *l = _l * 255.0f;
-        return;
-    }
-
-    vm = max - min;
-    _s = _l > 0.5f ? vm / (2.0f - max - min) : vm / (max + min);
-
-    if (max == _r) {
-        _h = (_g - _b) / vm + (_g < _b ? 6.0f : 0.0f);
-    }
-    else if (max == _g) {
-        _h = (_b - _r) / vm + 2.0f;
-    }
-    else {
-        _h = (_r - _g) / vm + 4.0f;
-    }
-
-    _h /= 6.0f;
-
-    *h = _h * 255.0f;
-    *s = _s * 255.0f;
-    *l = _l * 255.0f;
-}
-
-// -----------------------------------------------------------------------------
-void RGB2HSLfixed(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
-{
-    uint32_t fix255 = INT_TO_FP32(255);
-    //0.5 is 128
-    
-    uint32_t r = FP32_DIV(INT_TO_FP32(*r_h),fix255);
-    uint32_t g = FP32_DIV(INT_TO_FP32(*g_s),fix255);
-    uint32_t b = FP32_DIV(INT_TO_FP32(*b_l),fix255);
-    
-    int32_t max;
-    int32_t min;
-
-    int32_t vm;
-    int32_t h = 0, s = 0, l = 0; // set to black by default
-
-    max = MAX(MAX(r, g), b);
-    min = MIN(MIN(r, g), b);
-    l = FP32_DIV( (max + min), INT_TO_FP32(2));
-
-    if (min == max) {
-        *r_h = 0;
-        *g_s = 0;
-        *b_l = (uint8_t)FP32_TO_INT(FP32_MUL(l, fix255));
-        return;
-    }
-
-    vm = max - min;
-    s = l > 128 ? FP32_DIV(vm, (INT_TO_FP32(2) - max - min))
-                : FP32_DIV(vm, (max + min));
-
-    if (max == r) {
-        h = FP32_DIV((g - b) , vm + (g < b ? INT_TO_FP32(6) : 0));
-    }
-    else if (max == g) {
-        h = FP32_DIV((b - r) , vm + INT_TO_FP32(2));
-    }
-    else {
-        h = FP32_DIV((r - g) , vm + INT_TO_FP32(2));
-    }
-
-    h = FP32_DIV(h, INT_TO_FP32(6));
-
-    (*r_h) = (uint8_t)FP32_TO_INT(FP32_MUL(h , fix255));
-    (*g_s) = (uint8_t)FP32_TO_INT(FP32_MUL(s , fix255));
-    (*b_l) = (uint8_t)FP32_TO_INT(FP32_MUL(l , fix255));
-}
-
-// -----------------------------------------------------------------------------
-void RGB2HSL(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
-{
-    real_t r = *r_h / 255.0f;
-    real_t g = *g_s / 255.0f;
-    real_t b = *b_l / 255.0f;
-    real_t max;
-    real_t min;
-
-    real_t vm;
-    real_t h = 0.0f, s = 0.0f, l = 0.0f; // set to black by default
-
-    max = MAX(MAX(r, g), b);
-    min = MIN(MIN(r, g), b);
-    l = (max + min) / 2.0f;
+    real_t r = *r_h * 0.00392156863f;
+    real_t g = *g_s * 0.00392156863f;
+    real_t b = *b_l * 0.00392156863f;
+    real_t min = MIN3(r, g, b);
+    real_t max = MAX3(r, g, b);
+    real_t vm, h, s, l = (min + max) * 0.5f;
 
     if (min == max) {
         *r_h = 0;
         *g_s = 0;
         *b_l = l * 255.0f;
-        return;
-    }
-
-    vm = max - min;
-    s = l > 0.5f ? vm / (2.0f - max - min) : vm / (max + min);
-
-    if (max == r) {
-        h = (g - b) / vm + (g < b ? 6.0f : 0.0f);
-    }
-    else if (max == g) {
-        h = (b - r) / vm + 2.0f;
     }
     else {
-        h = (r - g) / vm + 4.0f;
+        vm = max - min;
+        s = l > 0.5f ? vm / (2.0f - max - min) : vm / (max + min);
+
+        if (max == r)
+            h = (g - b) / vm + (g < b ? 6.0f : 0.0f);
+        else if (max == g)
+            h = (b - r) / vm + 2.0f;
+        else
+            h = (r - g) / vm + 4.0f;
+
+        (*r_h) = h *  42.5f;
+        (*g_s) = s * 255.0f;
+        (*b_l) = l * 255.0f;
     }
+}
 
-    h /= 6.0f;
+// -----------------------------------------------------------------------------
+void rgb_to_hsl_fp32(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
+{
+    uint32_t fix255 = INT_TO_FP32(255);
+    uint32_t r = FP32_DIV(INT_TO_FP32(*r_h), fix255);
+    uint32_t g = FP32_DIV(INT_TO_FP32(*g_s), fix255);
+    uint32_t b = FP32_DIV(INT_TO_FP32(*b_l), fix255);
+    uint32_t min = MIN3(r, g, b);
+    uint32_t max = MAX3(r, g, b);
+    uint32_t vm, h, s, l = FP32_DIV((min + max), INT_TO_FP32(2));
 
-    (*r_h) = h * 255.0f;
-    (*g_s) = s * 255.0f;
-    (*b_l) = l * 255.0f;
+    if (min == max) {
+        *r_h = 0;
+        *g_s = 0;
+        *b_l = (uint8_t)FP32_TO_INT(FP32_MUL(l, fix255));
+    }
+    else {
+        vm = max - min;
+        s = l > 128 ? FP32_DIV(vm, (INT_TO_FP32(2) - max - min))
+                    : FP32_DIV(vm, (max + min));
+
+        if (max == r)
+            h = FP32_DIV((g - b) , vm + (g < b ? INT_TO_FP32(6) : 0));
+        else if (max == g)
+            h = FP32_DIV((b - r) , vm + INT_TO_FP32(2));
+        else
+            h = FP32_DIV((r - g) , vm + INT_TO_FP32(2));
+
+        h = FP32_DIV(h, INT_TO_FP32(6));
+        (*r_h) = (uint8_t)FP32_TO_INT(FP32_MUL(h , fix255));
+        (*g_s) = (uint8_t)FP32_TO_INT(FP32_MUL(s , fix255));
+        (*b_l) = (uint8_t)FP32_TO_INT(FP32_MUL(l , fix255));
+    }
 }
 
 // -----------------------------------------------------------------------------

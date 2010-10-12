@@ -11,6 +11,7 @@
 
 #include "readwritejpeg.h"
 #include "colordetect.h"
+#include "fp32.h"
 
 #define MAX_PATH 256
 #define PUT_BANNER(c) for (i = 0; i < c; ++i) printf("-"); printf("\n");
@@ -86,7 +87,7 @@ float test_hsl_fp_stream(int iterations, const uint8_t *stream_in,
         memcpy(&temp, color, sizeof(track_color_t));
         memcpy(img_in, stream_in, length);
         jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
-        color_detect_hsl_fp(rgb_buff, &temp, &box);
+        color_detect_hsl_fp32(rgb_buff, &temp, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -187,7 +188,7 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = ":f:r:th?";
+    static const char *str = "f:r:t:h?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
@@ -224,7 +225,6 @@ int main(int argc, char *argv[])
     bytes_read = fread(stream_in, 1, img_size, jpeg_fd);
     fclose(jpeg_fd);
     
-
     if (bytes_read != img_size) {
         fprintf(stderr, "expected %lu bytes, read %lu\n", img_size, bytes_read);
         return EXIT_FAILURE;
