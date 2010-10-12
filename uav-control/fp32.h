@@ -1,15 +1,27 @@
 #ifndef _UAV_FP32__H_
 #define _UAV_FP32__H_
 
-#define FP32_Y                  11
-#define FP32_Yp1                12
-#define FP32_2_TO_Ym1           1024    //10^2
+// 32-bit fixed point
 
-#define INT_TO_FP32(fixed)      ((fixed) << FP32_Y)
-#define FP32_TO_INT(myInt)      ((myInt) >> FP32_Y)
-#define FP32_DECIMALS(fixed)    ((fixed) & 0xff)
-#define FP32_MUL(x, y)          (((x) * (y) + FP32_2_TO_Ym1 ) >> FP32_Y)
-#define FP32_DIV(x, y)          ((((x) << (FP32_Y + 1))/(y)) / 2)
+#define FP32_BP  16
+#define FP32_BP2 32
+
+#define FP32_FROM_INT(i)    ((int32_t)(i) << FP32_BP)
+#define FP32_TO_INT(f)      ((f) >> FP32_BP)
+#define FP32_DECIMALS(f)    ((f) & 0xff)
+#define FP32_MUL(x, y)      (int32_t)(((int64_t)(x) * (int64_t)(y)) >> FP32_BP)
+#define FP32_DIV(x, y)      (int32_t)((((int64_t)(x) << FP32_BP2) / (y)) >> FP32_BP)
+
+// 16-bit fixed point
+
+#define FP16_BP  8
+#define FP16_BP2 16
+
+#define FP16_FROM_INT(i)    ((int16_t)(i) << FP16_BP)
+#define FP16_TO_INT(f)      ((f) >> FP16_BP)
+#define FP16_DECIMALS(f)    ((f) & 0xff)
+#define FP16_MUL(x, y)      (int16_t)(((int32_t)(x) * (int32_t)(y)) >> FP16_BP)
+#define FP16_DIV(x, y)      (int16_t)((((int32_t)(x) << FP16_BP2) / (y)) >> FP16_BP)
 
 #endif // _UAV_FP32__H_
 

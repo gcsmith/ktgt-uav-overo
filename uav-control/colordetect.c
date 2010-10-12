@@ -276,35 +276,38 @@ void rgb_to_hsl(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 // -----------------------------------------------------------------------------
 void rgb_to_hsl_fp32(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 {
-    uint32_t fix255 = INT_TO_FP32(255);
-    uint32_t r = FP32_DIV(INT_TO_FP32(*r_h), fix255);
-    uint32_t g = FP32_DIV(INT_TO_FP32(*g_s), fix255);
-    uint32_t b = FP32_DIV(INT_TO_FP32(*b_l), fix255);
-    uint32_t min = MIN3(r, g, b);
-    uint32_t max = MAX3(r, g, b);
-    uint32_t vm, h, s, l = FP32_DIV((min + max), INT_TO_FP32(2));
+    const int32_t fp_half = FP32_DIV(FP32_FROM_INT(1), FP32_FROM_INT(2));
+    const int32_t fp_2 = FP32_FROM_INT(2);
+    const int32_t fp_4 = FP32_FROM_INT(4);
+    const int32_t fp_6 = FP32_FROM_INT(6);
+    const int32_t fp_255 = FP32_FROM_INT(255);
+    int32_t r = FP32_DIV(FP32_FROM_INT(*r_h), fp_255);
+    int32_t g = FP32_DIV(FP32_FROM_INT(*g_s), fp_255);
+    int32_t b = FP32_DIV(FP32_FROM_INT(*b_l), fp_255);
+    int32_t min = MIN3(r, g, b);
+    int32_t max = MAX3(r, g, b);
+    int32_t vm, h, s, l = FP32_MUL((min + max), fp_half);
 
     if (min == max) {
         *r_h = 0;
         *g_s = 0;
-        *b_l = (uint8_t)FP32_TO_INT(FP32_MUL(l, fix255));
+        *b_l = (uint8_t)FP32_TO_INT(FP32_MUL(l, fp_255));
     }
     else {
         vm = max - min;
-        s = l > 128 ? FP32_DIV(vm, (INT_TO_FP32(2) - max - min))
-                    : FP32_DIV(vm, (max + min));
+        s = l > fp_half ? FP32_DIV(vm, (fp_2 - max - min))
+                        : FP32_DIV(vm, (max + min));
 
         if (max == r)
-            h = FP32_DIV((g - b) , vm + (g < b ? INT_TO_FP32(6) : 0));
+            h = FP32_DIV((g - b), vm) + (g < b ? fp_6 : 0);
         else if (max == g)
-            h = FP32_DIV((b - r) , vm + INT_TO_FP32(2));
+            h = FP32_DIV((b - r), vm) + fp_2;
         else
-            h = FP32_DIV((r - g) , vm + INT_TO_FP32(2));
+            h = FP32_DIV((r - g), vm) + fp_4;
 
-        h = FP32_DIV(h, INT_TO_FP32(6));
-        (*r_h) = (uint8_t)FP32_TO_INT(FP32_MUL(h , fix255));
-        (*g_s) = (uint8_t)FP32_TO_INT(FP32_MUL(s , fix255));
-        (*b_l) = (uint8_t)FP32_TO_INT(FP32_MUL(l , fix255));
+        (*r_h) = (uint8_t)FP32_TO_INT(FP32_DIV(FP32_MUL(h, fp_255), fp_6));
+        (*g_s) = (uint8_t)FP32_TO_INT(FP32_MUL(s, fp_255));
+        (*b_l) = (uint8_t)FP32_TO_INT(FP32_MUL(l, fp_255));
     }
 }
 

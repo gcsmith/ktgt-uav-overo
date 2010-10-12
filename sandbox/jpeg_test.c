@@ -72,7 +72,7 @@ float test_hsl_stream(int iterations, const uint8_t *stream_in,
 
 // -----------------------------------------------------------------------------
 // Benchmark jpeg decompression and hsl color tracking from memory stream.
-float test_hsl_fp_stream(int iterations, const uint8_t *stream_in,
+float test_hsl_fp32_stream(int iterations, const uint8_t *stream_in,
         unsigned long length, track_color_t *color)
 {
     struct timespec t0, t1;
@@ -234,27 +234,27 @@ int main(int argc, char *argv[])
     PUT_BANNER(80);
 
     if (!flag_decompress) {
-        printf("Decompress loop    : ");
+        printf("Decompress loop      : ");
         printf(" %f FPS\n", test_decompress(40, stream_in, img_size));
     }
 
     if (!flag_hsl) {
-        printf("HSL stream loop    : ");
+        printf("HSL stream loop      : ");
         printf(" %f FPS\n", test_hsl_stream(40, stream_in, img_size, &color));
     }
 
     if (!flag_hsl) {
-        printf("HSL fp stream loop : ");
-        printf(" %f FPS\n", test_hsl_fp_stream(40, stream_in, img_size, &color));
+        printf("HSL fp32 stream loop : ");
+        printf(" %f FPS\n", test_hsl_fp32_stream(40, stream_in, img_size, &color));
     }
 
     if (!flag_rgb1) {
-        printf("RGB1 stream loop   : ");
+        printf("RGB1 stream loop     : ");
         printf(" %f FPS\n", test_rgb1_stream(40, stream_in, img_size, &color));
     }
 
     if (!flag_rgb2) {
-        printf("RGB2 stream loop   : ");
+        printf("RGB2 stream loop     : ");
         printf(" %f FPS\n", test_rgb2_stream(40, stream_in, img_size, &color));
     }
 
