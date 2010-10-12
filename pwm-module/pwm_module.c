@@ -564,10 +564,10 @@ int pwm_disable_spi(void)
     pwm.gpio173_mux_restore = ioread16(base + 4);
     pwm.gpio174_mux_restore = ioread16(base + 6);
 
-    iowrite16(0x11C, base + 0);
-    iowrite16(0x11C, base + 2);
-    iowrite16(0x11C, base + 4);
-    iowrite16(0x11C, base + 6);
+    iowrite16(0x104, base + 0);
+    iowrite16(0x104, base + 2);
+    iowrite16(0x104, base + 4);
+    iowrite16(0x104, base + 6);
 
     iounmap(base);
     return 1;
