@@ -46,8 +46,8 @@ OBJ_FILES = colordetect.o \
             readwritejpeg.o \
             uav_control.o \
             utility.o \
-            video_uvc.o \
-            mjpg-streamer/v4l2uvc.o
+            v4l2uvc.o \
+            video_uvc.o
 
 DEP_FILES = $(strip $(OBJ_FILES:.o=.d))
 
@@ -63,7 +63,7 @@ $(APPNAME) : $(OBJ_FILES)
 	$(CC) $(CFLAGS) $(DEP_OUTPUT_OPTION) -c -o $@ $<
 
 clean:
-	@rm -rf $(APPNAME) *.o *.d mjpg-streamer/*.o mjpg-streamer/*.d
+	@rm -rf $(APPNAME) *.o *.d 
 
 ifneq ($(DEP_FILES),)
 ifeq ($(strip $(filter clean%, $(MAKECMDGOALS))),)

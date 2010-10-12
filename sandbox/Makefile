@@ -20,7 +20,6 @@ CFLAGS += -Wall -Werror \
           -I../uav-control
 
 UC = ../uav-control
-MS = ../uav-control/mjpg-streamer
 
 ifeq ("$(PROFILE)", "gprof")
     CFLAGS += -O0 -ggdb -pg
@@ -57,7 +56,7 @@ JPEG_OBJS = jpeg_test.o \
 MADC_OBJS = madc_test.o
 MJPG_OBJS = mjpg_test.o \
             $(UC)/video_uvc.o \
-            $(MS)/v4l2uvc.o
+            $(UC)/v4l2uvc.o
 PWM_OBJS  = pwm_test.o
 RSSI_OBJS = rssi_test.o
 
@@ -118,7 +117,7 @@ rssi_test: ${RSSI_OBJS}
 	$(CC) $(CFLAGS) $(DEP_OUTPUT_OPTION) $(OUTPUT_OPTION) $<
 
 clean:
-	@rm -rf $(APP_NAMES) *.o *.d ../uav-control/*.o
+	@rm -rf $(APP_NAMES) *.o *.d ../uav-control/*.o ../uav-control/*.d
 
 ifneq ($(DEP_FILES),)
 ifeq ($(strip $(filter clean%, $(MAKECMDGOALS))),)

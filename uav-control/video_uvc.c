@@ -1,7 +1,7 @@
 #include <pthread.h>
 #include <syslog.h>
 #include <stdlib.h>
-#include "mjpg-streamer/v4l2uvc.h"
+#include "v4l2uvc.h"
 #include "video_uvc.h"
 
 uvc_globals_t global = { 0 };
