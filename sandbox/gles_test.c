@@ -94,12 +94,15 @@ int main(int argc, char *argv[])
     int width = 320, height = 240, fps = 10;
     video_data_t vid_data;
 
+    const float rx = 320.0f / 512.0f;
+    const float ry = 240.0f / 512.0f;
+
     GLuint videoTex, vbo;
     float afVertices[] = {
          0.0f,  0.0f,  0.0f,  0.0f,  0.0f,
-         0.0f,  512.0f,  0.0f,  0.0f,  1.0f,
-         512.0f,  0.0f,  0.0f,  1.0f,  0.0f,
-         512.0f,  512.0f,  0.0f,  1.0f,  1.0f,
+         0.0f,  240.0f,  0.0f,  0.0f,  ry,
+         320.0f,  0.0f,  0.0f,  rx,  0.0f,
+         320.0f,  240.0f,  0.0f,  rx,  ry,
     };
     unsigned int uiSize = 4 * (sizeof(float) * 5);
 
@@ -128,12 +131,6 @@ int main(int argc, char *argv[])
 
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-    glDisable(GL_LIGHTING);
-
-    //glEnableClientState(GL_VERTEX_ARRAY);
-    //glEnableClientState(GL_NORMAL_ARRAY);
-    //glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
     glGenTextures(1, &videoTex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); 
@@ -168,7 +165,8 @@ int main(int argc, char *argv[])
     for(i = 0; i < TEX_SIZE; ++i) {
         for(j = 0; j < TEX_SIZE; ++j) {
             int offset = i * TEX_SIZE * 4 + j * 4;
-            GLuint col = (255L<<24) + ((255L-j*2)<<16) + ((255L-i)<<8) + (255L-i*2);
+            GLuint col = (255L << 24) + ((255L - j * 2) << 16) +
+                         ((255L - i) << 8) + (255L - i * 2);
             *((GLuint *)&tex[offset]) = col;
         }
     }
@@ -223,8 +221,7 @@ int main(int argc, char *argv[])
             glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
             color_detect_hsl_fp32(rgb_buff, &color, &box);
-            if (box.detected)
-            {
+            if (box.detected) {
                 float line_coords[] = {
                     (float)box.x1, 240.0f - box.y1, 0.0f,
                     (float)box.x2, 240.0f - box.y1, 0.0f,
