@@ -111,7 +111,7 @@ int colordetect_init(client_info_t *client)
 
     // set initial tracking threshold values
     g_globals.color.ht = 10;
-    g_globals.color.st = 30;
+    g_globals.color.st = 20;
     g_globals.color.lt = 30;
 
     g_globals.color.filter = 15;
@@ -339,7 +339,8 @@ void findColorHSL(const uint8_t *hsl_in,
             l = hsl_in[pix_start + 2];   
             
             if (abs(h - (int)color->r) < (int)color->ht &&
-                (s > 50) &&
+                (s > (color->g-20)) &&
+		(s < (color->g+20)) &&
                 (l > 25) && 
                 (l < 225)) {
 
