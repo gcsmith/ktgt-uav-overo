@@ -320,7 +320,7 @@ void findColorHSL(const uint8_t *hsl_in,
     int img_pitch = box->width * 3, scan_start = 0, pix_start = 0;
 
     // initialize box to obviously invalid state so we know if we didn't detect
-    int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
+    int xs = img_width, x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
 
     // iterate over each scanline in the source image
     for (y = 0; y < img_height; ++y) {
@@ -345,12 +345,16 @@ void findColorHSL(const uint8_t *hsl_in,
                 (l < 225)) {
 
                 // only update bounding box of consecutive pixels >= "filter"
-                if (++consec >= noise_filter) {
-                    if (x < x1) x1 = x;
+                if (consec >= noise_filter) {
+                    if (xs < x1) x1 = xs;
                     if (x > x2) x2 = x;
                     if (y < y1) y1 = y;
                     if (y > y2) y2 = y;
                 }
+                else if (0 == consec) {
+                    xs = x;
+                }
+                ++consec;
             }
             else {
                 // reset number of consecutive pixels if we didn't match
@@ -386,7 +390,7 @@ void findColorRGB(const uint8_t *rgb_in,
     int r_thresh = color->ht, g_thresh = color->st, b_thresh = color->lt;
 
     // initialize box to obviously invalid state so we know if we didn't detect
-    int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
+    int xs = img_width, x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
 
     // iterate over each scanline in the source image
     for (y = 0; y < img_height; ++y) {
@@ -405,12 +409,16 @@ void findColorRGB(const uint8_t *rgb_in,
                 abs(rgb_in[pix_start + 2] - b_track) < b_thresh) {
 
                 // only update bounding box of consecutive pixels >= "filter"
-                if (++consec >= noise_filter) {
-                    if (x < x1) x1 = x;
+                if (consec >= noise_filter) {
+                    if (xs < x1) x1 = xs;
                     if (x > x2) x2 = x;
                     if (y < y1) y1 = y;
                     if (y > y2) y2 = y; 
                 }
+                else if (0 == consec) {
+                    xs = x;
+                }
+                ++consec;
             }
             else {
                 // reset number of consecutive pixels if we didn't match
@@ -446,7 +454,7 @@ void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
     int dist;
 
     // initialize box to obviously invalid state so we know if we didn't detect
-    int x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
+    int xs = img_width, x1 = img_width, y1 = img_height, x2 = 0, y2 = 0;
 
     // square the input threshold value
     threshold *= threshold;
@@ -469,14 +477,17 @@ void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
 
             // if within threshold, update the bounding box
             if (dist < threshold) {
-
                 // only update bounding box of consecutive pixels >= "filter"
-                if (++consec >= noise_filter) {
+                if (consec >= noise_filter) {
                     if (x < x1) x1 = x;
                     if (x > x2) x2 = x;
                     if (y < y1) y1 = y;
                     if (y > y2) y2 = y; 
                 }
+                else if (0 == consec) {
+                    xs = x;
+                }
+                ++consec;
             }
             else {
                 // reset number of consecutive pixels if we didn't match
