@@ -45,7 +45,11 @@ APP_NAMES = evnt_test \
             rssi_test
 
 EVNT_OBJS = evnt_test.o
-GLES_OBJS = gles_test.o
+GLES_OBJS = gles_test.o \
+            $(UC)/colordetect.o \
+            $(UC)/readwritejpeg.o \
+            $(UC)/video_uvc.o \
+            $(UC)/v4l2uvc.o
 GPIO_OBJS = gpio_test.o
 FIXED_OBJS = fixed_test.o \
             $(UC)/colordetect.o \
@@ -79,7 +83,7 @@ evnt_test: ${EVNT_OBJS}
 
 gles_test: ${GLES_OBJS}
 	@echo "[LD] $@"
-	$(CC) $(LDFLAGS) -lpthread -lGLES_CM -lEGL -o $@ $^
+	$(CC) $(LDFLAGS) -lpthread -ljpeg -lGLES_CM -lEGL -o $@ $^
 
 gpio_test: ${GPIO_OBJS}
 	@echo "[LD] $@"
