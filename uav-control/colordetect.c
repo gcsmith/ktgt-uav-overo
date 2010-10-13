@@ -339,7 +339,7 @@ void findColorHSL(const uint8_t *hsl_in,
             l = hsl_in[pix_start + 2];   
             
             if (abs(h - (int)color->r) < (int)color->ht &&
-                (s > 100) &&
+                (s > 50) &&
                 (l > 25) && 
                 (l < 225)) {
 
