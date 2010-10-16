@@ -51,7 +51,7 @@ extern int image_width;         /* Number of columns in image */
  * and a compression quality factor are passed in.
  */
 
-void jpeg_wr_file(const char *filename, int quality, 
+int jpeg_wr_file(const char *filename, int quality, 
         const uint8_t *buffer, int width, int height)
 {
     /* This struct contains the JPEG compression parameters and pointers to
@@ -96,7 +96,7 @@ void jpeg_wr_file(const char *filename, int quality,
      */
     if ((outfile = fopen(filename, "wb")) == NULL) {
         fprintf(stderr, "can't open %s\n", filename);
-        exit(1);
+        return 0;
     }
     jpeg_stdio_dest(&cinfo, outfile);
 
@@ -159,6 +159,7 @@ void jpeg_wr_file(const char *filename, int quality,
     jpeg_destroy_compress(&cinfo);
 
     /* And we're done! */
+    return 1;
 }
 
 
@@ -550,7 +551,7 @@ int jpeg_rd_mem(const uint8_t *stream_in, unsigned long length,
     return 1;
 }
 
-void jpeg_wr_mem(uint8_t **stream_out, unsigned long *length,
+int jpeg_wr_mem(uint8_t **stream_out, unsigned long *length,
         int quality, const uint8_t *rgb_in, int width, int height)
 {
     /* This struct contains the JPEG compression parameters and pointers to
@@ -661,6 +662,7 @@ void jpeg_wr_mem(uint8_t **stream_out, unsigned long *length,
     jpeg_destroy_compress(&cinfo);
 
     /* And we're done! */
+    return 1;
 }
 
 /*

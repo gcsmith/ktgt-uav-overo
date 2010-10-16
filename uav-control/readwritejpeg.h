@@ -7,13 +7,13 @@
 #include <jpeglib.h>
 #include "utility.h"
 
-void jpeg_wr_file(const char *filename, int quality,
+int jpeg_wr_file(const char *filename, int quality,
         const uint8_t *buffer, int width, int height);
     
 int jpeg_rd_file(const char *filename, uint8_t **buffer,
         int *width, int *height);
 
-void jpeg_wr_mem(uint8_t **stream_out, unsigned long *length,
+int jpeg_wr_mem(uint8_t **stream_out, unsigned long *length,
         int quality, const uint8_t *rgb_in, int width, int height);
     
 int jpeg_rd_mem(const uint8_t *stream, unsigned long length,

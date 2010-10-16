@@ -21,7 +21,8 @@ void *cam_input_thread(void *arg) {
         // grab a frame
         if (uvcGrab(g_videoin) < 0) {
             syslog(LOG_ERR, "Error grabbing frames\n");
-            exit(EXIT_FAILURE);
+            sleep(1);
+            continue;
         }
 
         // Workaround for broken, corrupted frames:
