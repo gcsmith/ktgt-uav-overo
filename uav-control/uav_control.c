@@ -54,6 +54,11 @@ void *aux_trigger_thread(void *arg)
         pulse = gpio_event_sync_read(&g_gpio_aux);
         fc_get_vcm(&axes, &type);
 
+        if (VCM_TYPE_KILL == type) {
+            syslog(LOG_INFO, "AUX: killed, exiting aux thread\n");
+            break;
+        }
+
         // determine if we need to perform a state transition
         if (VCM_TYPE_LOCKOUT != type && pulse > 1475) {
             syslog(LOG_INFO, "AUX: switch from autonomous to manual\n");
