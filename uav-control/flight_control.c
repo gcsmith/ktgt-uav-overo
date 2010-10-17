@@ -103,7 +103,7 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
         }
         else
         {
-            cmp = thro_last_cmp + (int)(hrange * value * 0.15f);
+            cmp = thro_last_cmp + (int)(hrange * value * 0.05f);
 
             // keep signal within range
             if (cmp > max)
@@ -541,6 +541,13 @@ void fc_update_vcm(int axes, int type)
     vcm_axes = axes;
     vcm_type = type;
     pthread_mutex_unlock(&fc_vcm_event);
+
+    if (type == VCM_TYPE_LOCKOUT)
+    {
+        thro_last_value = 0.0f;
+        thro_last_cmp = 0, thro_first = 0;
+        assign_duty(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
+    }
 }
 
 // -----------------------------------------------------------------------------

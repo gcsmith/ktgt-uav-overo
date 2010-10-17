@@ -18,8 +18,8 @@
 
 #define PWM_DEV_ALT     PWM_DEV_FIRST + 0
 #define PWM_DEV_YAW     PWM_DEV_FIRST + 1
-#define PWM_DEV_ROLL    PWM_DEV_FIRST + 2
-#define PWM_DEV_PITCH   PWM_DEV_FIRST + 3
+#define PWM_DEV_PITCH   PWM_DEV_FIRST + 2
+#define PWM_DEV_ROLL    PWM_DEV_FIRST + 3
 
 // Data structure containing control signal values
 typedef struct ctl_sigs
