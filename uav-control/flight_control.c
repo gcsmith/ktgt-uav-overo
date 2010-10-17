@@ -267,7 +267,7 @@ void *autopilot_thread(void *arg)
 void *takeoff_thread(void *arg)
 {
     int error, input, last_input = 0, dx_dt, setpoint;
-    float last_control;
+    float last_control = 0.0f;
     char stable = 0, timer_set = 0;
     ctl_sigs_t control;
     clock_t timer = 0;;
@@ -325,20 +325,20 @@ void *takeoff_thread(void *arg)
                 if (dx_dt < 1)
                 {
                     control.alt = 0.1f;
-                    fc_update_ctl(&control, VCM_AXIS_ALT);
+                    flight_control(&control, VCM_AXIS_ALT);
                 }
 
                 // need to slow the rate of climb
                 else if (dx_dt > 3)
                 {
                     control.alt = last_control * 0.5f;
-                    fc_update_ctl(&control, VCM_AXIS_ALT);
+                    flight_control(&control, VCM_AXIS_ALT);
                 }
             }
             else
             {
                 control.alt = -0.1f;
-                fc_update_ctl(&control, VCM_AXIS_ALT);
+                flight_control(&control, VCM_AXIS_ALT);
             }
 
             last_control = control.alt;
