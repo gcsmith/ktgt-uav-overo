@@ -596,7 +596,7 @@ int main(int argc, char *argv[])
     // open PWM ports for mixed controlling
     if (!flag_no_fc) {
         syslog(LOG_INFO, "opening flight control\n");
-        if (0 > fc_init(&g_gpio_alt, &g_imu)) {
+        if (!fc_init(&g_gpio_alt, &g_imu)) {
             syslog(LOG_ERR, "failed to open flight control\n");
             uav_shutdown(EXIT_FAILURE);
         }
