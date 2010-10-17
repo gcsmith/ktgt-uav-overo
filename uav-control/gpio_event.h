@@ -24,6 +24,8 @@ typedef struct gpio_event
 
 int gpio_event_init();
 int gpio_event_attach(gpio_event_t *event, int gpio);
+int gpio_event_sync_read(gpio_event_t *event);
+int gpio_event_read(gpio_event_t *event);
 void gpio_event_detach(gpio_event_t *event);
 void gpio_event_shutdown();
 

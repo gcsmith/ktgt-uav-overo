@@ -47,20 +47,15 @@ static int g_muxsel = -1;
 void *aux_trigger_thread(void *arg)
 {
     uint32_t cmd_buffer[16];
-    int pulse = 0, locked_out = 0, axes = 0, type = 0, last_type = 0;
+    int pulse = 0, axes = 0, type = 0, last_type = 0;
 
     for (;;) {
         // go to sleep until we're pinged by the gpio_event subsystem
-        pthread_mutex_lock(&g_gpio_aux.lock);
-        pthread_cond_wait(&g_gpio_aux.cond, &g_gpio_aux.lock);
-        pulse = g_gpio_aux.pulsewidth;
-        pthread_mutex_unlock(&g_gpio_aux.lock);
-
+        pulse = gpio_event_sync_read(&g_gpio_aux);
         fc_get_vcm(&axes, &type);
-        locked_out = (type == VCM_TYPE_LOCKOUT);
 
         // determine if we need to perform a state transition
-        if (!locked_out && pulse > 1475) {
+        if (VCM_TYPE_LOCKOUT != type && pulse > 1475) {
             fprintf(stderr, "AUX: switch from autonomous to manual\n");
             fc_update_vcm(axes, VCM_TYPE_LOCKOUT);
             gpio_set_value(g_muxsel, MUX_SEL_RADIO);
@@ -72,7 +67,7 @@ void *aux_trigger_thread(void *arg)
             cmd_buffer[PKT_VCM_AXES] = VCM_AXIS_ALL;
             send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
         }
-        else if (locked_out && pulse <= 1475) {
+        else if (VCM_TYPE_LOCKOUT == type && pulse <= 1475) {
             fprintf(stderr, "AUX: switch from manual to autonomous\n");
             fc_update_vcm(axes, last_type);
             gpio_set_value(g_muxsel, MUX_SEL_UPROC);
@@ -254,14 +249,9 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
                 cmd_buffer[PKT_VTI_BATT] = read_vbatt();
 
-                pthread_mutex_lock(&g_gpio_alt.lock);
                 // taken from maxbotix from spec: 147 us == 1 inch
-                cmd_buffer[PKT_VTI_ALT] = g_gpio_alt.pulsewidth / 147;
-                pthread_mutex_unlock(&g_gpio_alt.lock);
-
-                pthread_mutex_lock(&g_gpio_aux.lock);
-                cmd_buffer[PKT_VTI_AUX]  = g_gpio_aux.pulsewidth;
-                pthread_mutex_unlock(&g_gpio_aux.lock);
+                cmd_buffer[PKT_VTI_ALT] = gpio_event_read(&g_gpio_alt) / 147;
+                cmd_buffer[PKT_VTI_AUX] = gpio_event_read(&g_gpio_aux);
 
                 send_packet(&g_client, cmd_buffer, PKT_VTI_LENGTH);
                 break;

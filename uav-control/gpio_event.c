@@ -211,3 +211,24 @@ void gpio_event_detach(gpio_event_t *event)
     ioctl(globals.fd, GPIO_EVENT_IOCTL_MONITOR_GPIO, &monitor);
 }
 
+// -----------------------------------------------------------------------------
+int gpio_event_sync_read(gpio_event_t *event)
+{
+    int pulse = 0;
+    pthread_mutex_lock(&event->lock);
+    pthread_cond_wait(&event->cond, &event->lock);
+    pulse = event->pulsewidth;
+    pthread_mutex_unlock(&event->lock);
+    return pulse;
+}
+
+// -----------------------------------------------------------------------------
+int gpio_event_read(gpio_event_t *event)
+{
+    int pulse = 0;
+    pthread_mutex_lock(&event->lock);
+    pulse = event->pulsewidth;
+    pthread_mutex_unlock(&event->lock);
+    return pulse;
+}
+
