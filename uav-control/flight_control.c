@@ -126,7 +126,7 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
     if (cmp == 0)
         return;
 
-    fprintf(stderr, "cmp = %d\n", cmp);
+    fprintf(stderr, "cmp = %u\n", cmp);
     pwm_set_compare(pwm->handle, cmp);
 }
 
@@ -206,10 +206,10 @@ void *autopilot_thread(void *arg)
     pid_pitch_ctlr.last_error  = 0.0f;
     pid_pitch_ctlr.total_error = 0.0f;
 
-    pthread_mutex_lock(&fc_alive_event);
+    //pthread_mutex_lock(&fc_alive_event);
     while (fc_alive && !kill_reached)
     {
-        pthread_mutex_unlock(&fc_alive_event);
+        //pthread_mutex_unlock(&fc_alive_event);
 
         // capture pitch
         pthread_mutex_lock(&imu->lock);
@@ -259,7 +259,7 @@ void *autopilot_thread(void *arg)
         }
     }
 
-    pthread_mutex_unlock(&fc_alive_event);
+    //pthread_mutex_unlock(&fc_alive_event);
     pthread_exit(NULL);
 }
 
@@ -299,13 +299,13 @@ void *takeoff_thread(void *arg)
 
     while (!stable)
     {
-        pthread_mutex_lock(&usrf->lock);
-        while ((input = (usrf->pulsewidth / 147)) != setpoint)
+        while ((input = (gpio_event_read(usrf) / 147)) != setpoint)
         {
-            pthread_mutex_unlock(&usrf->lock);
+            fprintf(stderr, "gpio pw = %d\n", input);
 
             // dead reckoning variables
             error = setpoint - input;
+            fprintf(stderr, "error = %d", error);
             if (last_input == 0)
                 last_input = input;
             dx_dt = input - last_input; // rate of climb [inches per second]
@@ -324,13 +324,15 @@ void *takeoff_thread(void *arg)
                 // need to climb
                 if (dx_dt < 1)
                 {
-                    control.alt = 0.1f;
+                    fprintf(stderr, "need to climb\n");
+                    control.alt = 0.35;
                     flight_control(&control, VCM_AXIS_ALT);
                 }
 
                 // need to slow the rate of climb
                 else if (dx_dt > 3)
                 {
+                    fprintf(stderr, "need to slow down\n");
                     control.alt = last_control * 0.5f;
                     flight_control(&control, VCM_AXIS_ALT);
                 }
@@ -344,15 +346,13 @@ void *takeoff_thread(void *arg)
             last_control = control.alt;
 
             // sleep for a second to allow the helicopter to lift
-            usleep(1000000);
+            usleep(50000);
 
             // helicopter has strayed away from stability - stop timing 
             // previous stability time
             if (timer_set)
                 timer_set = 0;
         }
-
-        pthread_mutex_unlock(&usrf->lock);
 
         if ((input == setpoint) && (!timer_set))
         {
@@ -415,7 +415,7 @@ void *landing_thread(void *arg)
             flight_control(&landing_sigs, VCM_AXIS_ALT);
         }
 
-        usleep(1000000);
+        usleep(50000);
     }
     
     pthread_mutex_unlock(&usrf->lock);
@@ -424,7 +424,7 @@ void *landing_thread(void *arg)
     for (i = 0; i < 5; i++)
     {
         flight_control(&landing_sigs, VCM_AXIS_ALT);
-        usleep(500000);
+        usleep(100000);
     }
 
     pthread_exit(NULL);
@@ -525,11 +525,14 @@ void fc_update_vcm(int axes, int type)
     vcm_type = type;
     pthread_mutex_unlock(&fc_vcm_event);
 
-    if (type == VCM_TYPE_LOCKOUT)
+    if ((type == VCM_TYPE_LOCKOUT) || (type == VCM_TYPE_KILL))
     {
         thro_last_value = 0.0f;
         thro_last_cmp = 0, thro_first = 0;
         assign_duty(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
+        pthread_mutex_lock(&fc_alive_event);
+        fc_alive = 0;
+        pthread_mutex_unlock(&fc_alive_event);
     }
 }
 
