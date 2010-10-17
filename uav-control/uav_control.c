@@ -151,7 +151,7 @@ void run_server(imu_data_t *imu, const char *port)
     uint32_t cmd_buffer[PKT_BUFF_LEN];
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
-    uint32_t vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
+    int vcm_type = VCM_TYPE_RADIO, vcm_axes = VCM_AXIS_ALL;
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
@@ -295,6 +295,14 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_SET_CTL_MODE:
                 // interpret client's request for input mode change
+                fc_get_vcm(&vcm_axes, &vcm_type);
+                if (vcm_type == VCM_TYPE_KILL || vcm_type == VCM_TYPE_LOCKOUT)
+                {
+                    // if killswitch engaged or locked out, don't allow change
+                    send_simple_packet(&g_client, SERVER_ACK_IGNORED);
+                    continue;
+                }
+
                 switch (cmd_buffer[PKT_VCM_TYPE]) {
                 case VCM_TYPE_RADIO:
                     syslog(LOG_DEBUG, "switching to radio control\n");
