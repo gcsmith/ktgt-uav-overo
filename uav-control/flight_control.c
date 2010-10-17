@@ -168,7 +168,7 @@ void flight_control(ctl_sigs_t *sigs, int chnl_flags)
 }
 
 // -----------------------------------------------------------------------------
-void *autopilot()
+void *autopilot_thread(void *arg)
 {
     int kill_reached = 0;
     int axes, type;
@@ -264,7 +264,7 @@ void *autopilot()
 }
 
 // -----------------------------------------------------------------------------
-void *takeoff()
+void *takeoff_thread(void *arg)
 {
     int error, input, last_input = 0, dx_dt, setpoint;
     float last_control;
@@ -293,7 +293,7 @@ void *takeoff()
 
     // spawn autopilot thread
     // autopilot should get be controlling the pitch
-    pthread_create(&auto_thrd, NULL, autopilot, NULL);
+    pthread_create(&auto_thrd, NULL, autopilot_thread, NULL);
 
     setpoint = 42; // 42 inches ~= 1 meter
 
@@ -374,7 +374,7 @@ void *takeoff()
 }
 
 // -----------------------------------------------------------------------------
-void *land()
+void *landing_thread(void *arg)
 {
     int i;
     int alt, prev_alt = 0, dx_dt;
@@ -431,6 +431,22 @@ void *land()
 }
 
 // -----------------------------------------------------------------------------
+int init_channel(int index, int duty_lo, int duty_hi, int duty_idle)
+{
+    pwm_channel_t *pwm = &g_channels[index];
+    if (0 > (pwm->handle = pwm_open_device(PWM_DEV_FIRST + PWM_ALT))) {
+        syslog(LOG_ERR, "error opening pwm %d device\n", PWM_ALT);
+        return 0; 
+    }
+
+    // keep throttle signal at the current value it is
+    pwm_set_freq_x100(pwm->handle, 4580);
+    pwm_get_range(pwm->handle, &pwm->rng_min, &pwm->rng_max);
+    assign_duty(pwm, duty_lo, duty_hi, duty_idle);
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
 int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
 {
     thro_last_value = 0.0f;
@@ -445,54 +461,21 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     pthread_mutex_init(&fc_alive_event, NULL);
     pthread_mutex_init(&fc_vcm_event, NULL);
 
-    if (0 > (g_channels[PWM_ALT].handle = pwm_open_device(PWM_DEV_ALT)))
-    {
-        syslog(LOG_ERR, "Error opening pwm device %d\n", PWM_DEV_ALT);
-        return 0; 
-    }
+    if (!init_channel(PWM_ALT, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
+        return 0;
     syslog(LOG_INFO, "flight control: altitude channel opened\n");
 
-    // keep throttle signal at the current value it is
-    pwm_set_freq_x100(g_channels[PWM_ALT].handle, 4580);
-    pwm_get_range(g_channels[PWM_ALT].handle, &g_channels[PWM_ALT].rng_min,
-        &g_channels[PWM_ALT].rng_max);
-    assign_duty(&g_channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
-
-    if (0 > (g_channels[PWM_PITCH].handle = pwm_open_device(PWM_DEV_PITCH)))
-    {
-        syslog(LOG_ERR, "Error opening pwm device %d\n", PWM_DEV_PITCH);
+    if (!init_channel(PWM_PITCH, PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE))
         return 0; 
-    }
     syslog(LOG_INFO, "flight control: pitch channel opened\n");
 
-    pwm_set_freq_x100(g_channels[PWM_PITCH].handle, 4580);
-    pwm_get_range(g_channels[PWM_PITCH].handle, &g_channels[PWM_PITCH].rng_min,
-            &g_channels[PWM_PITCH].rng_max);
-    assign_duty(&g_channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE);
-
-    if (0 > (g_channels[PWM_ROLL].handle = pwm_open_device(PWM_DEV_ROLL)))
-    {
-        syslog(LOG_ERR, "Error opening pwm device %d\n", PWM_DEV_ROLL);
+    if (!init_channel(PWM_ROLL, ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE))
         return 0;
-    }
     syslog(LOG_INFO, "flight control: roll channel opened\n");
 
-    pwm_set_freq_x100(g_channels[PWM_ROLL].handle, 4580);
-    pwm_get_range(g_channels[PWM_ROLL].handle, &g_channels[PWM_ROLL].rng_min,
-        &g_channels[PWM_ROLL].rng_max);
-    assign_duty(&g_channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE);
-
-    if (0 > (g_channels[PWM_YAW].handle = pwm_open_device(PWM_DEV_YAW)))
-    {
-        syslog(LOG_ERR, "Error opening pwm device %d\n", PWM_DEV_YAW);
+    if (!init_channel(PWM_YAW, YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE))
         return 0;
-    }
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
-
-    pwm_set_freq_x100(g_channels[PWM_YAW].handle, 4580);
-    pwm_get_range(g_channels[PWM_YAW].handle, &g_channels[PWM_YAW].rng_min,
-            &g_channels[PWM_YAW].rng_max);
-    assign_duty(&g_channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE);
 
     fc_alive = 1;
     syslog(LOG_INFO, "opened pwm device nodes\n");
@@ -524,14 +507,14 @@ void fc_shutdown()
 void fc_takeoff()
 {
     if (fc_alive)
-        pthread_create(&takeoff_thrd, NULL, takeoff, NULL);
+        pthread_create(&takeoff_thrd, NULL, takeoff_thread, NULL);
 }
 
 // -----------------------------------------------------------------------------
 void fc_land()
 {
     if (fc_alive)
-        pthread_create(&land_thrd, NULL, land, NULL);
+        pthread_create(&land_thrd, NULL, landing_thread, NULL);
 }
 
 // -----------------------------------------------------------------------------

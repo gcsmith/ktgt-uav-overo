@@ -9,17 +9,17 @@
 
 #define PWM_ALT     0
 #define PWM_YAW     1
-#define PWM_ROLL    2
-#define PWM_PITCH   3
+#define PWM_PITCH   2
+#define PWM_ROLL    3
 
 // PWM channel definitions
 #define PWM_DEV_FIRST   8
 #define PWM_DEV_LAST    11
 
-#define PWM_DEV_ALT     PWM_DEV_FIRST + 0
-#define PWM_DEV_YAW     PWM_DEV_FIRST + 1
-#define PWM_DEV_PITCH   PWM_DEV_FIRST + 2
-#define PWM_DEV_ROLL    PWM_DEV_FIRST + 3
+#define PWM_DEV_ALT     (PWM_DEV_FIRST + PWM_ALT)
+#define PWM_DEV_YAW     (PWM_DEV_FIRST + PWM_YAW)
+#define PWM_DEV_PITCH   (PWM_DEV_FIRST + PWM_PITCH)
+#define PWM_DEV_ROLL    (PWM_DEV_FIRST + PWM_ROLL)
 
 // Data structure containing control signal values
 typedef struct ctl_sigs
