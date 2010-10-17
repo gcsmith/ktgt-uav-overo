@@ -254,7 +254,7 @@ void *autopilot_thread(void *arg)
             {
                 pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
                 fc_sigs.alt = pid_result;
-                flight_control(&fc_sigs, VCM_AXIS_ALT);
+                //flight_control(&fc_sigs, VCM_AXIS_ALT);
             }
         }
     }
@@ -288,7 +288,7 @@ void *takeoff_thread(void *arg)
 
     pthread_mutex_lock(&fc_vcm_event);
     vcm_axes = vcm_axes | VCM_AXIS_ALT;
-    vcm_axes = vcm_axes & ~(VCM_AXIS_PITCH);
+    //vcm_axes = vcm_axes & ~(VCM_AXIS_PITCH);
     pthread_mutex_unlock(&fc_vcm_event);
 
     // spawn autopilot thread
@@ -325,20 +325,20 @@ void *takeoff_thread(void *arg)
                 if (dx_dt < 1)
                 {
                     control.alt = 0.1f;
-                    //fc_update_ctl(&control, VCM_AXIS_ALT);
+                    fc_update_ctl(&control, VCM_AXIS_ALT);
                 }
 
                 // need to slow the rate of climb
                 else if (dx_dt > 3)
                 {
                     control.alt = last_control * 0.5f;
-                    //fc_update_ctl(&control, VCM_AXIS_ALT);
+                    fc_update_ctl(&control, VCM_AXIS_ALT);
                 }
             }
             else
             {
                 control.alt = -0.1f;
-                //fc_update_ctl(&control, VCM_AXIS_ALT);
+                fc_update_ctl(&control, VCM_AXIS_ALT);
             }
 
             last_control = control.alt;
@@ -545,6 +545,7 @@ void fc_update_ctl(ctl_sigs_t *sigs)
     // if the incoming signal is a throttle event from the client, then we
     // target just the altitude control signal so we don't disturb the other
     // control signals
+    fprintf(stderr, "flight control's axes: %d\n", axes);
     flight_control(sigs, axes);
 }
 
