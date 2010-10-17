@@ -56,7 +56,7 @@ void *aux_trigger_thread(void *arg)
 
         // determine if we need to perform a state transition
         if (VCM_TYPE_LOCKOUT != type && pulse > 1475) {
-            fprintf(stderr, "AUX: switch from autonomous to manual\n");
+            syslog(LOG_INFO, "AUX: switch from autonomous to manual\n");
             fc_update_vcm(axes, VCM_TYPE_LOCKOUT);
             gpio_set_value(g_muxsel, MUX_SEL_RADIO);
             last_type = type;
@@ -68,7 +68,7 @@ void *aux_trigger_thread(void *arg)
             send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
         }
         else if (VCM_TYPE_LOCKOUT == type && pulse <= 1475) {
-            fprintf(stderr, "AUX: switch from manual to autonomous\n");
+            syslog(LOG_INFO, "AUX: switch from manual to autonomous\n");
             fc_update_vcm(axes, last_type);
             gpio_set_value(g_muxsel, MUX_SEL_UPROC);
 
@@ -216,6 +216,14 @@ void run_server(imu_data_t *imu, const char *port)
         }
         syslog(LOG_INFO, "client provided valid identification");
 
+        // ping the client with our initial state
+        fc_get_vcm(&vcm_axes, &vcm_type);
+        cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
+        cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
+        cmd_buffer[PKT_VCM_TYPE] = vcm_type;
+        cmd_buffer[PKT_VCM_AXES] = vcm_axes;
+        send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
+
         // enter main communication loop
         for (;;) {
             // read until we've consumed an entire packet
@@ -280,8 +288,8 @@ void run_server(imu_data_t *imu, const char *port)
                 jpg_buf[PKT_MJPG_FPS] = vid_data.fps;
                 
                 send_packet(&g_client, jpg_buf, vid_data.length + PKT_MJPG_LENGTH);
-                syslog(LOG_DEBUG, "send frame size %lu, pkt size %lu\n",
-                       vid_data.length, vid_data.length + PKT_BASE_LENGTH);
+                //syslog(LOG_DEBUG, "send frame size %lu, pkt size %lu\n",
+                //       vid_data.length, vid_data.length + PKT_BASE_LENGTH);
                 break;
             case CLIENT_REQ_SET_CTL_MODE:
                 // interpret client's request for input mode change
