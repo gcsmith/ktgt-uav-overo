@@ -434,8 +434,8 @@ void *landing_thread(void *arg)
 int init_channel(int index, int duty_lo, int duty_hi, int duty_idle)
 {
     pwm_channel_t *pwm = &g_channels[index];
-    if (0 > (pwm->handle = pwm_open_device(PWM_DEV_FIRST + PWM_ALT))) {
-        syslog(LOG_ERR, "error opening pwm %d device\n", PWM_ALT);
+    if (0 > (pwm->handle = pwm_open_device(PWM_DEV_FIRST + index))) {
+        syslog(LOG_ERR, "error opening pwm %d device\n", index);
         return 0; 
     }
 
