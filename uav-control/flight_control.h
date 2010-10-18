@@ -41,13 +41,32 @@ typedef struct pwm_channel
     unsigned int rng_min, rng_max;
 } pwm_channel_t;
 
+// initialize the flight control subsystem
 int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu);
+
+// shutdown the flight control subsystem
 void fc_shutdown();
-void fc_takeoff();
-void fc_land();
+
+// set capture path. all input signals will be logged and stored for mixed mode
+int fc_set_capture(const char *path);
+
+// set replay path. all autonomous flight will be replayed from stored signals
+int fc_set_replay(const char *path);
+
+// request autonomous takeoff
+int fc_takeoff();
+
+// request autonomous landing
+int fc_land();
+
+// update vehicle control mode info (control type and enabled axes)
 void fc_update_vcm(int axes, int type);
-void fc_update_ctl(ctl_sigs_t *sigs);
+
+// get the current control mode type and enabled axes
 void fc_get_vcm(int *axes, int *type);
+
+// inject manual input control signals
+void fc_update_ctl(ctl_sigs_t *sigs);
 
 #endif // FLIGHT_CONTROL__H_
 

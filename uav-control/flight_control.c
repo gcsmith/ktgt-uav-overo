@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <syslog.h>
 #include "flight_control.h"
@@ -19,8 +20,23 @@
 
 #define YAW_DUTY_LO 0.047f
 #define YAW_DUTY_HI 0.094f
+#define YAW_DUTY_IDLE 0.72f
+
+#define RECORD_BUCKET_SIZE 1024
+
+typedef struct input_record {
+    int time_delta;
+    ctl_sigs_t signals;
+} input_record_t;
+
+typedef struct record_bucket {
+    input_record_t records[RECORD_BUCKET_SIZE];
+    unsigned int count;
+    struct record_bucket *next;
+} record_bucket_t;
 
 typedef struct fc_globals {
+    pthread_t replay_thrd;
     pthread_t takeoff_thrd;
     pthread_t land_thrd;
     pthread_t auto_thrd;
@@ -42,11 +58,23 @@ typedef struct fc_globals {
     float thro_last_value;
     int thro_last_cmp;
     int thro_first;
+
+    const char *capture_path;
+    const char *replay_path;
+
+    record_bucket_t *record_head, *record_tail;
 } fc_globals_t;
 
-static fc_globals_t globals;
+static fc_globals_t globals = { 0 };
 
-// relative throttle control variables
+// -----------------------------------------------------------------------------
+record_bucket_t *new_record_bucket()
+{
+    record_bucket_t *bkt = (record_bucket_t *)malloc(sizeof(record_bucket_t));
+    bkt->count = 0;
+    bkt->next = NULL;
+    return bkt;
+}
 
 // -----------------------------------------------------------------------------
 int fc_get_alive(void)
@@ -278,6 +306,13 @@ void *autopilot_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
+void *replay_thread(void *arg)
+{
+    fprintf(stderr, "FLIGHT CONTROL: executing replay_thread\n");
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
 void *takeoff_thread(void *arg)
 {
     int error, input, last_input = 0, dx_dt, setpoint;
@@ -467,7 +502,7 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
         return 0;
     syslog(LOG_INFO, "flight control: roll channel opened\n");
 
-    if (!init_channel(PWM_YAW, YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE))
+    if (!init_channel(PWM_YAW, YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
@@ -494,26 +529,148 @@ void fc_shutdown()
     pthread_mutex_destroy(&globals.alive_lock);
     pthread_mutex_destroy(&globals.vcm_lock);
     pthread_cond_destroy(&globals.takeoff_cond);
+
+    if (globals.capture_path) {
+        record_bucket_t *bucket, *curr;
+        FILE *fout;
+
+        // attempt to open the output file for writing
+        fout = fopen(globals.capture_path, "w");
+        if (!fout) {
+            syslog(LOG_ERR, "failed to open %s\n", globals.capture_path);
+            return;
+        }
+        syslog(LOG_INFO, "dumping capture to %s\n", globals.capture_path);
+
+        // iterate over and dump out each record bucket
+        bucket = globals.record_head;
+        while (NULL != bucket) {
+            curr = bucket;
+
+            // write the current bucket out to the file
+            for (i = 0; i < curr->count; i++) {
+                input_record_t *record = &curr->records[i];
+                fprintf(fout, "%d %f %f %f %f\n", record->time_delta,
+                        record->signals.alt, record->signals.yaw,
+                        record->signals.pitch, record->signals.roll);
+            }
+
+            bucket = bucket->next;
+            free(curr);
+        }
+        fclose(fout);
+    }
 }
 
 // -----------------------------------------------------------------------------
-void fc_takeoff()
+int fc_set_capture(const char *path)
 {
-    if (fc_get_alive())
+    // do some basic checking for erroneous requests
+    if (globals.capture_path) {
+        syslog(LOG_ERR, "already set capture path in flight_control");
+        return 0;
+    }
+    if (globals.replay_path) {
+        syslog(LOG_ERR, "cannot specify both capture and replay paths");
+        return 0;
+    }
+
+    globals.capture_path = path;
+
+    // allocate the first record bucket in our linked list
+    globals.record_head = globals.record_tail = new_record_bucket();
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+int fc_set_replay(const char *path)
+{
+    FILE *fin;
+    int entries_read = 0, buckets_filled = 1;
+    record_bucket_t *bucket;
+    input_record_t *record;
+
+    // do some basic checking for erroneous requests
+    if (globals.replay_path) {
+        syslog(LOG_ERR, "already set replay path in flight_control");
+        return 0;
+    }
+    if (globals.capture_path) {
+        syslog(LOG_ERR, "cannot specify both replay and capture paths");
+        return 0;
+    }
+
+    fin = fopen(path, "r");
+    if (!fin) {
+        syslog(LOG_ERR, "failed to open %s for reading", path);
+        return 0;
+    }
+
+    globals.record_head = globals.record_tail = bucket = new_record_bucket();
+    while (!feof(fin)) {
+        int time_delta;
+        float alt, yaw, pitch, roll;
+        fscanf(fin, "%d %f %f %f %f\n", &time_delta, &alt, &yaw, &pitch, &roll);
+
+        if (bucket->count >= RECORD_BUCKET_SIZE) {
+            // add a new bucket to the linked list if we're out of space
+            bucket = new_record_bucket();
+            globals.record_tail->next = bucket;
+            globals.record_tail = bucket;
+            ++buckets_filled;
+        }
+
+        // store the loaded input record
+        record = &bucket->records[bucket->count++];
+        record->time_delta = time_delta;
+        record->signals.alt = alt;
+        record->signals.yaw = yaw;
+        record->signals.pitch = pitch;
+        record->signals.roll = roll;
+        ++entries_read;
+    }
+    fclose(fin);
+
+    syslog(LOG_INFO, "successfully loaded %d input records into %d buckets\n",
+           entries_read, buckets_filled);
+    globals.replay_path = path;
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+int fc_takeoff()
+{
+    if (!fc_get_alive()) {
+        syslog(LOG_ERR, "flight_control cannot takeoff in dead state");
+        return 0;
+    }
+
+    if (globals.replay_path) {
+        pthread_create(&globals.replay_thrd, NULL, replay_thread, NULL);
+    }
+    else {
         pthread_create(&globals.takeoff_thrd, NULL, takeoff_thread, NULL);
+    }
+    return 1;
 }
 
 // -----------------------------------------------------------------------------
-void fc_land()
+int fc_land()
 {
-    if (fc_get_alive())
-        pthread_create(&globals.land_thrd, NULL, landing_thread, NULL);
+    if (!fc_get_alive()) {
+        syslog(LOG_ERR, "flight_controll cannot land in dead state");
+        return 0;
+    }
+
+    pthread_create(&globals.land_thrd, NULL, landing_thread, NULL);
+    return 1;
 }
 
+// -----------------------------------------------------------------------------
 void fc_reset_channels(void)
 {
     assign_duty(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
-    assign_duty(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE);
+    assign_duty(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE);
     assign_duty(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE);
     assign_duty(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE);
 }
@@ -572,6 +729,22 @@ void fc_update_ctl(ctl_sigs_t *sigs)
     // control signals
     fprintf(stderr, "flight control's axes: %d\n", axes);
     flight_control(sigs, axes);
+
+    // if --capture is enabled, store this control signal
+    if (globals.capture_path) {
+        record_bucket_t *bucket = globals.record_tail;
+        if (bucket->count >= RECORD_BUCKET_SIZE) {
+            // attach this bucket to the current tail of our linked list
+            bucket = new_record_bucket();
+            globals.record_tail->next = bucket;
+            globals.record_tail = bucket;
+        }
+
+        // insert the record into our bucket
+        bucket->records[bucket->count].time_delta = 50000;
+        bucket->records[bucket->count].signals = *sigs;
+        bucket->count++;
+    }
 }
 
 // -----------------------------------------------------------------------------

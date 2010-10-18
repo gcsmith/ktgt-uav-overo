@@ -402,6 +402,8 @@ void print_usage()
 {
     printf("usage: uav_control [options]\n\n"
            "Program options:\n"
+           "  -c [ --capture ] path   : capture and store control inputs\n"
+           "  -r [ --replay ] path    : set autonomous replay from path\n"
            "  -s [ --stty_dev ] arg   : specify serial device for IMU\n"
            "  -v [ --v4l_dev ] arg    : specify video device for webcam\n"
            "  -p [ --port ] arg       : specify port for network socket\n"
@@ -434,8 +436,11 @@ int main(int argc, char *argv[])
     char port_str[DEV_LEN];
     char stty_dev[DEV_LEN] = "/dev/ttyS0";
     char v4l_dev[DEV_LEN] = "/dev/video0";
+    char *capture_path = NULL, *replay_path = NULL;
 
     struct option long_options[] = {
+        { "capture",    required_argument, NULL, 'c' },
+        { "replay",     required_argument, NULL, 'r' },
         { "stty_dev",   required_argument, NULL, 's' },
         { "v4l_dev",    required_argument, NULL, 'v' },
         { "port",       required_argument, NULL, 'p' },
@@ -456,10 +461,16 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "s:v:p:m:u:o:x:y:f:DVh?";
+    static const char *str = "c:r:s:v:p:m:u:o:x:y:f:DVh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
+        case 'c':
+            capture_path = strdup(optarg);
+            break;
+        case 'r':
+            replay_path = strdup(optarg);
+            break;
         case 's':
             strncpy(stty_dev, optarg, DEV_LEN);
             break;
@@ -539,7 +550,29 @@ int main(int argc, char *argv[])
             syslog(LOG_ERR, "failed to open flight control\n");
             uav_shutdown(EXIT_FAILURE);
         }
+
+        if (capture_path && replay_path) {
+            // does not make sense to specify both at once
+            syslog(LOG_ERR, "cannot specify both --capture and --replay\n");
+            uav_shutdown(EXIT_FAILURE);
+        }
+        else if (capture_path) {
+            // tell flight_control to capture input for mixed mode control
+            syslog(LOG_INFO, "enabling capture mode for flight control\n");
+            fc_set_capture(capture_path);
+        }
+        else if (replay_path) {
+            // tell flight_control to replay stored input signals
+            syslog(LOG_INFO, "enabling replay mode for flight control\n");
+            fc_set_replay(replay_path);
+        }
     } 
+    else {
+        if (capture_path || replay_path) {
+            // warn the user but don't bother failing
+            syslog(LOG_ERR, "cannot capture or replay --no-fc (ignoring)\n");
+        }
+    }
 
     // initialize the gpio subsystem(s) unless specified not to (no-gpio)
     if (!flag_no_gpio) {
