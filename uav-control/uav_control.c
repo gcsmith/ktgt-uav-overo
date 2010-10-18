@@ -415,6 +415,7 @@ void print_usage()
            "  -V [ --verbose ]        : enable verbose logging\n"
            "  -h [ --help ]           : display this usage message\n"
            "  --no-adc                : do not capture data from adc\n"
+           "  --no-fc                 : do not enable autonomous flight\n"
            "  --no-gpio               : do not perform any gpio processing\n"
            "  --no-track              : do not perform color tracking\n"
            "  --no-video              : do not capture video from webcam\n");
@@ -448,10 +449,10 @@ int main(int argc, char *argv[])
         { "verbose",    no_argument,       NULL, 'V' },
         { "help",       no_argument,       NULL, 'h' },
         { "no-adc",     no_argument,       &flag_no_adc,   1 },
+        { "no-fc",      no_argument,       &flag_no_fc,    1 },
         { "no-gpio",    no_argument,       &flag_no_gpio,  1 },
         { "no-track",   no_argument,       &flag_no_track, 1 },
         { "no-video",   no_argument,       &flag_no_video, 1 },
-        { "no-fc",      no_argument,       &flag_no_fc,    1 },
         { 0, 0, 0, 0 }
     };
 
