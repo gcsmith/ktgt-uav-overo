@@ -308,7 +308,24 @@ void *autopilot_thread(void *arg)
 // -----------------------------------------------------------------------------
 void *replay_thread(void *arg)
 {
+    record_bucket_t *bucket;
+    input_record_t *record;
+    int i;
+
     fprintf(stderr, "FLIGHT CONTROL: executing replay_thread\n");
+
+    bucket = globals.record_head;
+    while (NULL != bucket) {
+
+        for (i = 0; i < bucket->count; i++) {
+            record = &bucket->records[i];
+            usleep(record->time_delta);
+            flight_control(&record->signals, VCM_AXIS_ALL);
+        }
+
+        bucket = bucket->next;
+    }
+
     pthread_exit(NULL);
 }
 
