@@ -548,6 +548,8 @@ void fc_update_vcm(int axes, int type)
         globals.thro_first = 0;
         fc_reset_channels();
     }
+    else
+        fc_set_alive(1);
 }
 
 // -----------------------------------------------------------------------------
