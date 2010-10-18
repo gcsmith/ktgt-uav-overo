@@ -45,6 +45,22 @@ static fc_globals_t globals;
 
 // relative throttle control variables
 
+int fc_get_alive(void)
+{
+    int alive = 0;
+    pthread_mutex_lock(&globals.alive_lock);
+    alive = globals.alive;
+    pthread_mutex_unlock(&globals.alive_lock);
+    return alive;
+}
+
+void fc_set_alive(int alive)
+{
+    pthread_mutex_lock(&globals.alive_lock);
+    globals.alive = alive;
+    pthread_mutex_unlock(&globals.alive_lock);
+}
+
 // -----------------------------------------------------------------------------
 void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
 {
@@ -56,6 +72,7 @@ void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
     else if (duty > fmax)
         duty = fmax;
 
+    fprintf(stderr, "called assign_duty with %f %f %f\n", fmin, fmax, duty);
     cmp_val = (int)(pwm->rng_min + (int)((pwm->rng_max - pwm->rng_min) * duty));
     pwm_set_compare(pwm->handle, cmp_val);
 }
@@ -121,20 +138,13 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
     if (cmp == 0)
         return;
 
-    fprintf(stderr, "cmp = %u\n", cmp);
     pwm_set_compare(pwm->handle, cmp);
 }
 
 // -----------------------------------------------------------------------------
 void flight_control(ctl_sigs_t *sigs, int chnl_flags)
 {
-    int fc_on;
-
-    pthread_mutex_lock(&globals.alive_lock);
-    fc_on = globals.alive;
-    pthread_mutex_unlock(&globals.alive_lock);
-
-    if (fc_on)
+    if (fc_get_alive())
     {
         // adjust altitude if specified
         if (chnl_flags & VCM_AXIS_ALT)
@@ -202,10 +212,8 @@ void *autopilot_thread(void *arg)
     pid_pitch_ctlr.total_error = 0.0f;
 
     //pthread_mutex_lock(&globals.alive_lock);
-    while (globals.alive && !kill_reached)
+    while (fc_get_alive() && !kill_reached)
     {
-        //pthread_mutex_unlock(&globals.alive_lock);
-
         // capture pitch
         pthread_mutex_lock(&globals.imu->lock);
         //fd_yaw   = globals.imu->angles[IMU_DATA_YAW];
@@ -252,7 +260,6 @@ void *autopilot_thread(void *arg)
         }
     }
 
-    //pthread_mutex_unlock(&globals.alive_lock);
     pthread_exit(NULL);
 }
 
@@ -419,7 +426,7 @@ void *landing_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-int init_channel(int index, int duty_lo, int duty_hi, int duty_idle)
+int init_channel(int index, float duty_lo, float duty_hi, float duty_idle)
 {
     pwm_channel_t *pwm = &globals.channels[index];
     if (0 > (pwm->handle = pwm_open_device(PWM_DEV_FIRST + index))) {
@@ -469,7 +476,7 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
         return 0;
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
-    globals.alive = 1;
+    fc_set_alive(1);
     syslog(LOG_INFO, "opened pwm device nodes\n");
     return 1;
 }
@@ -480,9 +487,7 @@ void fc_shutdown()
     int i;
 
     // set flag for all controllers to see that flight control is shutting down
-    pthread_mutex_lock(&globals.alive_lock);
-    globals.alive = 0;
-    pthread_mutex_unlock(&globals.alive_lock);
+    fc_set_alive(0);
 
     // TODO: Wait for controller threads to exit
 
@@ -498,34 +503,47 @@ void fc_shutdown()
 // -----------------------------------------------------------------------------
 void fc_takeoff()
 {
-    if (globals.alive)
+    if (fc_get_alive())
         pthread_create(&globals.takeoff_thrd, NULL, takeoff_thread, NULL);
 }
 
 // -----------------------------------------------------------------------------
 void fc_land()
 {
-    if (globals.alive)
+    if (fc_get_alive())
         pthread_create(&globals.land_thrd, NULL, landing_thread, NULL);
 }
 
 // -----------------------------------------------------------------------------
 void fc_update_vcm(int axes, int type)
 {
+    if (!fc_get_alive())
+    {
+        // if we're killed, don't allow any more state transitions
+        fprintf(stderr, "not alive. ignoring fc_update_vcm\n");
+        return;
+    }
+
+    // otherwise, set the new type and axes and continue
     pthread_mutex_lock(&globals.vcm_lock);
-    globals.vcm_axes = axes;
     globals.vcm_type = type;
+    globals.vcm_axes = axes;
     pthread_mutex_unlock(&globals.vcm_lock);
 
-    if ((type == VCM_TYPE_LOCKOUT) || (type == VCM_TYPE_KILL))
+    if (VCM_TYPE_KILL == type)
+    {
+        // set all pwm outputs to low or idle values and kill ourselves
+        assign_duty(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
+        assign_duty(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE);
+        assign_duty(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE);
+        assign_duty(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE);
+        fc_set_alive(0);
+    }
+    else if (VCM_TYPE_LOCKOUT == type)
     {
         globals.thro_last_value = 0.0f;
         globals.thro_last_cmp = 0;
         globals.thro_first = 0;
-        assign_duty(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
-        pthread_mutex_lock(&globals.alive_lock);
-        globals.alive = 0;
-        pthread_mutex_unlock(&globals.alive_lock);
     }
 }
 

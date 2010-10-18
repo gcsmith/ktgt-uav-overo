@@ -531,6 +531,15 @@ int main(int argc, char *argv[])
         uav_shutdown(EXIT_FAILURE);
     }
 
+    // open PWM ports for mixed controlling
+    if (!flag_no_fc) {
+        syslog(LOG_INFO, "opening flight control\n");
+        if (!fc_init(&g_gpio_alt, &g_imu)) {
+            syslog(LOG_ERR, "failed to open flight control\n");
+            uav_shutdown(EXIT_FAILURE);
+        }
+    } 
+
     // initialize the gpio subsystem(s) unless specified not to (no-gpio)
     if (!flag_no_gpio) {
         // initialize gpio event monitors
@@ -571,6 +580,9 @@ int main(int argc, char *argv[])
             syslog(LOG_ERR, "failed to create aux trigger thread");
             uav_shutdown(EXIT_FAILURE);
         }
+
+        // start with mux select on computer control (we start in autonomous)
+        gpio_set_value(g_muxsel, MUX_SEL_UPROC);
     }
 
     // initialize video subsystem unless specified not to (no-video)
@@ -605,15 +617,6 @@ int main(int argc, char *argv[])
             uav_shutdown(EXIT_FAILURE);
         }
     }
-
-    // open PWM ports for mixed controlling
-    if (!flag_no_fc) {
-        syslog(LOG_INFO, "opening flight control\n");
-        if (!fc_init(&g_gpio_alt, &g_imu)) {
-            syslog(LOG_ERR, "failed to open flight control\n");
-            uav_shutdown(EXIT_FAILURE);
-        }
-    } 
 
     // server entry point
     run_server(&g_imu, port_str);
