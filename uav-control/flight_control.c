@@ -25,8 +25,11 @@ typedef struct fc_globals {
     pthread_t land_thrd;
     pthread_t auto_thrd;
 
+    pthread_cond_t takeoff_cond;
+
     pthread_mutex_t alive_lock;
     pthread_mutex_t vcm_lock;
+    pthread_mutex_t takeoff_cond_lock;
 
     pwm_channel_t channels[4];
     gpio_event_t *usrf; // ultrasonic range finder pwm
@@ -45,6 +48,7 @@ static fc_globals_t globals;
 
 // relative throttle control variables
 
+// -----------------------------------------------------------------------------
 int fc_get_alive(void)
 {
     int alive = 0;
@@ -54,6 +58,7 @@ int fc_get_alive(void)
     return alive;
 }
 
+// -----------------------------------------------------------------------------
 void fc_set_alive(int alive)
 {
     pthread_mutex_lock(&globals.alive_lock);
@@ -109,8 +114,8 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
         {
             globals.thro_first = 1;
             cmp = min + (int)(hrange * value);
-            fprintf(stderr, "flight_control alt: value = %f, lv = %f\n",
-                    value, globals.thro_last_value);
+            //fprintf(stderr, "flight_control alt: value = %f, lv = %f\n",
+              //      value, globals.thro_last_value);
             globals.thro_last_cmp = cmp;
         }
         else
@@ -123,8 +128,8 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
             if (cmp < min)
                 cmp = min;
 
-            fprintf(stderr, "flight_control alt: value = %f, lv = %f, cmp = %d, lc = %d\n", 
-                    value, globals.thro_last_value, cmp, globals.thro_last_cmp);
+            //fprintf(stderr, "flight_control alt: value = %f, lv = %f, cmp = %d, lc = %d\n", 
+             //       value, globals.thro_last_value, cmp, globals.thro_last_cmp);
             globals.thro_last_cmp = cmp;
          }
 
@@ -211,6 +216,14 @@ void *autopilot_thread(void *arg)
     pid_pitch_ctlr.last_error  = 0.0f;
     pid_pitch_ctlr.total_error = 0.0f;
 
+    fprintf(stderr, "autopilot waiting...\n");
+    
+    pthread_mutex_lock(&globals.takeoff_cond_lock);
+    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_cond_lock);
+    pthread_mutex_unlock(&globals.takeoff_cond_lock);
+
+    fprintf(stderr, "autopilot starting...\n");
+
     //pthread_mutex_lock(&globals.alive_lock);
     while (fc_get_alive() && !kill_reached)
     {
@@ -260,6 +273,7 @@ void *autopilot_thread(void *arg)
         }
     }
 
+    fprintf(stderr, "autopilot thread exiting\n");
     pthread_exit(NULL);
 }
 
@@ -268,9 +282,7 @@ void *takeoff_thread(void *arg)
 {
     int error, input, last_input = 0, dx_dt, setpoint;
     float last_control = 0.0f;
-    char stable = 0, timer_set = 0;
     ctl_sigs_t control;
-    clock_t timer = 0;;
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
 
@@ -292,84 +304,66 @@ void *takeoff_thread(void *arg)
     pthread_mutex_unlock(&globals.vcm_lock);
 
     // spawn autopilot thread
-    // autopilot should get be controlling the pitch
     pthread_create(&globals.auto_thrd, NULL, autopilot_thread, NULL);
 
     setpoint = 42; // 42 inches ~= 1 meter
 
-    while (fc_get_alive() || !stable)
+    while (fc_get_alive() && ((input = (gpio_event_read(globals.usrf) / 147)) != setpoint))
     {
-        while ((input = (gpio_event_read(globals.usrf) / 147)) != setpoint)
-        {
-            fprintf(stderr, "gpio pw = %d\n", input);
+        fprintf(stderr, "gpio pw = %d\n", input);
 
-            // dead reckoning variables
-            error = setpoint - input;
-            fprintf(stderr, "error = %d", error);
-            if (last_input == 0)
-                last_input = input;
-            dx_dt = input - last_input; // rate of climb [inches per second]
+        // dead reckoning variables
+        error = setpoint - input;
+        fprintf(stderr, "error = %d", error);
+        if (last_input == 0)
             last_input = input;
-
-            // if the helicopter is 20 inches from the setpoint, switch to PID control
-            if ((error <= (setpoint - 20)) && (error >= (setpoint + 20)))
+        dx_dt = input - last_input; // rate of climb [inches per second]
+        last_input = input;
+#if 0
+        // if the helicopter is 20 inches from the setpoint, switch to PID control
+        if ((error <= (setpoint - 20)) && (error >= (setpoint + 20)))
+        {
+            // turn the altitude VCM bit off to indicate autonomous control
+            pthread_mutex_lock(&globals.vcm_lock);
+            globals.vcm_axes &= ~(VCM_AXIS_ALT);
+            pthread_mutex_unlock(&globals.vcm_lock);
+        }
+#endif
+        if (error > 0)
+        {
+            // need to climb
+            if (dx_dt < 1)
             {
-                // turn the altitude VCM bit off to indicate autonomous control
-                pthread_mutex_lock(&globals.vcm_lock);
-                globals.vcm_axes &= ~(VCM_AXIS_ALT);
-                pthread_mutex_unlock(&globals.vcm_lock);
-            }
-            else if (error > 0)
-            {
-                // need to climb
-                if (dx_dt < 1)
-                {
-                    fprintf(stderr, "need to climb\n");
-                    control.alt = 0.35;
-                    flight_control(&control, VCM_AXIS_ALT);
-                }
-
-                // need to slow the rate of climb
-                else if (dx_dt > 3)
-                {
-                    fprintf(stderr, "need to slow down\n");
-                    control.alt = last_control * 0.5f;
-                    flight_control(&control, VCM_AXIS_ALT);
-                }
-            }
-            else
-            {
-                control.alt = -0.1f;
+                fprintf(stderr, "need to climb\n");
+                control.alt = 0.20;
                 flight_control(&control, VCM_AXIS_ALT);
             }
 
-            last_control = control.alt;
-
-            // sleep for a second to allow the helicopter to lift
-            usleep(50000);
-
-            // helicopter has strayed away from stability - stop timing 
-            // previous stability time
-            if (timer_set)
-                timer_set = 0;
+            // need to slow the rate of climb
+            else if (dx_dt > 3)
+            {
+                fprintf(stderr, "need to slow down\n");
+                control.alt = last_control * 0.5f;
+                flight_control(&control, VCM_AXIS_ALT);
+            }
         }
-
-        if ((input == setpoint) && (!timer_set))
+        else
         {
-            // get the time from now that the helicopter should still be at 
-            // the setpoint to be considered stable
-            timer = clock() + 5 * CLOCKS_PER_SEC;
-            timer_set = 1;
+            control.alt = -0.1f;
+            flight_control(&control, VCM_AXIS_ALT);
         }
-        else if ((input == setpoint) && timer_set)
-        {
-            // helicopter has been at the setpoint for 5 seconds
-            // alititude requirement has been achieved
-            if (clock() >= timer)
-                stable = 1;
-        }
+
+        last_control = control.alt;
+
+        // sleep to allow the helicopter to lift
+        usleep(50000);
     }
 
+    pthread_mutex_lock(&globals.takeoff_cond_lock);
+    pthread_cond_broadcast(&globals.takeoff_cond);
+    pthread_mutex_unlock(&globals.takeoff_cond_lock);
+
+    fprintf(stderr, "takeoff thread exiting\n");
     pthread_exit(NULL);
 }
 
@@ -459,6 +453,7 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
 
     pthread_mutex_init(&globals.alive_lock, NULL);
     pthread_mutex_init(&globals.vcm_lock, NULL);
+    pthread_cond_init(&globals.takeoff_cond, NULL);
 
     if (!init_channel(PWM_ALT, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
@@ -498,6 +493,7 @@ void fc_shutdown()
 
     pthread_mutex_destroy(&globals.alive_lock);
     pthread_mutex_destroy(&globals.vcm_lock);
+    pthread_cond_destroy(&globals.takeoff_cond);
 }
 
 // -----------------------------------------------------------------------------
@@ -546,6 +542,7 @@ void fc_update_vcm(int axes, int type)
     }
     else if (VCM_TYPE_LOCKOUT == type)
     {
+        fc_set_alive(0);
         globals.thro_last_value = 0.0f;
         globals.thro_last_cmp = 0;
         globals.thro_first = 0;
