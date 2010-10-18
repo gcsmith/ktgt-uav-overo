@@ -1,6 +1,9 @@
 // -----------------------------------------------------------------------------
+// File:    razor_imu.h
+// Authors: Garrett Smith, Kevin Macksamie
+// Created: 09-18-2010
+// 
 // Definitions for communication between gumstix and 9DOF IMU.
-// Garrett Smith 2010
 // -----------------------------------------------------------------------------
 
 #ifndef _UAV_RAZOR_IMU__H_

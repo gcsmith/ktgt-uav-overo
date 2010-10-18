@@ -1,6 +1,9 @@
 // -----------------------------------------------------------------------------
+// File:    uav_protocol.h
+// Authors: Garrett Smith, Kevin Macksamie
+// Created: 09-16-2010
+//
 // Definitions for communication protocol between uav and remote computer.
-// Garrett Smith 2010
 // -----------------------------------------------------------------------------
 
 #ifndef _UAV_PROTOCOL__H_

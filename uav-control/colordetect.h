@@ -1,3 +1,12 @@
+// -----------------------------------------------------------------------------
+// File:    colordetect.h
+// Authors: Tyler Thierolf, Timothy Miller, Garrett Smith
+// Created: 10-01-2010
+//
+// Routines for detecting solid colors within RGB or HSL images, as well as
+// algorithms to convert between color spaces.
+// -----------------------------------------------------------------------------
+
 #ifndef _UAV_COLORDETECT__H_
 #define _UAV_COLORDETECT__H_
 

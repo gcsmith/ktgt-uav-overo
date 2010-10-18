@@ -1,3 +1,13 @@
+// -----------------------------------------------------------------------------
+// File:    fp32.h
+// Authors: Garrett Smith, Tyler Thierolf, Timothy Miller
+// Created: 10-09-2010
+//
+// Simple 32-bit fixed point library that supports addition, subtraction,
+// multiplication, and division, as well as conversion routines between
+// fixed point and floating point.
+// -----------------------------------------------------------------------------
+
 #ifndef _UAV_FP32__H_
 #define _UAV_FP32__H_
 

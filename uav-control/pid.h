@@ -1,5 +1,13 @@
-#ifndef __H_PID_H_
-#define __H_PID_H_
+// -----------------------------------------------------------------------------
+// File:    pid.h
+// Authors: Kevin Macksamie
+// Created: 09-30-2010
+//
+// Definitions for proportional-integral-derivative controller algorithm.
+// -----------------------------------------------------------------------------
+
+#ifndef _UAV_PID__H_
+#define _UAV_PID__H_
 
 typedef struct _pid pid_ctrl_t;
 struct _pid
@@ -13,18 +21,19 @@ struct _pid
     float total_error;  /* Error sum */
 };
 
-/*****************************************************************************
- * Function: pid_compute
- * Inputs:
- *   + controller - the PID controller being used
- *   + input - the sensor output the controller is monitoring
- *   + curr_error - the error between the controller setpoint and the sensor
- *     output
- *   + u - the output of the controller
- * Outputs:
- *   + curr_error
- *   + u
- ****************************************************************************/ 
+// -----------------------------------------------------------------------------
+// Function: pid_compute
+// Inputs:
+//   + controller - the PID controller being used
+//   + input - the sensor output the controller is monitoring
+//   + curr_error - the error between the controller setpoint and the sensor
+//     output
+//   + u - the output of the controller
+// Outputs:
+//   + curr_error
+//   + u
+// -----------------------------------------------------------------------------
 void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
 
-#endif
+#endif // _UAV_PID__H_
+
