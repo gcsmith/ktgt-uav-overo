@@ -521,7 +521,13 @@ void fc_reset_channels(void)
 // -----------------------------------------------------------------------------
 void fc_update_vcm(int axes, int type)
 {
-    if (!fc_get_alive())
+    int curr_type;
+
+    pthread_mutex_lock(&globals.vcm_lock);
+    curr_type = globals.vcm_type;
+    pthread_mutex_unlock(&globals.vcm_lock);
+
+    if (VCM_TYPE_KILL == curr_type)
     {
         // if we're killed, don't allow any more state transitions
         fprintf(stderr, "not alive. ignoring fc_update_vcm\n");
