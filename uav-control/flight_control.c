@@ -297,7 +297,7 @@ void *takeoff_thread(void *arg)
 
     setpoint = 42; // 42 inches ~= 1 meter
 
-    while (!stable)
+    while (fc_get_alive() || !stable)
     {
         while ((input = (gpio_event_read(globals.usrf) / 147)) != setpoint)
         {
@@ -514,6 +514,14 @@ void fc_land()
         pthread_create(&globals.land_thrd, NULL, landing_thread, NULL);
 }
 
+void fc_reset_channels(void)
+{
+    assign_duty(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
+    assign_duty(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE);
+    assign_duty(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE);
+    assign_duty(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE);
+}
+
 // -----------------------------------------------------------------------------
 void fc_update_vcm(int axes, int type)
 {
@@ -533,10 +541,7 @@ void fc_update_vcm(int axes, int type)
     if (VCM_TYPE_KILL == type)
     {
         // set all pwm outputs to low or idle values and kill ourselves
-        assign_duty(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
-        assign_duty(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, PWM_DUTY_IDLE);
-        assign_duty(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE);
-        assign_duty(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE);
+        fc_reset_channels();
         fc_set_alive(0);
     }
     else if (VCM_TYPE_LOCKOUT == type)
@@ -544,6 +549,7 @@ void fc_update_vcm(int axes, int type)
         globals.thro_last_value = 0.0f;
         globals.thro_last_cmp = 0;
         globals.thro_first = 0;
+        fc_reset_channels();
     }
 }
 
