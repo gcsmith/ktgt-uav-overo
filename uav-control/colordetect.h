@@ -13,9 +13,9 @@
 #include "utility.h"
 
 typedef struct track_color {
-    uint8_t r, g, b;        // red/green/blue channels (why not hsl?)
-    uint8_t ht, st, lt;    // hue/saturation/lightness thresholds
-    int filter;             // simple filter (consecutive pixels)
+    uint8_t r, g, b;    // red/green/blue color channels
+    uint8_t ht, st, lt; // hue/saturation/lightness thresholds
+    int filter;         // simple filter (consecutive pixels)
 } track_color_t;
 
 typedef struct {
