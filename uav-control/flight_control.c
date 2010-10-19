@@ -17,9 +17,9 @@
 #define ROLL_DUTY_HI 0.087f
 #define ROLL_DUTY_IDLE 0.07f
 
-#define YAW_DUTY_LO 0.047f
-#define YAW_DUTY_HI 0.094f
-#define YAW_DUTY_IDLE 0.72f
+#define YAW_DUTY_LO 0.0465f
+#define YAW_DUTY_HI 0.0948f
+#define YAW_DUTY_IDLE 0.07f
 
 typedef struct fc_globals {
     pthread_t replay_thrd;
@@ -460,7 +460,7 @@ void *landing_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-int init_channel(int index, float duty_lo, float duty_hi, float duty_idle)
+int init_channel(int index, int freq, float duty_lo, float duty_hi, float duty_idle)
 {
     pwm_channel_t *pwm = &globals.channels[index];
     if (0 > (pwm->handle = pwm_open_device(PWM_DEV_FIRST + index))) {
@@ -469,7 +469,7 @@ int init_channel(int index, float duty_lo, float duty_hi, float duty_idle)
     }
 
     // keep throttle signal at the current value it is
-    pwm_set_freq_x100(pwm->handle, 4580);
+    pwm_set_freq_x100(pwm->handle, freq);
     pwm_get_range(pwm->handle, &pwm->rng_min, &pwm->rng_max);
     assign_duty(pwm, duty_lo, duty_hi, duty_idle);
     return 1;
@@ -495,19 +495,19 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     pthread_mutex_init(&globals.vcm_lock, NULL);
     pthread_cond_init(&globals.takeoff_cond, NULL);
 
-    if (!init_channel(PWM_ALT, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
+    if (!init_channel(PWM_ALT, 4580, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
     syslog(LOG_INFO, "flight control: altitude channel opened\n");
 
-    if (!init_channel(PWM_PITCH, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
+    if (!init_channel(PWM_PITCH, 4580, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
         return 0; 
     syslog(LOG_INFO, "flight control: pitch channel opened\n");
 
-    if (!init_channel(PWM_ROLL, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
+    if (!init_channel(PWM_ROLL, 4580, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: roll channel opened\n");
 
-    if (!init_channel(PWM_YAW, YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE))
+    if (!init_channel(PWM_YAW, 4581, YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
@@ -677,6 +677,9 @@ int fc_land()
 // -----------------------------------------------------------------------------
 void fc_reset_channels(void)
 {
+    globals.thro_last_value = 0.0f;
+    globals.thro_last_cmp = 0;
+    globals.thro_first = 0;
     assign_duty(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
     assign_duty(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE);
     assign_duty(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE);
@@ -705,20 +708,9 @@ void fc_update_vcm(int axes, int type)
     globals.vcm_axes = axes;
     pthread_mutex_unlock(&globals.vcm_lock);
 
-    if (VCM_TYPE_KILL == type)
-    {
-        // set all pwm outputs to low or idle values and kill ourselves
-        fc_reset_channels();
+    fc_reset_channels();
+    if (VCM_TYPE_KILL == type || VCM_TYPE_LOCKOUT == type)
         fc_set_alive(0);
-    }
-    else if (VCM_TYPE_LOCKOUT == type)
-    {
-        fc_set_alive(0);
-        globals.thro_last_value = 0.0f;
-        globals.thro_last_cmp = 0;
-        globals.thro_first = 0;
-        fc_reset_channels();
-    }
     else
         fc_set_alive(1);
 
