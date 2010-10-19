@@ -5,35 +5,21 @@
 #include "flight_control.h"
 #include "pid.h"
 
-#define PWM_DUTY_MIN   0.05f
-#define PWM_DUTY_MAX   0.09f
-#define PWM_DUTY_IDLE  0.07f
-
 #define ALT_DUTY_LO 0.046f
 #define ALT_DUTY_HI 0.09f
+#define ALT_DUTY_IDLE 0.07f
 
 #define PITCH_DUTY_LO 0.057f
 #define PITCH_DUTY_HI 0.09f
+#define PITCH_DUTY_IDLE 0.07f
 
 #define ROLL_DUTY_LO 0.052f
 #define ROLL_DUTY_HI 0.087f
+#define ROLL_DUTY_IDLE 0.07f
 
 #define YAW_DUTY_LO 0.047f
 #define YAW_DUTY_HI 0.094f
 #define YAW_DUTY_IDLE 0.72f
-
-#define RECORD_BUCKET_SIZE 1024
-
-typedef struct input_record {
-    int time_delta;
-    ctl_sigs_t signals;
-} input_record_t;
-
-typedef struct record_bucket {
-    input_record_t records[RECORD_BUCKET_SIZE];
-    unsigned int count;
-    struct record_bucket *next;
-} record_bucket_t;
 
 typedef struct fc_globals {
     pthread_t replay_thrd;
@@ -63,12 +49,13 @@ typedef struct fc_globals {
     const char *replay_path;
 
     record_bucket_t *record_head, *record_tail;
+    timespec_t last_time;
 } fc_globals_t;
 
 static fc_globals_t globals = { 0 };
 
 // -----------------------------------------------------------------------------
-record_bucket_t *new_record_bucket()
+record_bucket_t *record_create_bucket()
 {
     record_bucket_t *bkt = (record_bucket_t *)malloc(sizeof(record_bucket_t));
     bkt->count = 0;
@@ -319,13 +306,14 @@ void *replay_thread(void *arg)
 
         for (i = 0; i < bucket->count; i++) {
             record = &bucket->records[i];
-            usleep(record->time_delta);
+            clock_nanosleep(CLOCK_REALTIME, 0, &record->delta, 0);
             flight_control(&record->signals, VCM_AXIS_ALL);
         }
 
         bucket = bucket->next;
     }
 
+    fprintf(stderr, "completed replay_thread\n");
     pthread_exit(NULL);
 }
 
@@ -511,11 +499,11 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
         return 0;
     syslog(LOG_INFO, "flight control: altitude channel opened\n");
 
-    if (!init_channel(PWM_PITCH, PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE))
+    if (!init_channel(PWM_PITCH, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
         return 0; 
     syslog(LOG_INFO, "flight control: pitch channel opened\n");
 
-    if (!init_channel(PWM_ROLL, ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE))
+    if (!init_channel(PWM_ROLL, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: roll channel opened\n");
 
@@ -567,7 +555,8 @@ void fc_shutdown()
             // write the current bucket out to the file
             for (i = 0; i < curr->count; i++) {
                 input_record_t *record = &curr->records[i];
-                fprintf(fout, "%d %f %f %f %f\n", record->time_delta,
+                fprintf(fout, "%ld %ld %f %f %f %f\n",
+                        record->delta.tv_sec, record->delta.tv_nsec,
                         record->signals.alt, record->signals.yaw,
                         record->signals.pitch, record->signals.roll);
             }
@@ -595,7 +584,7 @@ int fc_set_capture(const char *path)
     globals.capture_path = path;
 
     // allocate the first record bucket in our linked list
-    globals.record_head = globals.record_tail = new_record_bucket();
+    globals.record_head = globals.record_tail = record_create_bucket();
     return 1;
 }
 
@@ -606,6 +595,7 @@ int fc_set_replay(const char *path)
     int entries_read = 0, buckets_filled = 1;
     record_bucket_t *bucket;
     input_record_t *record;
+    timespec_t delta;
 
     // do some basic checking for erroneous requests
     if (globals.replay_path) {
@@ -623,15 +613,15 @@ int fc_set_replay(const char *path)
         return 0;
     }
 
-    globals.record_head = globals.record_tail = bucket = new_record_bucket();
+    globals.record_head = globals.record_tail = bucket = record_create_bucket();
     while (!feof(fin)) {
-        int time_delta;
         float alt, yaw, pitch, roll;
-        fscanf(fin, "%d %f %f %f %f\n", &time_delta, &alt, &yaw, &pitch, &roll);
+        fscanf(fin, "%ld %ld %f %f %f %f\n", &delta.tv_sec, &delta.tv_nsec,
+               &alt, &yaw, &pitch, &roll);
 
         if (bucket->count >= RECORD_BUCKET_SIZE) {
             // add a new bucket to the linked list if we're out of space
-            bucket = new_record_bucket();
+            bucket = record_create_bucket();
             globals.record_tail->next = bucket;
             globals.record_tail = bucket;
             ++buckets_filled;
@@ -639,7 +629,8 @@ int fc_set_replay(const char *path)
 
         // store the loaded input record
         record = &bucket->records[bucket->count++];
-        record->time_delta = time_delta;
+        record->delta.tv_sec = delta.tv_sec;
+        record->delta.tv_nsec = delta.tv_nsec;
         record->signals.alt = alt;
         record->signals.yaw = yaw;
         record->signals.pitch = pitch;
@@ -688,8 +679,8 @@ void fc_reset_channels(void)
 {
     assign_duty(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
     assign_duty(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE);
-    assign_duty(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PWM_DUTY_IDLE);
-    assign_duty(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, PWM_DUTY_IDLE);
+    assign_duty(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE);
+    assign_duty(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE);
 }
 
 // -----------------------------------------------------------------------------
@@ -730,12 +721,16 @@ void fc_update_vcm(int axes, int type)
     }
     else
         fc_set_alive(1);
+
+    // save the last timer tick every time we switch state
+    clock_gettime(CLOCK_REALTIME, &globals.last_time);
 }
 
 // -----------------------------------------------------------------------------
 void fc_update_ctl(ctl_sigs_t *sigs)
 {
     int axes;
+    timespec_t curr_time, time_delta;
 
     pthread_mutex_lock(&globals.vcm_lock);
     axes = globals.vcm_axes;
@@ -752,13 +747,18 @@ void fc_update_ctl(ctl_sigs_t *sigs)
         record_bucket_t *bucket = globals.record_tail;
         if (bucket->count >= RECORD_BUCKET_SIZE) {
             // attach this bucket to the current tail of our linked list
-            bucket = new_record_bucket();
+            bucket = record_create_bucket();
             globals.record_tail->next = bucket;
             globals.record_tail = bucket;
         }
 
+        // record the delta time between controller inputs
+        clock_gettime(CLOCK_REALTIME, &curr_time);
+        timespec_diff(&globals.last_time, &curr_time, &time_delta);
+        globals.last_time = curr_time;
+
         // insert the record into our bucket
-        bucket->records[bucket->count].time_delta = 50000;
+        bucket->records[bucket->count].delta = time_delta;
         bucket->records[bucket->count].signals = *sigs;
         bucket->count++;
     }

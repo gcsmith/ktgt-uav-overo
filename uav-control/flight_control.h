@@ -14,6 +14,7 @@
 #include "pwm_lib.h"
 #include "razor_imu.h"
 #include "uav_protocol.h"
+#include "utility.h"
 
 #define PWM_ALT     0
 #define PWM_YAW     1
@@ -21,6 +22,7 @@
 #define PWM_ROLL    3
 
 // PWM channel definitions
+
 #define PWM_DEV_FIRST   8
 #define PWM_DEV_LAST    11
 
@@ -29,11 +31,25 @@
 #define PWM_DEV_PITCH   (PWM_DEV_FIRST + PWM_PITCH)
 #define PWM_DEV_ROLL    (PWM_DEV_FIRST + PWM_ROLL)
 
-// Data structure containing control signal values
+#define RECORD_BUCKET_SIZE 1024
+
 typedef struct ctl_sigs
 {
     float alt, pitch, roll, yaw;
 } ctl_sigs_t;
+
+typedef struct input_record
+{
+    timespec_t delta;
+    ctl_sigs_t signals;
+} input_record_t;
+
+typedef struct record_bucket
+{
+    input_record_t records[RECORD_BUCKET_SIZE];
+    unsigned int count;
+    struct record_bucket *next;
+} record_bucket_t;
 
 typedef struct pwm_channel
 {

@@ -23,7 +23,7 @@ CFLAGS += -Wall -Werror -D_GNU_SOURCE \
 LFLAGS += $(LDFLAGS) \
           -L../pwm-lib \
           -L../gpio-lib \
-          -lpthread -ljpeg -lpwm -lgpio -lm
+          -lpthread -ljpeg -lpwm -lgpio -lm -lrt
 
 ifeq ("$(PROFILE)", "gprof")
 	CFLAGS += -O0 -ggdb -pg

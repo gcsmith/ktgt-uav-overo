@@ -69,6 +69,37 @@ void daemonize(void)
 }
 
 // -----------------------------------------------------------------------------
+int timespec_diff(const timespec_t *t0, const timespec_t *t1, timespec_t *td)
+{
+    td->tv_sec  = t1->tv_sec  - t0->tv_sec;
+    td->tv_nsec = t1->tv_nsec - t0->tv_nsec;
+
+    if (td->tv_sec >= 0 && td->tv_nsec > 0) {
+        return 1;
+    }
+    else if (td->tv_sec > 0 && td->tv_nsec < 0) {
+        td->tv_nsec += 1000000000L;
+        td->tv_sec--;
+        return 1;
+    }
+    else if (td->tv_sec < 0 && td->tv_nsec > 0) {
+        td->tv_nsec -= 1000000000L;
+        td->tv_sec++;
+        td->tv_sec = -td->tv_sec;
+        td->tv_nsec = -td->tv_nsec;
+        return -1;
+    }
+    else if (td->tv_sec <= 0 && td->tv_nsec < 0) {
+        td->tv_sec = -td->tv_sec;
+        td->tv_nsec = -td->tv_nsec;
+        return -1;
+    }
+    else /* (td->tv_sec == 0 && td->tv_nsec == 0) */ {
+        return 0;
+    }
+}
+
+// -----------------------------------------------------------------------------
 uint32_t read_wlan_rssi(int sock)
 {
     static int rssi = 0;

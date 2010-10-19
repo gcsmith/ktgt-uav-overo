@@ -10,6 +10,7 @@
 #define _UAV_UTILITY_IMU__H_
 
 #include <stdint.h>
+#include <time.h>
 
 // return the smallest of the two specified values
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -28,6 +29,7 @@
 
 // allow us to toggle the precision of all internal floating point algorithms
 typedef float real_t;
+typedef struct timespec timespec_t;
 
 typedef struct client_info
 {
@@ -37,6 +39,9 @@ typedef struct client_info
 
 // turn the calling process into a daemon process
 void daemonize(void);
+
+// compute the delta between two timespecs
+int timespec_diff(const timespec_t *t0, const timespec_t *t1, timespec_t *td);
 
 // initialize analog-to-digital channels for reading
 int adc_open_channels(void);
