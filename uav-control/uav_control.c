@@ -542,6 +542,7 @@ int main(int argc, char *argv[])
         syslog(LOG_ERR, "failed to initialize IMU");
         uav_shutdown(EXIT_FAILURE);
     }
+    imu_set_avg_filter(&g_imu, 16);
 
     // open PWM ports for mixed controlling
     if (!flag_no_fc) {

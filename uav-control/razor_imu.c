@@ -12,12 +12,36 @@
 #include "razor_imu.h"
 
 // -----------------------------------------------------------------------------
+inline void calc_moving_avg(imu_data_t *data, float *new_samples)
+{
+    // subtract out the value to remove from the moving sum
+    real_t *samples = &data->samples[data->avg_idx * 3];
+    data->moving_sum[0] -= samples[0];
+    data->moving_sum[1] -= samples[1];
+    data->moving_sum[2] -= samples[2];
+
+    // add in the new samples to the moving sum
+    data->moving_sum[0] += (samples[0] = new_samples[0]);
+    data->moving_sum[1] += (samples[1] = new_samples[1]);
+    data->moving_sum[2] += (samples[2] = new_samples[2]);
+
+    // wrap around the sample index into our ring buffer if necessary
+    if (++data->avg_idx >= data->avg_len)
+        data->avg_idx = 0;
+
+    // calculate the average of each channel
+    data->angles[0] = data->moving_sum[0] * data->inv_avg_len;
+    data->angles[1] = data->moving_sum[1] * data->inv_avg_len;
+    data->angles[2] = data->moving_sum[2] * data->inv_avg_len;
+}
+
+// -----------------------------------------------------------------------------
 static void *imu_rd_thread(void *thread_args)
 {
     imu_data_t *data = (imu_data_t *)thread_args;
     char buff[128], num_buff[16], *ptr;
     int nb, i, data_idx = 0, num_idx = 0;
-    float temp_data[3];
+    real_t temp_data[3];
 
     // XXX: rewrite me -- I can barely make sense of what I wrote here
     while (data->running) {
@@ -28,12 +52,21 @@ static void *imu_rd_thread(void *thread_args)
                 switch (ptr[i]) {
                 case '\n':
                     num_buff[num_idx++] = '\0';
-                    temp_data[data_idx++] = strtof(num_buff, NULL);
+                    temp_data[data_idx++] = (real_t)strtof(num_buff, NULL);
                     if (data_idx == 3) {
                         pthread_mutex_lock(&data->lock);
-                        data->angles[0] = temp_data[0];
-                        data->angles[1] = temp_data[1];
-                        data->angles[2] = temp_data[2];
+
+                        if (data->avg_len <= 0) {
+                            // store the immediate sample values
+                            data->angles[0] = temp_data[0];
+                            data->angles[1] = temp_data[1];
+                            data->angles[2] = temp_data[2];
+                        }
+                        else {
+                            // calculate a moving average of the samples
+                            calc_moving_avg(data, temp_data);
+                        }
+
                         data->sample++;
                         pthread_mutex_unlock(&data->lock);
                         data_idx = 0;
@@ -100,6 +133,27 @@ int imu_init(const char *device, int baud, imu_data_t *data)
     }
 
     return 1;
+}
+
+// -----------------------------------------------------------------------------
+void imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
+{
+    pthread_mutex_lock(&data->lock);
+    
+    // clear the previous average buffer, if there was one
+    if (data->samples) {
+        syslog(LOG_INFO, "clearing avg buffer length %d\n", data->avg_len);
+        free(data->samples);
+    }
+
+    // set the new parameters and allocate the running average buffer
+    data->samples = (real_t *)calloc(avg_len * 3, sizeof(real_t));
+    data->avg_len = avg_len;
+    data->avg_idx = 0;
+    data->inv_avg_len = 1.0f / (real_t)avg_len;
+
+    pthread_mutex_unlock(&data->lock);
+    fprintf(stderr, "setting average filter to %d samples\n", avg_len);
 }
 
 // -----------------------------------------------------------------------------
