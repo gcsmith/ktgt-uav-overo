@@ -367,15 +367,37 @@ void run_server(imu_data_t *imu, const char *port)
                 
                 fc_update_ctl(&client_sigs);
                 break;
-            case CLIENT_REQ_TRACK_COLOR:
-                tc.r = cmd_buffer[PKT_TC_CHANNEL_0];
-                tc.g = cmd_buffer[PKT_TC_CHANNEL_1];
-                tc.b = cmd_buffer[PKT_TC_CHANNEL_2];
-                tc.ht = cmd_buffer[PKT_TC_THRESH_0];
-                tc.st = cmd_buffer[PKT_TC_THRESH_1];
-                tc.lt = cmd_buffer[PKT_TC_THRESH_2];
-                tc.filter = 20;
+            case CLIENT_REQ_CAM_TC:
+                // determine whether color tracking is enabled or disabled
+                colordetect_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
+
+                // update our color tracking parameters
+                tc.r = cmd_buffer[PKT_CAM_TC_CH0];
+                tc.g = cmd_buffer[PKT_CAM_TC_CH1];
+                tc.b = cmd_buffer[PKT_CAM_TC_CH2];
+                tc.ht = cmd_buffer[PKT_CAM_TC_TH0];
+                tc.st = cmd_buffer[PKT_CAM_TC_TH1];
+                tc.lt = cmd_buffer[PKT_CAM_TC_TH2];
+                tc.filter = cmd_buffer[PKT_CAM_TC_FILTER];
                 colordetect_set_track_color(&tc);
+                // TODO: ack?
+                break;
+            case CLIENT_REQ_CAM_EXP:
+                // set camera to requested exposure mode and value
+                video_cfg_exposure(cmd_buffer[PKT_CAM_EXP_AUTO],
+                                   cmd_buffer[PKT_CAM_EXP_VALUE]);
+                // TODO: ack?
+                break;
+            case CLIENT_REQ_CAM_FOC:
+                // set camera to requested focus mode and value
+                video_cfg_focus(cmd_buffer[PKT_CAM_FOC_AUTO],
+                                cmd_buffer[PKT_CAM_FOC_VALUE]);
+                // TODO: ack?
+                break;
+            case CLIENT_REQ_CAM_WHB:
+                // set camera to requested white balance mode
+                video_cfg_whitebalance(cmd_buffer[PKT_CAM_WHB_AUTO]);
+                // TODO: ack?
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes

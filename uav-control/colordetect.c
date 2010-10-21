@@ -135,9 +135,19 @@ void colordetect_shutdown(void)
     pthread_cancel(g_globals.thread);
 }
 
+// -----------------------------------------------------------------------------
 void colordetect_set_track_color(track_color_t *color)
 {
     g_globals.color = *color;
+}
+
+// -----------------------------------------------------------------------------
+void colordetect_enable(int enabled)
+{
+    if (enabled)
+        syslog(LOG_INFO, "TODO: requested color tracking enable\n");
+    else
+        syslog(LOG_INFO, "TODO: requested color tracking disable\n");
 }
 
 #endif

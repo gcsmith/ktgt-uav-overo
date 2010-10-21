@@ -10,7 +10,7 @@
 #define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x00000004  // software version
+#define IDENT_VERSION   0x00000005  // uav_control protocal version
 #define PKT_BUFF_LEN    2048        // max possible packet length
 
 // Packet commands from server to client
@@ -34,7 +34,10 @@
 #define CLIENT_REQ_MJPG_FRAME   4   // request a single frame of video
 #define CLIENT_REQ_SET_CTL_MODE 5   // request a change in control mode
 #define CLIENT_REQ_FLIGHT_CTL   6   // command the helicopter's flight
-#define CLIENT_REQ_TRACK_COLOR  7
+#define CLIENT_REQ_CAM_TC       7   // request change in camera track color
+#define CLIENT_REQ_CAM_EXP      8   // request change in camera exposure
+#define CLIENT_REQ_CAM_FOC      9   // request change in camera focus
+#define CLIENT_REQ_CAM_WHB      10  // request change in camera white balance
 
 // General packet offsets
 
@@ -110,17 +113,36 @@
 
 // Set tracking color, format, and thresholds
 
-#define TC_COLOR_FMT_RGB    0x00000001      // red/green/blue channels
-#define TC_COLOR_FMT_HSL    0x00000002      // hue/saturation/lightness channels
+#define CAM_TC_FMT_RGB      0x00000001      // red/green/blue channels
+#define CAM_TC_FMT_HSL      0x00000002      // hue/saturation/lightness channels
 
-#define PKT_TC_COLOR_FMT    PKT_BASE + 0
-#define PKT_TC_CHANNEL_0    PKT_BASE + 1
-#define PKT_TC_CHANNEL_1    PKT_BASE + 2
-#define PKT_TC_CHANNEL_2    PKT_BASE + 3
-#define PKT_TC_THRESH_0     PKT_BASE + 4
-#define PKT_TC_THRESH_1     PKT_BASE + 5
-#define PKT_TC_THRESH_2     PKT_BASE + 6
-#define PKT_TC_LENGTH       (sizeof(uint32_t) * (PKT_BASE + 7))
+#define PKT_CAM_TC_ENABLE   PKT_BASE + 0
+#define PKT_CAM_TC_FMT      PKT_BASE + 1
+#define PKT_CAM_TC_CH0      PKT_BASE + 2
+#define PKT_CAM_TC_CH1      PKT_BASE + 3
+#define PKT_CAM_TC_CH2      PKT_BASE + 4
+#define PKT_CAM_TC_TH0      PKT_BASE + 5
+#define PKT_CAM_TC_TH1      PKT_BASE + 6
+#define PKT_CAM_TC_TH2      PKT_BASE + 7
+#define PKT_CAM_TC_FILTER   PKT_BASE + 8
+#define PKT_CAM_TC_LENGTH   (sizeof(uint32_t) * (PKT_BASE + 9))
+
+// Set camera exposure configuration
+
+#define PKT_CAM_EXP_AUTO    PKT_BASE + 0
+#define PKT_CAM_EXP_VALUE   PKT_BASE + 1
+#define PKT_CAM_EXP_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 2))
+
+// Set camera focus configuration
+
+#define PKT_CAM_FOC_AUTO    PKT_BASE + 0
+#define PKT_CAM_FOC_VALUE   PKT_BASE + 1
+#define PKT_CAM_FOC_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 2))
+
+// Set camera white balance configuration
+
+#define PKT_CAM_WHB_AUTO    PKT_BASE + 0
+#define PKT_CAM_WHB_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 1))
 
 #endif // _UAV_PROTOCOL__H_
 

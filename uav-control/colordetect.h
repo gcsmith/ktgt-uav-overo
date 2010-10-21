@@ -30,6 +30,7 @@ typedef struct {
 int colordetect_init(client_info_t *client);
 void colordetect_shutdown(void);
 void colordetect_set_track_color(track_color_t *color);
+void colordetect_enable(int enabled);
 
 // determine color bounding box using simple red/green/blue thresholding
 void color_detect_rgb(const uint8_t *rgb_in,
