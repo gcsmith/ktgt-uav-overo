@@ -11,6 +11,7 @@ static int g_vid_enabled = 0;
 static int g_is_fresh = 0;
 static int g_unprocessed = 0;
 
+// -----------------------------------------------------------------------------
 void *cam_input_thread(void *arg)
 {
     // set cleanup handler to cleanup allocated ressources
@@ -85,6 +86,7 @@ void *cam_input_thread(void *arg)
     return NULL;
 }
 
+// -----------------------------------------------------------------------------
 int video_lock(video_data_t *vdata, int type)
 {
     if (!g_vid_enabled) {
@@ -120,12 +122,14 @@ int video_lock(video_data_t *vdata, int type)
     return 1;
 }
 
+// -----------------------------------------------------------------------------
 void video_unlock()
 {
     // allow others to access the global buffer again
     pthread_mutex_unlock(&global.db);
 }
 
+// -----------------------------------------------------------------------------
 int video_init(const char *dev, int width, int height, int fps)
 {
     int format = V4L2_PIX_FMT_MJPEG;
@@ -196,6 +200,7 @@ int video_init(const char *dev, int width, int height, int fps)
     return 1;
 }
 
+// -----------------------------------------------------------------------------
 void video_shutdown(void)
 {
     if (!g_vid_enabled) {
@@ -220,6 +225,7 @@ void video_shutdown(void)
         free(global.buf);
 }
 
+// -----------------------------------------------------------------------------
 int video_cfg_exposure(int automatic, int abs_value)
 {
     if (automatic) {
@@ -249,6 +255,7 @@ int video_cfg_exposure(int automatic, int abs_value)
     return 1;
 }
 
+// -----------------------------------------------------------------------------
 int video_cfg_focus(int automatic, int abs_value)
 {
     if (automatic) {
@@ -263,7 +270,7 @@ int video_cfg_focus(int automatic, int abs_value)
         // set the focus mode to manual adjustment
         syslog(LOG_INFO, "setting video focus to manual mode\n");
         if (0 > v4l2SetControl(g_videoin, V4L2_CID_FOCUS_AUTO, 0)) {
-            syslog(LOG_ERR, "failed to set video focus mode to auto\n");
+            syslog(LOG_ERR, "failed to set video focus mode to manaul\n");
             return 0;
         }
 
@@ -278,6 +285,7 @@ int video_cfg_focus(int automatic, int abs_value)
     return 1;
 }
 
+// -----------------------------------------------------------------------------
 int video_cfg_whitebalance(int automatic)
 {
     if (automatic) {
