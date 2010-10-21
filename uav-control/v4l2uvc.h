@@ -34,6 +34,16 @@
 #include <linux/videodev.h>
 #include <libv4l2.h>
 #define NB_BUFFER 4
+#define IOCTL_VIDEO(fd, req, value) v4l2_ioctl(fd, req, value)
+#define OPEN_VIDEO(fd, flags) v4l2_open(fd, flags)
+#define CLOSE_VIDEO(fd) v4l2_close(fd)
+
+typedef enum _streaming_state streaming_state;
+enum _streaming_state {
+    STREAMING_OFF = 0,
+    STREAMING_ON = 1,
+    STREAMING_PAUSED = 2,
+};
 
 typedef struct uvc_globals {
     int stop;
@@ -56,7 +66,7 @@ struct vdIn {
     void *mem[NB_BUFFER];
     unsigned char *tmpbuffer;
     unsigned char *framebuffer;
-    int isstreaming;
+    streaming_state streamingState;
     int grabmethod;
     int width;
     int height;
@@ -84,11 +94,10 @@ struct vdIn {
 
 int init_videoIn(struct vdIn *vd, char *device, int width, int height, int fps,
                  int format, int grabmethod, uvc_globals_t *pglobal);
+void enumerateControls(struct vdIn *vd, uvc_globals_t *pglobal);
 void control_readed(struct vdIn *vd, struct v4l2_queryctrl *ctrl,
                     uvc_globals_t *pglobal);
-int enum_controls(int vd);
-int save_controls(int vd);
-int load_controls(int vd);
+int setResolution(struct vdIn *vd, int width, int height);
 
 int memcpy_picture(unsigned char *out, unsigned char *buf, int size);
 int uvcGrab(struct vdIn *vd);

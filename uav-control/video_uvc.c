@@ -11,7 +11,8 @@ static int g_vid_enabled = 0;
 static int g_is_fresh = 0;
 static int g_unprocessed = 0;
 
-void *cam_input_thread(void *arg) {
+void *cam_input_thread(void *arg)
+{
     // set cleanup handler to cleanup allocated ressources
     uvc_globals_t *pglobal = (uvc_globals_t *)arg;
     // pthread_cleanup_push(cam_cleanup, NULL);
@@ -217,5 +218,90 @@ void video_shutdown(void)
         free(g_videoin);
     if (NULL != global.buf)
         free(global.buf);
+}
+
+int video_cfg_exposure(int automatic, int abs_value)
+{
+    if (automatic) {
+        // set exposure mode to automatic and let the camera take over
+        syslog(LOG_INFO, "setting video exposure to automatic mode\n");
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO)) {
+            syslog(LOG_ERR, "failed to set video exposure mode to auto\n");
+            return 0;
+        }
+    }
+    else {
+        // set the exposure mode to manual adjustment
+        syslog(LOG_INFO, "setting video exposure to manual mode\n");
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL)) {
+            syslog(LOG_ERR, "failed to set video exposure mode to manual\n");
+            return 0;
+        }
+
+        // set the absolute exposure value (units are undefined)
+        syslog(LOG_INFO, "setting video absolute exposure to %d\n", abs_value);
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_EXPOSURE_ABSOLUTE, abs_value)) {
+            syslog(LOG_ERR, "failed to set video absolute exposure to %d\n", abs_value);
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+int video_cfg_focus(int automatic, int abs_value)
+{
+    if (automatic) {
+        // set focus mode to automatic and let the camera take over
+        syslog(LOG_INFO, "setting video focus to automatic mode\n");
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_FOCUS_AUTO, 1)) {
+            syslog(LOG_ERR, "failed to set video focus mode to auto\n");
+            return 0;
+        }
+    }
+    else {
+        // set the focus mode to manual adjustment
+        syslog(LOG_INFO, "setting video focus to manual mode\n");
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_FOCUS_AUTO, 0)) {
+            syslog(LOG_ERR, "failed to set video focus mode to auto\n");
+            return 0;
+        }
+
+        // set the absolute focus value (units are undefined)
+        syslog(LOG_INFO, "setting video absolute focus to %d\n", abs_value);
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_FOCUS_ABSOLUTE, abs_value)) {
+            syslog(LOG_ERR, "failed to set video absolute focus to %d\n", abs_value);
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+int video_cfg_whitebalance(int automatic)
+{
+    if (automatic) {
+        // set white balance mode to automatic and let the camera take over
+        syslog(LOG_INFO, "setting video white balance to automatic mode\n");
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_AUTO_WHITE_BALANCE, 1)) {
+            syslog(LOG_ERR, "failed to set video white balance mode to auto\n");
+            return 0;
+        }
+    }
+    else {
+        syslog(LOG_INFO, "setting video white balance to manual mode\n");
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_AUTO_WHITE_BALANCE, 0)) {
+            syslog(LOG_ERR, "failed to set video white balance mode to auto\n");
+            return 0;
+        }
+
+        syslog(LOG_INFO, "setting video white balance\n");
+        if (0 > v4l2SetControl(g_videoin, V4L2_CID_DO_WHITE_BALANCE, 0)) {
+            syslog(LOG_ERR, "failed to set video white balance\n");
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
