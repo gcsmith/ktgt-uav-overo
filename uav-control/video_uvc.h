@@ -46,5 +46,8 @@ int video_enum_devctrl(enum_ctrl_fn c_fn, enum_menu_fn m_fn);
 // set the specified device control value
 int video_set_devctrl(int id, int value);
 
+// get the specified device control value
+int video_get_devctrl(int id);
+
 #endif // _UAV_VIDEO_UVC__H_
 
