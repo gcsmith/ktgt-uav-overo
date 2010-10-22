@@ -92,7 +92,7 @@ void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
     else if (duty > fmax)
         duty = fmax;
 
-    fprintf(stderr, "called assign_duty with %f %f %f\n", fmin, fmax, duty);
+    // fprintf(stderr, "called assign_duty with %f %f %f\n", fmin, fmax, duty);
     cmp_val = (int)(pwm->rng_min + (int)((pwm->rng_max - pwm->rng_min) * duty));
     pwm_set_compare(pwm->handle, cmp_val);
 }

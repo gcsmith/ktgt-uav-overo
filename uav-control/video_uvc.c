@@ -7,32 +7,32 @@
 uvc_globals_t global = { 0 };
 static struct vdIn *g_videoin;
 static pthread_t g_camthrd;
-static int g_vid_enabled = 0;
 static int g_is_fresh = 0;
 static int g_unprocessed = 0;
 
 // -----------------------------------------------------------------------------
-void *cam_input_thread(void *arg)
+static void *video_capture_thread(void *arg)
 {
     // set cleanup handler to cleanup allocated ressources
     uvc_globals_t *pglobal = (uvc_globals_t *)arg;
     // pthread_cleanup_push(cam_cleanup, NULL);
 
-    while (!pglobal->stop) {
+    while (pglobal->enabled) {
 
-        // grab a frame
-        if (uvcGrab(g_videoin) < 0) {
-            syslog(LOG_ERR, "Error grabbing frames\n");
+        // attempt to grab the next frame from the webcam (block until ready)
+        if (v4l2GrabFrame(g_videoin) < 0) {
+            syslog(LOG_ERR, "error grabbing frame from uvc device\n");
+            // sleep for a second and then try again
             sleep(1);
             continue;
         }
 
+#if 0
         // Workaround for broken, corrupted frames:
         // Under low light conditions corrupted frames may get captured.
         // The good thing is such frames are quite small compared to the regular
         // pictures.  For example a VGA (640x480) webcam picture is normally
         // >= 8kByte large, corrupted frames are smaller.
-#if 0
         if (g_videoin->buf.bytesused < minimum_size) {
             DBG("dropping too small frame, assuming it as broken\n");
             continue;
@@ -42,43 +42,28 @@ void *cam_input_thread(void *arg)
         // copy JPG picture to global buffer
         pthread_mutex_lock(&pglobal->db);
 
-        // If capturing in YUV mode convert to JPEG now.
-        // This compression requires many CPU cycles, so try to avoid YUV
-        // format. Getting JPEGs straight from the webcam, is one of the major
-        // advantages of Linux-UVC compatible devices.
-#if 0
-        if (g_videoin->formatIn == V4L2_PIX_FMT_YUYV) {
-            DBG("compressing frame\n");
-            pglobal->size = compress_yuyv_to_jpeg(g_videoin, pglobal->buf,
-                                                  g_videoin->framesizeIn,
-                                                  gquality);
-        }
-        else {
-#endif
-            pglobal->size = memcpy_picture(pglobal->buf, g_videoin->tmpbuffer,
-                                           g_videoin->buf.bytesused);
-#if 0
-        }
-#endif
+        pglobal->size = v4l2CopyBuffer(pglobal->buf,
+                g_videoin->tmpbuffer, g_videoin->buf.bytesused);
 
 #if 0
-        // motion detection can be done just by comparing the picture size,
+        // Motion detection can be done just by comparing the picture size,
         // but it is not very accurate!!
         if ((prev_size-global->size)*(prev_size-global->size) > 4*1024*1024) {
             DBG("motion detected (delta: %d kB)\n", (prev_size - global->size) / 1024);
         }
         prev_size = global->size;
 #endif
+
         g_is_fresh = 1;
         g_unprocessed = 1;
 
         // signal fresh_frame
-        // pthread_cond_broadcast(&pglobal->db_update);
-        pthread_mutex_unlock( &pglobal->db );
+        pthread_cond_broadcast(&pglobal->db_update);
+        pthread_mutex_unlock(&pglobal->db);
 
         // only use usleep if the fps is below 5, otherwise the overhead is too long
-        if ( g_videoin->fps < 5 ) {
-            usleep(1000*1000/g_videoin->fps);
+        if (g_videoin->fps < 5) {
+            usleep(1000 * 1000 / g_videoin->fps);
         }
     }
 
@@ -87,9 +72,109 @@ void *cam_input_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-int video_lock(video_data_t *vdata, int type)
+int video_init(const char *dev, video_mode_t *mode)
 {
-    if (!g_vid_enabled) {
+    int format = V4L2_PIX_FMT_MJPEG;
+    static uvc_globals_t *pglobal;
+
+    if (global.enabled) {
+        syslog(LOG_INFO, "attempting to call video_init multiple times\n");
+        return 0;
+    }
+
+    global.buf = NULL;
+    global.size = 0;
+
+    global.width  = mode->width;
+    global.height = mode->height;
+    global.fps    = mode->fps;
+
+    if (0 != pthread_mutex_init(&global.db, NULL)) {
+        syslog(LOG_ERR, "could not initialize mutex variable\n");
+        closelog();
+        return 0;
+    }
+
+    if (0 != pthread_cond_init(&global.db_update, NULL)) {
+        syslog(LOG_ERR, "could not initialize condition variable\n");
+        closelog();
+        return 0;
+    }
+
+    // keep a pointer to the global variables
+    pglobal = &global;
+
+    // allocate webcam datastructure
+    g_videoin = calloc(1, sizeof(struct vdIn));
+    if (NULL == g_videoin) {
+        syslog(LOG_ERR, "not enough memory for g_videoin\n");
+        return 0;
+    }
+
+    // display the parsed values
+    syslog(LOG_INFO, "  V4L2 Device  : %s\n", dev);
+    syslog(LOG_INFO, "  Resolution   : %i x %i\n", mode->width, mode->height);
+    syslog(LOG_INFO, "  Framerate    : %i\n", mode->fps);
+    syslog(LOG_INFO, "  Video Format : %s\n", "MJPEG");
+
+    // open video device and prepare data structure
+    if (v4l2DeviceOpen(g_videoin, (char *)dev, mode->width, mode->height,
+                mode->fps, format, 1, pglobal) < 0) {
+        syslog(LOG_ERR, "init_videoIn failed\n");
+        return 0;
+    }
+
+    v4l2EnumControls(g_videoin);
+
+    pglobal->buf = malloc(g_videoin->framesizeIn);
+    if (NULL == pglobal->buf) {
+        syslog(LOG_ERR, "could not allocate memory in input_run()\n");
+        return 0;
+    }
+
+    pthread_create(&g_camthrd, 0, video_capture_thread, pglobal);
+    pthread_detach(g_camthrd);
+
+    global.enabled = 1;
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+void video_shutdown(void)
+{
+    if (!global.enabled) {
+        syslog(LOG_INFO, "attempting to call video_shutdown prior to init\n");
+        return;
+    }
+
+    global.enabled = 0;
+    pthread_cancel(g_camthrd);
+
+    pthread_cond_destroy(&global.db_update);
+    pthread_mutex_destroy(&global.db);
+
+    v4l2DeviceClose(g_videoin);
+
+    if (NULL != g_videoin->tmpbuffer) {
+        free(g_videoin->tmpbuffer);
+        g_videoin->tmpbuffer = NULL;
+    }
+
+    if (NULL != g_videoin) {
+        free(g_videoin);
+        g_videoin = NULL;
+    }
+
+    if (NULL != global.buf) {
+        free(global.buf);
+        global.buf = NULL;
+    }
+}
+
+// -----------------------------------------------------------------------------
+int video_lock(video_data_t *data, int type)
+{
+    if (!global.enabled) {
         syslog(LOG_ERR, "attempting to call video_lock prior to init\n");
         return 0;
     }
@@ -112,12 +197,12 @@ int video_lock(video_data_t *vdata, int type)
 
     // pthread_cond_wait(&global.db_update, &global.db);
 
-    vdata->length = (unsigned long)global.size;
-    vdata->data = (const char *)global.buf;
+    data->length = (size_t)global.size;
+    data->data = (uint8_t *)global.buf;
 
-    vdata->width = global.width;
-    vdata->height = global.height;
-    vdata->fps = global.fps;
+    data->mode.width  = global.width;
+    data->mode.height = global.height;
+    data->mode.fps    = global.fps;
 
     return 1;
 }
@@ -130,103 +215,14 @@ void video_unlock()
 }
 
 // -----------------------------------------------------------------------------
-int video_init(const char *dev, int width, int height, int fps)
+int video_set_mode(video_mode_t *mode)
 {
-    int format = V4L2_PIX_FMT_MJPEG;
-    static uvc_globals_t *pglobal;
-
-    if (g_vid_enabled) {
-        syslog(LOG_INFO, "attempting to call video_init multiple times\n");
-        return 0;
-    }
-
-    global.stop = 0;
-    global.buf  = NULL;
-    global.size = 0;
-
-    global.width  = width;
-    global.height = height;
-    global.fps    = fps;
-
-    if (pthread_mutex_init(&global.db, NULL) != 0) {
-        syslog(LOG_ERR, "could not initialize mutex variable\n");
-        closelog();
-        return 0;
-    }
-
-    if (pthread_cond_init(&global.db_update, NULL) != 0) {
-        syslog(LOG_ERR, "could not initialize condition variable\n");
-        closelog();
-        return 0;
-    }
-
-    // keep a pointer to the global variables
-    pglobal = &global;
-
-    // allocate webcam datastructure
-    g_videoin = malloc(sizeof(struct vdIn));
-    if (g_videoin == NULL) {
-        syslog(LOG_ERR, "not enough memory for g_videoin\n");
-        return 0;
-    }
-    memset(g_videoin, 0, sizeof(struct vdIn));
-
-    // display the parsed values
-    syslog(LOG_INFO, "  V4L2 device        : %s\n", dev);
-    syslog(LOG_INFO, "  Desired Resolution : %i x %i\n", width, height);
-    syslog(LOG_INFO, "  Frames Per Second  : %i\n", fps);
-    syslog(LOG_INFO, "  Vdeo Stream Format : %s\n", "MJPEG");
-    //(format==V4L2_PIX_FMT_YUYV)?"YUV":"MJPEG");
-#if 0
-    if ( format == V4L2_PIX_FMT_YUYV )
-        syslog(LOG_ERR, "JPEG Quality......: %d\n", gquality);
-#endif
-    // open video device and prepare data structure
-    if (init_videoIn(g_videoin, (char *)dev, width, height, fps, format, 1, pglobal) < 0) {
-        syslog(LOG_ERR, "init_VideoIn failed\n");
-        return 0;
-    }
-
-    pglobal->buf = malloc(g_videoin->framesizeIn);
-    if (pglobal->buf == NULL) {
-        syslog(LOG_ERR, "could not allocate memory in input_run()\n");
-        return 0;
-    }
-
-    pthread_create(&g_camthrd, 0, cam_input_thread, pglobal);
-    pthread_detach(g_camthrd);
-
-    g_vid_enabled = 1;
+    syslog(LOG_INFO, "TODO: implement video_set_mode\n");
     return 1;
 }
 
 // -----------------------------------------------------------------------------
-void video_shutdown(void)
-{
-    if (!g_vid_enabled) {
-        syslog(LOG_INFO, "attempting to call video_shutdown prior to init\n");
-        return;
-    }
-
-    g_vid_enabled = 0;
-    global.stop = 1;
-    pthread_cancel(g_camthrd);
-
-    pthread_cond_destroy(&global.db_update);
-    pthread_mutex_destroy(&global.db);
-
-    close_v4l2(g_videoin);
-
-    if (NULL != g_videoin->tmpbuffer)
-        free(g_videoin->tmpbuffer);
-    if (NULL != g_videoin)
-        free(g_videoin);
-    if (NULL != global.buf)
-        free(global.buf);
-}
-
-// -----------------------------------------------------------------------------
-int video_cfg_exposure(int automatic, int abs_value)
+int video_set_exposure(int automatic, int abs_value)
 {
     if (automatic) {
         // set exposure mode to automatic and let the camera take over
@@ -256,7 +252,7 @@ int video_cfg_exposure(int automatic, int abs_value)
 }
 
 // -----------------------------------------------------------------------------
-int video_cfg_focus(int automatic, int abs_value)
+int video_set_focus(int automatic, int abs_value)
 {
     if (automatic) {
         // set focus mode to automatic and let the camera take over
@@ -286,7 +282,7 @@ int video_cfg_focus(int automatic, int abs_value)
 }
 
 // -----------------------------------------------------------------------------
-int video_cfg_whitebalance(int automatic)
+int video_set_whitebalance(int automatic)
 {
     if (automatic) {
         // set white balance mode to automatic and let the camera take over

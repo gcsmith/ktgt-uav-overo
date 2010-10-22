@@ -288,9 +288,10 @@ void run_server(imu_data_t *imu, const char *port)
                 // now send out the entire jpeg frame
                 jpg_buf[PKT_COMMAND] = SERVER_ACK_MJPG_FRAME;
                 jpg_buf[PKT_LENGTH]  = vid_data.length + PKT_MJPG_LENGTH;
-                jpg_buf[PKT_MJPG_WIDTH] = vid_data.width;
-                jpg_buf[PKT_MJPG_HEIGHT] = vid_data.height;
-                jpg_buf[PKT_MJPG_FPS] = vid_data.fps;
+
+                jpg_buf[PKT_MJPG_WIDTH]  = vid_data.mode.width;
+                jpg_buf[PKT_MJPG_HEIGHT] = vid_data.mode.height;
+                jpg_buf[PKT_MJPG_FPS]    = vid_data.mode.fps;
                 
                 send_packet(&g_client, jpg_buf, vid_data.length + PKT_MJPG_LENGTH);
                 //syslog(LOG_DEBUG, "send frame size %lu, pkt size %lu\n",
@@ -384,19 +385,19 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_CAM_EXP:
                 // set camera to requested exposure mode and value
-                video_cfg_exposure(cmd_buffer[PKT_CAM_EXP_AUTO],
+                video_set_exposure(cmd_buffer[PKT_CAM_EXP_AUTO],
                                    cmd_buffer[PKT_CAM_EXP_VALUE]);
                 // TODO: ack?
                 break;
             case CLIENT_REQ_CAM_FOC:
                 // set camera to requested focus mode and value
-                video_cfg_focus(cmd_buffer[PKT_CAM_FOC_AUTO],
+                video_set_focus(cmd_buffer[PKT_CAM_FOC_AUTO],
                                 cmd_buffer[PKT_CAM_FOC_VALUE]);
                 // TODO: ack?
                 break;
             case CLIENT_REQ_CAM_WHB:
                 // set camera to requested white balance mode
-                video_cfg_whitebalance(cmd_buffer[PKT_CAM_WHB_AUTO]);
+                video_set_whitebalance(cmd_buffer[PKT_CAM_WHB_AUTO]);
                 // TODO: ack?
                 break;
             default:
@@ -644,8 +645,9 @@ int main(int argc, char *argv[])
 
     // initialize video subsystem unless specified not to (no-video)
     if (!flag_no_video) {
+        video_mode_t mode = { arg_width, arg_height, arg_fps };
         syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
-        if (!video_init(v4l_dev, arg_width, arg_height, arg_fps)) {
+        if (!video_init(v4l_dev, &mode)) {
             syslog(LOG_ERR, "failed to initialize video subsystem\n");
             uav_shutdown(EXIT_FAILURE);
         }

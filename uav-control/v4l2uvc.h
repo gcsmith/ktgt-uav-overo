@@ -21,7 +21,11 @@
 # along with this program; if not, write to the Free Software                  #
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA    #
 #                                                                              #
+# Adapted from the original mjpg-streamer sources for use in uav_control.      #
 *******************************************************************************/
+
+#ifndef _UAV_V4L2UVC__H_
+#define _UAV_V4L2UVC__H_
 
 #include <stdio.h>
 #include <string.h>
@@ -46,7 +50,7 @@ enum _streaming_state {
 };
 
 typedef struct uvc_globals {
-    int stop;
+    int enabled;
     int size;
     int width, height, fps;
     unsigned char *buf;
@@ -92,20 +96,17 @@ struct vdIn {
     int recordtime;
 };
 
-int init_videoIn(struct vdIn *vd, char *device, int width, int height, int fps,
-                 int format, int grabmethod, uvc_globals_t *pglobal);
-void enumerateControls(struct vdIn *vd, uvc_globals_t *pglobal);
-void control_readed(struct vdIn *vd, struct v4l2_queryctrl *ctrl,
-                    uvc_globals_t *pglobal);
-int setResolution(struct vdIn *vd, int width, int height);
-
-int memcpy_picture(unsigned char *out, unsigned char *buf, int size);
-int uvcGrab(struct vdIn *vd);
-int close_v4l2(struct vdIn *vd);
-
+int v4l2DeviceOpen(struct vdIn *vd, char *device, int width, int height,
+        int fps, int format, int grabmethod, uvc_globals_t *pglobal);
+int v4l2DeviceClose(struct vdIn *vd);
+int v4l2CopyBuffer(unsigned char *out, unsigned char *buf, int size);
+int v4l2GrabFrame(struct vdIn *vd);
+int v4l2EnumControls(struct vdIn *vd);
+int v4l2QueryControl(struct vdIn *vd, int control, struct v4l2_queryctrl *qc);
 int v4l2GetControl(struct vdIn *vd, int control);
 int v4l2SetControl(struct vdIn *vd, int control, int value);
-int v4l2UpControl(struct vdIn *vd, int control);
-int v4l2DownControl(struct vdIn *vd, int control);
-int v4l2ToggleControl(struct vdIn *vd, int control);
 int v4l2ResetControl(struct vdIn *vd, int control);
+int v4l2SetResolution(struct vdIn *vd, int width, int height);
+
+#endif // _UAV_V4L2UVC__H_
+
