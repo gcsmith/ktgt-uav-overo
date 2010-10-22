@@ -43,5 +43,8 @@ int video_set_mode(video_mode_t *mode);
 // get an enumerated list of supported v4l/uvc device controls
 int video_enum_devctrl(enum_ctrl_fn c_fn, enum_menu_fn m_fn);
 
+// set the specified device control value
+int video_set_devctrl(int id, int value);
+
 #endif // _UAV_VIDEO_UVC__H_
 

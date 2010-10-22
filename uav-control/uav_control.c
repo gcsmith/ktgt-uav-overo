@@ -444,6 +444,11 @@ void run_server(imu_data_t *imu, const char *port)
                 }
                 break;
             case CLIENT_REQ_CAM_DCC:
+                if (!video_set_devctrl(cmd_buffer[PKT_CAM_DCC_ID],
+                                       cmd_buffer[PKT_CAM_DCC_VALUE])) {
+                    syslog(LOG_ERR, "failed to set device control\n");
+                    send_simple_packet(&g_client, SERVER_ACK_IGNORED);
+                }
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes
