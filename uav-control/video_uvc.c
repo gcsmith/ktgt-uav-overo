@@ -276,12 +276,12 @@ int video_enum_devctrl(enum_ctrl_fn c_fn, enum_menu_fn m_fn)
         return 0;
     }
 
-    return (0 > v4l2EnumControls(g_videoin, c_fn, m_fn)) ? 0 : 1;
+    return (0 <= v4l2EnumControls(g_videoin, c_fn, m_fn));
 }
 
 // -----------------------------------------------------------------------------
 int video_set_devctrl(int id, int value)
 {
-    return (0 > v4l2SetControl(g_videoin, id, value));
+    return (0 <= v4l2SetControl(g_videoin, id, value));
 }
 
