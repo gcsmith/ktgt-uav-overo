@@ -616,10 +616,8 @@ int fc_set_replay(const char *path)
     globals.record_head = globals.record_tail = bucket = record_create_bucket();
     while (!feof(fin)) {
         float alt, yaw, pitch, roll;
-        int retu = fscanf(fin, "%ld %ld %f %f %f %f\n", &delta.tv_sec, &delta.tv_nsec,
+        fscanf(fin, "%ld %ld %f %f %f %f\n", &delta.tv_sec, &delta.tv_nsec,
                &alt, &yaw, &pitch, &roll);
-
-        syslog(LOG_ERR, "%d\n", retu);
 
         if (bucket->count >= RECORD_BUCKET_SIZE) {
             // add a new bucket to the linked list if we're out of space
