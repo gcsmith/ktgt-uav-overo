@@ -107,6 +107,10 @@ void print_enum_ctrl(const struct v4l2_queryctrl *qc)
         type = "menu";
         enum_menu = 1;
         break;
+    case V4L2_CTRL_TYPE_STRING:
+        type = "string";
+        break;
+        
     }
 
     syslog(LOG_INFO, " + %s [type:%s min:%d max:%d step:%d default:%d flags:%d]",

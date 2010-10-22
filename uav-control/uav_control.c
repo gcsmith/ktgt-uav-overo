@@ -119,6 +119,7 @@ void send_enum_ctrl(const struct v4l2_queryctrl *qc)
     cmd_buffer[PKT_CAM_DCI_MAX]     = qc->maximum;
     cmd_buffer[PKT_CAM_DCI_STEP]    = qc->step;
     cmd_buffer[PKT_CAM_DCI_DEFAULT] = qc->default_value;
+    cmd_buffer[PKT_CAM_DCI_CURRENT] = video_get_devctrl(qc->id);
     memcpy(&cmd_buffer[PKT_CAM_DCI_NAME], qc->name, 32);
 
     syslog(LOG_INFO, "sending camera device control info");

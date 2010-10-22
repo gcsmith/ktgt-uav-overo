@@ -114,7 +114,7 @@ int colordetect_init(client_info_t *client)
     g_globals.color.st = 20;
     g_globals.color.lt = 30;
 
-    g_globals.color.filter = 15;
+    g_globals.color.filter = 10;
 
     // create and kick off the color tracking thread
     pthread_create(&g_globals.thread, 0, color_detect_thread, &g_globals);

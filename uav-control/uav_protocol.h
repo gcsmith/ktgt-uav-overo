@@ -139,8 +139,9 @@
 #define PKT_CAM_DCI_MAX     PKT_BASE + 3    // control value maximum
 #define PKT_CAM_DCI_STEP    PKT_BASE + 4    // control value step quantity
 #define PKT_CAM_DCI_DEFAULT PKT_BASE + 5    // control value default
-#define PKT_CAM_DCI_NAME    PKT_BASE + 6    // name of device control (32 char)
-#define PKT_CAM_DCI_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 15))
+#define PKT_CAM_DCI_CURRENT PKT_BASE + 6   // current value of the control
+#define PKT_CAM_DCI_NAME    PKT_BASE + 7    // name of device control (32 char)
+#define PKT_CAM_DCI_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 16))
 
 // Camera Device Control Menu
 
