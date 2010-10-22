@@ -33,8 +33,7 @@ static int debug = 0;
 static int init_v4l2(struct vdIn *vd);
 
 int v4l2DeviceOpen(struct vdIn *vd, char *device, int width,
-        int height, int fps, int format, int grabmethod,
-        uvc_globals_t *pglobal)
+        int height, int fps, int format, int grabmethod)
 {
     if (vd == NULL || device == NULL)
         return -1;
@@ -397,7 +396,8 @@ int v4l2DeviceClose(struct vdIn *vd)
   return 0;
 }
 
-static void enumerate_menu(struct vdIn *vd, struct v4l2_queryctrl *qc)
+static void enumerate_menu(struct vdIn *vd, struct v4l2_queryctrl *qc,
+        enum_menu_fn m_fn)
 {
     struct v4l2_querymenu qm;
     memset(&qm, 0, sizeof(qm));
@@ -406,7 +406,8 @@ static void enumerate_menu(struct vdIn *vd, struct v4l2_queryctrl *qc)
     // enumerate each menu item for this device control
     for (qm.index = qc->minimum; qm.index <= qc->maximum; qm.index++) {
         if (0 == ioctl(vd->fd, VIDIOC_QUERYMENU, &qm)) {
-            syslog(LOG_INFO, "   + %s", qm.name);
+            if (m_fn)
+                (*m_fn)(&qm);
         }
         else {
             perror("VIDIOC_QUERYMENU");
@@ -415,42 +416,16 @@ static void enumerate_menu(struct vdIn *vd, struct v4l2_queryctrl *qc)
     }
 }
 
-static void query_device_control(struct vdIn *vd, struct v4l2_queryctrl *qc)
+static void query_device_control(struct vdIn *vd, struct v4l2_queryctrl *qc,
+        enum_ctrl_fn c_fn, enum_menu_fn m_fn)
 {
-    int enum_menu = 0;
-    const char *type = "unknown";
-
-    switch (qc->type) {
-    case V4L2_CTRL_TYPE_INTEGER:
-        type = "int";
-        break;
-    case V4L2_CTRL_TYPE_BOOLEAN:
-        type = "bool";
-        break;
-    case V4L2_CTRL_TYPE_BUTTON:
-        type = "button";
-        break;
-    case V4L2_CTRL_TYPE_INTEGER64:
-        type = "int64";
-        break;
-    case V4L2_CTRL_TYPE_CTRL_CLASS:
-        type = "class";
-        break;
-    case V4L2_CTRL_TYPE_MENU:
-        type = "menu";
-        enum_menu = 1;
-        break;
-    }
-
-    syslog(LOG_INFO, " + %s [type:%s min:%d max:%d step:%d default:%d flags:%d]",
-           qc->name, type, qc->minimum, qc->maximum, qc->step,
-           qc->default_value, qc->flags);
-
-    if (enum_menu)
-        enumerate_menu(vd, qc);
+    if (NULL != c_fn)
+        (*c_fn)(qc);
+    if (V4L2_CTRL_TYPE_MENU == qc->type)
+        enumerate_menu(vd, qc, m_fn);
 }
 
-int v4l2EnumControls(struct vdIn *vd)
+int v4l2EnumControls(struct vdIn *vd, enum_ctrl_fn c_fn, enum_menu_fn m_fn)
 {
     struct v4l2_queryctrl qc;
     memset(&qc, 0, sizeof(qc));
@@ -463,7 +438,7 @@ int v4l2EnumControls(struct vdIn *vd)
             if (qc.flags & V4L2_CTRL_FLAG_DISABLED)
                 continue;
             // process this device control and move on
-            query_device_control(vd, &qc);
+            query_device_control(vd, &qc, c_fn, m_fn);
             qc.id |= V4L2_CTRL_FLAG_NEXT_CTRL;
         } while (0 == ioctl(vd->fd, VIDIOC_QUERYCTRL, &qc));
     }
@@ -474,7 +449,7 @@ int v4l2EnumControls(struct vdIn *vd)
                 if (qc.flags & V4L2_CTRL_FLAG_DISABLED)
                     continue;
                 // process this device control and move on
-                query_device_control(vd, &qc);
+                query_device_control(vd, &qc, c_fn, m_fn);
             }
             else if (errno != EINVAL) {
                 perror("VIDIOC_QUERYCTRL");
@@ -483,12 +458,12 @@ int v4l2EnumControls(struct vdIn *vd)
         }
 
         // enumerate the private device controls using the old interface
-        for (qc.id = V4L2_CID_PRIVATE_BASE; ; qc.id++) {
+        for (qc.id = V4L2_CID_PRIVATE_BASE;; qc.id++) {
             if (0 == ioctl(vd->fd, VIDIOC_QUERYCTRL, &qc)) {
                 if (qc.flags & V4L2_CTRL_FLAG_DISABLED)
                     continue;
                 // process this device control and move on
-                query_device_control(vd, &qc);
+                query_device_control(vd, &qc, c_fn, m_fn);
             }
             else if (errno != EINVAL) {
                 perror("VIDIOC_QUERYCTRL");

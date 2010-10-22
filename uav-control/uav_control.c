@@ -89,6 +89,59 @@ void *aux_trigger_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
+void send_enum_ctrl(const struct v4l2_queryctrl *qc)
+{
+    uint32_t cmd_buffer[32];
+
+    cmd_buffer[PKT_COMMAND] = SERVER_UPDATE_CAM_DCI;
+    cmd_buffer[PKT_LENGTH]  = PKT_CAM_DCI_LENGTH;
+
+    // convert the V4L type to something more generic
+    switch (qc->type) {
+    case V4L2_CTRL_TYPE_INTEGER:
+    case V4L2_CTRL_TYPE_INTEGER64:
+        cmd_buffer[PKT_CAM_DCI_TYPE] = CAM_DCI_TYPE_INT;
+        break;
+    case V4L2_CTRL_TYPE_BOOLEAN:
+        cmd_buffer[PKT_CAM_DCI_TYPE] = CAM_DCI_TYPE_BOOL;
+        break;
+    case V4L2_CTRL_TYPE_MENU:
+        cmd_buffer[PKT_CAM_DCI_TYPE] = CAM_DCI_TYPE_MENU;
+        break;
+    default:
+        // simply ignore types that we don't care about
+        return;
+    }
+
+    // fill in the rest of the parameters
+    cmd_buffer[PKT_CAM_DCI_ID]      = qc->id;
+    cmd_buffer[PKT_CAM_DCI_MIN]     = qc->minimum;
+    cmd_buffer[PKT_CAM_DCI_MAX]     = qc->maximum;
+    cmd_buffer[PKT_CAM_DCI_STEP]    = qc->step;
+    cmd_buffer[PKT_CAM_DCI_DEFAULT] = qc->default_value;
+    memcpy(&cmd_buffer[PKT_CAM_DCI_NAME], qc->name, 32);
+
+    syslog(LOG_INFO, "sending camera device control info");
+    send_packet(&g_client, cmd_buffer, PKT_CAM_DCI_LENGTH);
+}
+
+// -----------------------------------------------------------------------------
+void send_enum_menu(const struct v4l2_querymenu *qm)
+{
+    uint32_t cmd_buffer[32];
+
+    cmd_buffer[PKT_COMMAND] = SERVER_UPDATE_CAM_DCM;
+    cmd_buffer[PKT_LENGTH]  = PKT_CAM_DCM_LENGTH;
+
+    cmd_buffer[PKT_CAM_DCM_ID]    = qm->id;
+    cmd_buffer[PKT_CAM_DCM_INDEX] = qm->index;
+    memcpy(&cmd_buffer[PKT_CAM_DCM_NAME], qm->name, 32);
+
+    syslog(LOG_INFO, "sending camera device menu info");
+    send_packet(&g_client, cmd_buffer, PKT_CAM_DCM_LENGTH);
+}
+
+// -----------------------------------------------------------------------------
 // Perform final shutdown and cleanup.
 void uav_shutdown(int rc)
 {
@@ -383,22 +436,14 @@ void run_server(imu_data_t *imu, const char *port)
                 colordetect_set_track_color(&tc);
                 // TODO: ack?
                 break;
-            case CLIENT_REQ_CAM_EXP:
-                // set camera to requested exposure mode and value
-                video_set_exposure(cmd_buffer[PKT_CAM_EXP_AUTO],
-                                   cmd_buffer[PKT_CAM_EXP_VALUE]);
-                // TODO: ack?
+            case CLIENT_REQ_CAM_DCI:
+                // actual packet sending handled in callback routines
+                if (!video_enum_devctrl(send_enum_ctrl, send_enum_menu)) {
+                    syslog(LOG_ERR, "failed to enumerate device controls\n");
+                    send_simple_packet(&g_client, SERVER_ACK_IGNORED);
+                }
                 break;
-            case CLIENT_REQ_CAM_FOC:
-                // set camera to requested focus mode and value
-                video_set_focus(cmd_buffer[PKT_CAM_FOC_AUTO],
-                                cmd_buffer[PKT_CAM_FOC_VALUE]);
-                // TODO: ack?
-                break;
-            case CLIENT_REQ_CAM_WHB:
-                // set camera to requested white balance mode
-                video_set_whitebalance(cmd_buffer[PKT_CAM_WHB_AUTO]);
-                // TODO: ack?
+            case CLIENT_REQ_CAM_DCC:
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes

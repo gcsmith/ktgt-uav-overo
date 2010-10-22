@@ -42,21 +42,15 @@
 #define OPEN_VIDEO(fd, flags) v4l2_open(fd, flags)
 #define CLOSE_VIDEO(fd) v4l2_close(fd)
 
+typedef void (*enum_ctrl_fn)(const struct v4l2_queryctrl *qc);
+typedef void (*enum_menu_fn)(const struct v4l2_querymenu *qm);
+
 typedef enum _streaming_state streaming_state;
 enum _streaming_state {
     STREAMING_OFF = 0,
     STREAMING_ON = 1,
     STREAMING_PAUSED = 2,
 };
-
-typedef struct uvc_globals {
-    int enabled;
-    int size;
-    int width, height, fps;
-    unsigned char *buf;
-    pthread_mutex_t db;
-    pthread_cond_t  db_update;
-} uvc_globals_t;
 
 struct vdIn {
     int fd;
@@ -97,11 +91,11 @@ struct vdIn {
 };
 
 int v4l2DeviceOpen(struct vdIn *vd, char *device, int width, int height,
-        int fps, int format, int grabmethod, uvc_globals_t *pglobal);
+        int fps, int format, int grabmethod);
 int v4l2DeviceClose(struct vdIn *vd);
 int v4l2CopyBuffer(unsigned char *out, unsigned char *buf, int size);
 int v4l2GrabFrame(struct vdIn *vd);
-int v4l2EnumControls(struct vdIn *vd);
+int v4l2EnumControls(struct vdIn *vd, enum_ctrl_fn c_fn, enum_menu_fn m_fn);
 int v4l2QueryControl(struct vdIn *vd, int control, struct v4l2_queryctrl *qc);
 int v4l2GetControl(struct vdIn *vd, int control);
 int v4l2SetControl(struct vdIn *vd, int control, int value);

@@ -9,6 +9,8 @@
 #ifndef _UAV_VIDEO_UVC__H_
 #define _UAV_VIDEO_UVC__H_
 
+#include "v4l2uvc.h"
+
 typedef struct video_mode
 {
     unsigned int width;     // frame width in pixels
@@ -38,14 +40,8 @@ void video_unlock();
 // override the current video mode (resolution, framerate, etc)
 int video_set_mode(video_mode_t *mode);
 
-// configure the camera's exposure. if automatic is set, abs_value is ignored
-int video_set_exposure(int automatic, int abs_value);
-
-// configure the camera's focus. if automatic is set, abs_value is ignored
-int video_set_focus(int automatic, int abs_value);
-
-// configure the camera's white balance. if automatic is not set, set balance
-int video_set_whitebalance(int automatic);
+// get an enumerated list of supported v4l/uvc device controls
+int video_enum_devctrl(enum_ctrl_fn c_fn, enum_menu_fn m_fn);
 
 #endif // _UAV_VIDEO_UVC__H_
 

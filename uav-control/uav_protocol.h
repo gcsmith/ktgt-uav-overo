@@ -10,7 +10,7 @@
 #define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x00000005  // uav_control protocal version
+#define IDENT_VERSION   0x00000006  // uav_control protocal version
 #define PKT_BUFF_LEN    2048        // max possible packet length
 
 // Packet commands from server to client
@@ -23,7 +23,8 @@
 #define SERVER_ACK_MJPG_FRAME   5   // transmit a single frame of video
 #define SERVER_UPDATE_CTL_MODE  6   // update (or acknowledge) control mode
 #define SERVER_UPDATE_TRACKING  7   // send updated tracking state information
-#define SERVER_ACK_TRACK_COLOR  8
+#define SERVER_UPDATE_CAM_DCI   8   // send updated camera device control info
+#define SERVER_UPDATE_CAM_DCM   9   // send updated camera device control menu
 
 // Packet commands from client to server
 
@@ -35,9 +36,8 @@
 #define CLIENT_REQ_SET_CTL_MODE 5   // request a change in control mode
 #define CLIENT_REQ_FLIGHT_CTL   6   // command the helicopter's flight
 #define CLIENT_REQ_CAM_TC       7   // request change in camera track color
-#define CLIENT_REQ_CAM_EXP      8   // request change in camera exposure
-#define CLIENT_REQ_CAM_FOC      9   // request change in camera focus
-#define CLIENT_REQ_CAM_WHB      10  // request change in camera white balance
+#define CLIENT_REQ_CAM_DCI      8   // request camera device control info
+#define CLIENT_REQ_CAM_DCC      9   // request camera device control config
 
 // General packet offsets
 
@@ -127,22 +127,33 @@
 #define PKT_CAM_TC_FILTER   PKT_BASE + 8
 #define PKT_CAM_TC_LENGTH   (sizeof(uint32_t) * (PKT_BASE + 9))
 
-// Set camera exposure configuration
+// Camera Device Control Info
 
-#define PKT_CAM_EXP_AUTO    PKT_BASE + 0
-#define PKT_CAM_EXP_VALUE   PKT_BASE + 1
-#define PKT_CAM_EXP_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 2))
+#define CAM_DCI_TYPE_BOOL   0   // boolean (checkbox)
+#define CAM_DCI_TYPE_INT    1   // integer (slider)
+#define CAM_DCI_TYPE_MENU   2   // menu (combo box)
 
-// Set camera focus configuration
+#define PKT_CAM_DCI_ID      PKT_BASE + 0    // V4L device control id
+#define PKT_CAM_DCI_TYPE    PKT_BASE + 1    // type of device control
+#define PKT_CAM_DCI_MIN     PKT_BASE + 2    // control value minimum
+#define PKT_CAM_DCI_MAX     PKT_BASE + 3    // control value maximum
+#define PKT_CAM_DCI_STEP    PKT_BASE + 4    // control value step quantity
+#define PKT_CAM_DCI_DEFAULT PKT_BASE + 5    // control value default
+#define PKT_CAM_DCI_NAME    PKT_BASE + 6    // name of device control (32 char)
+#define PKT_CAM_DCI_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 15))
 
-#define PKT_CAM_FOC_AUTO    PKT_BASE + 0
-#define PKT_CAM_FOC_VALUE   PKT_BASE + 1
-#define PKT_CAM_FOC_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 2))
+// Camera Device Control Menu
 
-// Set camera white balance configuration
+#define PKT_CAM_DCM_ID      PKT_BASE + 0
+#define PKT_CAM_DCM_INDEX   PKT_BASE + 1
+#define PKT_CAM_DCM_NAME    PKT_BASE + 2
+#define PKT_CAM_DCM_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 11))
 
-#define PKT_CAM_WHB_AUTO    PKT_BASE + 0
-#define PKT_CAM_WHB_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 1))
+// Camera Device Control Configuration
+
+#define PKT_CAM_DCC_ID      PKT_BASE + 0    // V4L device control id
+#define PKT_CAM_DCC_VALUE   PKT_BASE + 1    // new device control value
+#define PKT_CAM_DCC_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 2))
 
 #endif // _UAV_PROTOCOL__H_
 

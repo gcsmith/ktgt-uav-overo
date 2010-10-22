@@ -4,7 +4,17 @@
 #include "v4l2uvc.h"
 #include "video_uvc.h"
 
-uvc_globals_t global = { 0 };
+typedef struct video_globals
+{
+    int enabled;                // indicate initialization status of video
+    int size;                   // size of current frame in bytes
+    int width, height, fps;     // resolution and framerate
+    unsigned char *buf;         // pointer to current frame buffer
+    pthread_mutex_t db;         // lock frame buffer
+    pthread_cond_t  db_update;  // signal frame updates
+} video_globals_t;
+
+video_globals_t global = { 0 };
 static struct vdIn *g_videoin;
 static pthread_t g_camthrd;
 static int g_is_fresh = 0;
@@ -14,7 +24,7 @@ static int g_unprocessed = 0;
 static void *video_capture_thread(void *arg)
 {
     // set cleanup handler to cleanup allocated ressources
-    uvc_globals_t *pglobal = (uvc_globals_t *)arg;
+    video_globals_t *pglobal = (video_globals_t *)arg;
     // pthread_cleanup_push(cam_cleanup, NULL);
 
     while (pglobal->enabled) {
@@ -72,10 +82,48 @@ static void *video_capture_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
+void print_enum_ctrl(const struct v4l2_queryctrl *qc)
+{
+    int enum_menu = 0;
+    const char *type = "unknown";
+
+    switch (qc->type) {
+    case V4L2_CTRL_TYPE_INTEGER:
+        type = "int";
+        break;
+    case V4L2_CTRL_TYPE_BOOLEAN:
+        type = "bool";
+        break;
+    case V4L2_CTRL_TYPE_BUTTON:
+        type = "button";
+        break;
+    case V4L2_CTRL_TYPE_INTEGER64:
+        type = "int64";
+        break;
+    case V4L2_CTRL_TYPE_CTRL_CLASS:
+        type = "class";
+        break;
+    case V4L2_CTRL_TYPE_MENU:
+        type = "menu";
+        enum_menu = 1;
+        break;
+    }
+
+    syslog(LOG_INFO, " + %s [type:%s min:%d max:%d step:%d default:%d flags:%d]",
+           qc->name, type, qc->minimum, qc->maximum, qc->step,
+           qc->default_value, qc->flags);
+}
+
+// -----------------------------------------------------------------------------
+void print_enum_menu(const struct v4l2_querymenu *qm)
+{
+    syslog(LOG_INFO, "   + %s", qm->name);
+}
+
+// -----------------------------------------------------------------------------
 int video_init(const char *dev, video_mode_t *mode)
 {
     int format = V4L2_PIX_FMT_MJPEG;
-    static uvc_globals_t *pglobal;
 
     if (global.enabled) {
         syslog(LOG_INFO, "attempting to call video_init multiple times\n");
@@ -101,9 +149,6 @@ int video_init(const char *dev, video_mode_t *mode)
         return 0;
     }
 
-    // keep a pointer to the global variables
-    pglobal = &global;
-
     // allocate webcam datastructure
     g_videoin = calloc(1, sizeof(struct vdIn));
     if (NULL == g_videoin) {
@@ -111,28 +156,30 @@ int video_init(const char *dev, video_mode_t *mode)
         return 0;
     }
 
-    // display the parsed values
-    syslog(LOG_INFO, "  V4L2 Device  : %s\n", dev);
-    syslog(LOG_INFO, "  Resolution   : %i x %i\n", mode->width, mode->height);
-    syslog(LOG_INFO, "  Framerate    : %i\n", mode->fps);
-    syslog(LOG_INFO, "  Video Format : %s\n", "MJPEG");
-
     // open video device and prepare data structure
     if (v4l2DeviceOpen(g_videoin, (char *)dev, mode->width, mode->height,
-                mode->fps, format, 1, pglobal) < 0) {
+                mode->fps, format, 1) < 0) {
         syslog(LOG_ERR, "init_videoIn failed\n");
         return 0;
     }
 
-    v4l2EnumControls(g_videoin);
+    // display the parsed values
+    syslog(LOG_INFO, "  V4L2 Device  : %s\n", dev);
+    syslog(LOG_INFO, "  Device Name  : %s\n", g_videoin->cap.card);
+    syslog(LOG_INFO, "  Resolution   : %i x %i\n", mode->width, mode->height);
+    syslog(LOG_INFO, "  Framerate    : %i\n", mode->fps);
+    syslog(LOG_INFO, "  Video Format : %s\n", "MJPEG");
 
-    pglobal->buf = malloc(g_videoin->framesizeIn);
-    if (NULL == pglobal->buf) {
+    // enumerate the supported device controls and print to log / stdout
+    v4l2EnumControls(g_videoin, print_enum_ctrl, print_enum_menu);
+
+    global.buf = malloc(g_videoin->framesizeIn);
+    if (NULL == global.buf) {
         syslog(LOG_ERR, "could not allocate memory in input_run()\n");
         return 0;
     }
 
-    pthread_create(&g_camthrd, 0, video_capture_thread, pglobal);
+    pthread_create(&g_camthrd, 0, video_capture_thread, &global);
     pthread_detach(g_camthrd);
 
     global.enabled = 1;
@@ -222,90 +269,13 @@ int video_set_mode(video_mode_t *mode)
 }
 
 // -----------------------------------------------------------------------------
-int video_set_exposure(int automatic, int abs_value)
+int video_enum_devctrl(enum_ctrl_fn c_fn, enum_menu_fn m_fn)
 {
-    if (automatic) {
-        // set exposure mode to automatic and let the camera take over
-        syslog(LOG_INFO, "setting video exposure to automatic mode\n");
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO)) {
-            syslog(LOG_ERR, "failed to set video exposure mode to auto\n");
-            return 0;
-        }
-    }
-    else {
-        // set the exposure mode to manual adjustment
-        syslog(LOG_INFO, "setting video exposure to manual mode\n");
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL)) {
-            syslog(LOG_ERR, "failed to set video exposure mode to manual\n");
-            return 0;
-        }
-
-        // set the absolute exposure value (units are undefined)
-        syslog(LOG_INFO, "setting video absolute exposure to %d\n", abs_value);
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_EXPOSURE_ABSOLUTE, abs_value)) {
-            syslog(LOG_ERR, "failed to set video absolute exposure to %d\n", abs_value);
-            return 0;
-        }
+    if (!global.enabled) {
+        syslog(LOG_ERR, "attempting to enumerate controls prior to init\n");
+        return 0;
     }
 
-    return 1;
-}
-
-// -----------------------------------------------------------------------------
-int video_set_focus(int automatic, int abs_value)
-{
-    if (automatic) {
-        // set focus mode to automatic and let the camera take over
-        syslog(LOG_INFO, "setting video focus to automatic mode\n");
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_FOCUS_AUTO, 1)) {
-            syslog(LOG_ERR, "failed to set video focus mode to auto\n");
-            return 0;
-        }
-    }
-    else {
-        // set the focus mode to manual adjustment
-        syslog(LOG_INFO, "setting video focus to manual mode\n");
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_FOCUS_AUTO, 0)) {
-            syslog(LOG_ERR, "failed to set video focus mode to manaul\n");
-            return 0;
-        }
-
-        // set the absolute focus value (units are undefined)
-        syslog(LOG_INFO, "setting video absolute focus to %d\n", abs_value);
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_FOCUS_ABSOLUTE, abs_value)) {
-            syslog(LOG_ERR, "failed to set video absolute focus to %d\n", abs_value);
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-// -----------------------------------------------------------------------------
-int video_set_whitebalance(int automatic)
-{
-    if (automatic) {
-        // set white balance mode to automatic and let the camera take over
-        syslog(LOG_INFO, "setting video white balance to automatic mode\n");
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_AUTO_WHITE_BALANCE, 1)) {
-            syslog(LOG_ERR, "failed to set video white balance mode to auto\n");
-            return 0;
-        }
-    }
-    else {
-        syslog(LOG_INFO, "setting video white balance to manual mode\n");
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_AUTO_WHITE_BALANCE, 0)) {
-            syslog(LOG_ERR, "failed to set video white balance mode to auto\n");
-            return 0;
-        }
-
-        syslog(LOG_INFO, "setting video white balance\n");
-        if (0 > v4l2SetControl(g_videoin, V4L2_CID_DO_WHITE_BALANCE, 0)) {
-            syslog(LOG_ERR, "failed to set video white balance\n");
-            return 0;
-        }
-    }
-
-    return 1;
+    return (0 > v4l2EnumControls(g_videoin, c_fn, m_fn)) ? 0 : 1;
 }
 
