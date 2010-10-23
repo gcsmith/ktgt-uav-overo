@@ -55,6 +55,7 @@ typedef struct pwm_channel
 {
     pwm_t handle;
     unsigned int rng_min, rng_max;
+    unsigned int cmp;
     unsigned int trim;
 } pwm_channel_t;
 

@@ -159,10 +159,8 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
         return;
 
     // adjust the trim, but keep within the absolute limits of this pwm channel
-    cmp += pwm->trim;
-    cmp = MIN(MAX(cmp, pwm->rng_min), pwm->rng_max);
-
-    pwm_set_compare(pwm->handle, cmp);
+    pwm->cmp = MIN(MAX(cmp, pwm->rng_min), pwm->rng_max);
+    pwm_set_compare(pwm->handle, pwm->cmp + pwm->trim);
 }
 
 // -----------------------------------------------------------------------------
@@ -774,15 +772,34 @@ void fc_get_vcm(int *axes, int *type)
 // -----------------------------------------------------------------------------
 void fc_set_trim(int axes, int value)
 {
-    syslog(LOG_ERR, "update trims for channel %d: %d\n", axes, value);
     if (axes & VCM_AXIS_ALT)
-        globals.channels[PWM_ALT].trim = value;
+    {
+        pwm_channel_t *alt = &globals.channels[PWM_ALT];
+        alt->trim = value;
+        pwm_set_compare(alt->handle, alt->cmp + alt->trim);
+        syslog(LOG_INFO, "set ALT trim to %d\n", value);
+    }
     if (axes & VCM_AXIS_YAW)
-        globals.channels[PWM_YAW].trim = value;
+    {
+        pwm_channel_t *yaw = &globals.channels[PWM_YAW];
+        yaw->trim = value;
+        pwm_set_compare(yaw->handle, yaw->cmp + yaw->trim);
+        syslog(LOG_INFO, "setting YAW trim to %d\n", value);
+    }
     if (axes & VCM_AXIS_PITCH)
-        globals.channels[PWM_PITCH].trim = value;
+    {
+        pwm_channel_t *pitch = &globals.channels[PWM_PITCH];
+        pitch->trim = value;
+        pwm_set_compare(pitch->handle, pitch->cmp + pitch->trim);
+        syslog(LOG_INFO, "setting PITCH trim to %d\n", value);
+    }
     if (axes & VCM_AXIS_ROLL)
-        globals.channels[PWM_ROLL].trim = value;
+    {
+        pwm_channel_t *roll = &globals.channels[PWM_ROLL];
+        roll->trim = value;
+        pwm_set_compare(roll->handle, roll->cmp + roll->trim);
+        syslog(LOG_INFO, "setting ROLL trim to %d\n", value);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -802,6 +819,4 @@ int fc_get_trim(int axes)
         return -1;
     }
 }
-
-
 
