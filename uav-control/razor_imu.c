@@ -147,8 +147,12 @@ void imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
         data->samples = NULL;
     }
 
+    // reset to initial values, as we're starting over
     data->avg_len = avg_len;
     data->avg_idx = 0;
+    data->moving_sum[0] = 0.0f;
+    data->moving_sum[1] = 0.0f;
+    data->moving_sum[2] = 0.0f;
 
     if (0 == avg_len) {
         pthread_mutex_unlock(&data->lock);
