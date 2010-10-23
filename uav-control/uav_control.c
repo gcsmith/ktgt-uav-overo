@@ -422,11 +422,6 @@ void run_server(imu_data_t *imu, const char *port)
                 
                 fc_set_ctl(&client_sigs);
                 break;
-            case CLIENT_REQ_TRIM:
-                // update trim for the specified axis
-                fc_set_trim(cmd_buffer[PKT_TRIM_AXIS],
-                            cmd_buffer[PKT_TRIM_VALUE]);
-                break;
             case CLIENT_REQ_CAM_TC:
                 // determine whether color tracking is enabled or disabled
                 colordetect_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
@@ -457,6 +452,21 @@ void run_server(imu_data_t *imu, const char *port)
                     send_simple_packet(&g_client, SERVER_ACK_IGNORED);
                 }
                 break;
+            case CLIENT_REQ_STS:
+                // update trim for the specified axis
+                fc_set_trims(cmd_buffer[PKT_STS_AXES],
+                             cmd_buffer[PKT_STS_VALUE]);
+                break;
+            case CLIENT_REQ_GTS:
+                // respond to client's request for axis trim settings
+                cmd_buffer[PKT_COMMAND]   = SERVER_ACK_GTS;
+                cmd_buffer[PKT_LENGTH]    = PKT_GTS_LENGTH;
+                cmd_buffer[PKT_GTS_YAW]   = fc_get_trim(VCM_AXIS_YAW);
+                cmd_buffer[PKT_GTS_PITCH] = fc_get_trim(VCM_AXIS_PITCH);
+                cmd_buffer[PKT_GTS_ROLL]  = fc_get_trim(VCM_AXIS_ROLL);
+                cmd_buffer[PKT_GTS_ALT]   = fc_get_trim(VCM_AXIS_ALT);
+                send_packet(&g_client, cmd_buffer, PKT_GTS_LENGTH);
+                break;
             case CLIENT_REQ_SFS:
                 // respond to client's request to adjust filter settings
                 samples = cmd_buffer[PKT_SFS_SAMPLES];
@@ -485,11 +495,11 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_GFS:
                 // respond to client's request for current filter settings
-                cmd_buffer[PKT_COMMAND] = SERVER_ACK_GFS;
-                cmd_buffer[PKT_LENGTH] = PKT_GFS_LENGTH;
-                cmd_buffer[PKT_GFS_IMU] = imu_get_avg_filter(&g_imu);
-                cmd_buffer[PKT_GFS_ALT] = gpio_event_get_filter(&g_gpio_alt);
-                cmd_buffer[PKT_GFS_AUX] = gpio_event_get_filter(&g_gpio_aux);
+                cmd_buffer[PKT_COMMAND]  = SERVER_ACK_GFS;
+                cmd_buffer[PKT_LENGTH]   = PKT_GFS_LENGTH;
+                cmd_buffer[PKT_GFS_IMU]  = imu_get_avg_filter(&g_imu);
+                cmd_buffer[PKT_GFS_ALT]  = gpio_event_get_filter(&g_gpio_alt);
+                cmd_buffer[PKT_GFS_AUX]  = gpio_event_get_filter(&g_gpio_aux);
                 cmd_buffer[PKT_GFS_BATT] = 0;
                 send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
                 break;

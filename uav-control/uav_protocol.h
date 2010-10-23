@@ -25,7 +25,8 @@
 #define SERVER_UPDATE_TRACKING  7   // send updated tracking state information
 #define SERVER_UPDATE_CAM_DCI   8   // send updated camera device control info
 #define SERVER_UPDATE_CAM_DCM   9   // send updated camera device control menu
-#define SERVER_ACK_GFS          10
+#define SERVER_ACK_GTS          10
+#define SERVER_ACK_GFS          11
 
 // Packet commands from client to server
 
@@ -36,12 +37,13 @@
 #define CLIENT_REQ_MJPG_FRAME   4   // request a single frame of video
 #define CLIENT_REQ_SET_CTL_MODE 5   // request a change in control mode
 #define CLIENT_REQ_FLIGHT_CTL   6   // command the helicopter's flight
-#define CLIENT_REQ_TRIM         7   // request software trim update
-#define CLIENT_REQ_CAM_TC       8   // request change in camera track color
-#define CLIENT_REQ_CAM_DCI      9   // request camera device control info
-#define CLIENT_REQ_CAM_DCC      10  // request camera device control config
-#define CLIENT_REQ_SFS          11  // request set filter samples
-#define CLIENT_REQ_GFS          12  // request get filter samples
+#define CLIENT_REQ_CAM_TC       7   // request change in camera track color
+#define CLIENT_REQ_CAM_DCI      8   // request camera device control info
+#define CLIENT_REQ_CAM_DCC      9   // request camera device control config
+#define CLIENT_REQ_STS          10  // request set trim settings
+#define CLIENT_REQ_GTS          11  // request get trim settings
+#define CLIENT_REQ_SFS          12  // request set filter samples
+#define CLIENT_REQ_GFS          13  // request get filter samples
 
 // General packet offsets
 
@@ -160,11 +162,19 @@
 #define PKT_CAM_DCC_VALUE   PKT_BASE + 1    // new device control value
 #define PKT_CAM_DCC_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 2))
 
-// Software trim settings
+// Set trim settings
 
-#define PKT_TRIM_AXIS       PKT_BASE + 0    // axis to set trim
-#define PKT_TRIM_VALUE      PKT_BASE + 1    // trim value (signed integer)
-#define PKT_TRIM_LENGTH     (sizeof(uint32_t) * (PKT_BASE + 2))
+#define PKT_STS_AXES        PKT_BASE + 0    // axis to set trim
+#define PKT_STS_VALUE       PKT_BASE + 1    // trim value (signed integer)
+#define PKT_STS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 2))
+
+// Get trim settings
+
+#define PKT_GTS_YAW         PKT_BASE + 0
+#define PKT_GTS_PITCH       PKT_BASE + 1
+#define PKT_GTS_ROLL        PKT_BASE + 2
+#define PKT_GTS_ALT         PKT_BASE + 3
+#define PKT_GTS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 4))
 
 // Set filter samples (for a single signal)
 

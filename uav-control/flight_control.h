@@ -86,9 +86,9 @@ void fc_get_vcm(int *axes, int *type);
 // inject manual input control signals
 void fc_set_ctl(ctl_sigs_t *sigs);
 
-void fc_set_trim(int channel, int value);
+void fc_set_trims(int axes, int value);
 
-int fc_get_trim(int channel);
+int fc_get_trim(int axis);
 
 #endif // FLIGHT_CONTROL__H_
 

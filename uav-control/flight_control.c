@@ -738,7 +738,7 @@ void fc_get_vcm(int *axes, int *type)
 }
 
 // -----------------------------------------------------------------------------
-void fc_set_trim(int axes, int value)
+void fc_set_trims(int axes, int value)
 {
     if (axes & VCM_AXIS_ALT) {
         pwm_channel_t *alt = &globals.channels[PWM_ALT];
