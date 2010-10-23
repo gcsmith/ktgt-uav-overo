@@ -38,84 +38,88 @@ void *color_detect_thread(void *arg)
     uint32_t cmd_buffer[16];
     struct timespec t0, t1;
     long time = 0;
-    long trackingRateTime = (1000000/trackingRate);
+    long trackingRateTime;
     int frameCount=0;
     int skip = 0;
-    clock_gettime(CLOCK_REALTIME, &t0);
     
-    while (data->running) {
-        clock_gettime(CLOCK_REALTIME, &t1);
-        time += compute_delta(&t0, &t1);
-        t0 = t1;
-        if(frameCount != 0){
-            if((frameCount*trackingRateTime - time) > (time/frameCount)){
-                skip = (frameCount*trackingRateTime - time)/(time/frameCount);
-                printf("Skipping the next %d frames.  %d  %ld  %ld\n", skip, frameCount, trackingRateTime, time);
-                time = 0;
-                frameCount = 0;
+    if(trackingRate > 0){
+        trackingRateTime = (1000000/trackingRate);
+        clock_gettime(CLOCK_REALTIME, &t0);
+    
+        while (data->running) {
+            clock_gettime(CLOCK_REALTIME, &t1);
+            time += compute_delta(&t0, &t1);
+            t0 = t1;
+            if(frameCount != 0){
+                if((frameCount*trackingRateTime - time) > (time/frameCount)){
+                    skip = (frameCount*trackingRateTime - time)/(time/frameCount);
+                    printf("Skipping the next %d frames.  %d  %ld  %ld\n", skip, frameCount, trackingRateTime, time);
+                    time = 0;
+                    frameCount = 0;
+                }
+                else if(frameCount == 50){
+                    time = 0;
+                    frameCount = 0;           
+                }
             }
-            else if(frameCount == 50){
-                time = 0;
-                frameCount = 0;           
+            if (!video_lock(&vid_data, LOCK_SYNC)) {
+                // video disabled, non-functioning, or frame not ready
+                 //printf("FAILURE TO LOCK\n"); fflush(stdout);
+                continue;
             }
+
+            if(skip == 0){
+                // copy the jpeg to our buffer now that we're safely locked
+                if (buff_sz < vid_data.length) {
+                    free(jpg_buf);
+                    buff_sz = (vid_data.length);
+                    jpg_buf = (uint8_t *)malloc(buff_sz);
+                }
+
+                memcpy(jpg_buf, vid_data.data, vid_data.length);     
+                video_unlock();
+
+                if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height)) {
+                    color_detect_hsl_fp32(rgb_buff, color, box);
+                }
+
+                if (box->detected) {
+
+                    cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
+                    cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
+                    cmd_buffer[PKT_CTS_STATE] = CTS_STATE_DETECTED;
+                    cmd_buffer[PKT_CTS_X1]    = (uint32_t)box->x1;
+                    cmd_buffer[PKT_CTS_Y1]    = (uint32_t)box->y1;
+                    cmd_buffer[PKT_CTS_X2]    = (uint32_t)box->x2;
+                    cmd_buffer[PKT_CTS_Y2]    = (uint32_t)box->y2;
+                    cmd_buffer[PKT_CTS_XC]    = (uint32_t)box->xc;
+                    cmd_buffer[PKT_CTS_YC]    = (uint32_t)box->yc;
+
+                    send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
+                    data->tracking = 1;
+
+                    printf("Bounding box: (%d,%d) (%d,%d)\n",
+                           box->x1, box->y1, box->x2, box->y2);
+                }
+                else if (data->tracking) {
+
+                    memset(cmd_buffer, 0, PKT_CTS_LENGTH);
+                    cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
+                    cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
+                    cmd_buffer[PKT_CTS_STATE] = CTS_STATE_SEARCHING;
+                    send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
+                    data->tracking = 0;
+
+                    printf("lost target...\n");
+                }
+                fflush(stdout);
+                frameCount++;
+            }
+            else {
+                skip--;
+                video_unlock();
+            } 
         }
-        if (!video_lock(&vid_data, LOCK_SYNC)) {
-            // video disabled, non-functioning, or frame not ready
-             //printf("FAILURE TO LOCK\n"); fflush(stdout);
-            continue;
-        }
-
-        if(skip == 0){
-            // copy the jpeg to our buffer now that we're safely locked
-            if (buff_sz < vid_data.length) {
-                free(jpg_buf);
-                buff_sz = (vid_data.length);
-                jpg_buf = (uint8_t *)malloc(buff_sz);
-            }
-
-            memcpy(jpg_buf, vid_data.data, vid_data.length);     
-            video_unlock();
-
-            if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height)) {
-                color_detect_hsl_fp32(rgb_buff, color, box);
-            }
-
-            if (box->detected) {
-
-                cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
-                cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
-                cmd_buffer[PKT_CTS_STATE] = CTS_STATE_DETECTED;
-                cmd_buffer[PKT_CTS_X1]    = (uint32_t)box->x1;
-                cmd_buffer[PKT_CTS_Y1]    = (uint32_t)box->y1;
-                cmd_buffer[PKT_CTS_X2]    = (uint32_t)box->x2;
-                cmd_buffer[PKT_CTS_Y2]    = (uint32_t)box->y2;
-                cmd_buffer[PKT_CTS_XC]    = (uint32_t)box->xc;
-                cmd_buffer[PKT_CTS_YC]    = (uint32_t)box->yc;
-
-                send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
-                data->tracking = 1;
-
-                printf("Bounding box: (%d,%d) (%d,%d)\n",
-                       box->x1, box->y1, box->x2, box->y2);
-            }
-            else if (data->tracking) {
-
-                memset(cmd_buffer, 0, PKT_CTS_LENGTH);
-                cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
-                cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
-                cmd_buffer[PKT_CTS_STATE] = CTS_STATE_SEARCHING;
-                send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
-                data->tracking = 0;
-
-                printf("lost target...\n");
-            }
-            fflush(stdout);
-            frameCount++;
-        }
-        else {
-            skip--;
-            video_unlock();
-        } 
     }
 
     pthread_exit(NULL);
@@ -551,14 +555,14 @@ void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
 }
 
 //------------------------------------------------------------------------------
-void setTrackingRate(int fps){
+void color_detect_set_tracking_rate(int fps){
     if(abs(fps) > 0){
         trackingRate = abs(fps);
     }
 }
 
 //------------------------------------------------------------------------------
-int getTrackingRate(){
+int color_detect_get_tracking_rate(){
     return trackingRate;
 }
 
