@@ -620,9 +620,14 @@ int fc_set_replay(const char *path)
 
     globals.record_head = globals.record_tail = bucket = record_create_bucket();
     while (!feof(fin)) {
+        // attempt to parse the current line
         float alt, yaw, pitch, roll;
-        fscanf(fin, "%ld %ld %f %f %f %f\n", &delta.tv_sec, &delta.tv_nsec,
-               &alt, &yaw, &pitch, &roll);
+        if (6 != fscanf(fin, "%ld %ld %f %f %f %f\n", &delta.tv_sec,
+                    &delta.tv_nsec, &alt, &yaw, &pitch, &roll)) {
+            // skip this line and continue on if incorrectly formatted
+            syslog(LOG_ERR, "invalid line detected in replay file\n");
+            continue;
+        }
 
         if (bucket->count >= RECORD_BUCKET_SIZE) {
             // add a new bucket to the linked list if we're out of space

@@ -94,6 +94,10 @@ void print_enum_ctrl(const struct v4l2_queryctrl *qc)
     case V4L2_CTRL_TYPE_BOOLEAN:
         type = "bool";
         break;
+    case V4L2_CTRL_TYPE_MENU:
+        type = "menu";
+        enum_menu = 1;
+        break;
     case V4L2_CTRL_TYPE_BUTTON:
         type = "button";
         break;
@@ -103,15 +107,9 @@ void print_enum_ctrl(const struct v4l2_queryctrl *qc)
     case V4L2_CTRL_TYPE_CTRL_CLASS:
         type = "class";
         break;
-    case V4L2_CTRL_TYPE_MENU:
-        type = "menu";
-        enum_menu = 1;
-        break;
-#ifdef V4L2_CTRL_TYPE_STRING
-    case V4L2_CTRL_TYPE_STRING:
-        type = "string";
-        break;
-#endif
+    default:
+        // silently ignore any other control types
+        return;
     }
 
     syslog(LOG_INFO, " + %s [type:%s min:%d max:%d step:%d default:%d flags:%d]",
