@@ -44,7 +44,7 @@ static ctl_sigs_t client_sigs = { 0 };
 static int g_muxsel = -1;
 
 // -----------------------------------------------------------------------------
-void *aux_trigger_thread(void *arg)
+static void *aux_trigger_thread(void *arg)
 {
     uint32_t cmd_buffer[16];
     int pulse = 0, axes = 0, type = 0, last_type = 0;
@@ -201,7 +201,7 @@ void run_server(imu_data_t *imu, const char *port)
     struct sockaddr_in *sa;
     struct addrinfo info, *r;
     socklen_t addr_sz = sizeof(addr);
-    int hsock, rc;
+    int hsock, rc, samples;
     uint32_t cmd_buffer[PKT_BUFF_LEN];
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
@@ -457,19 +457,41 @@ void run_server(imu_data_t *imu, const char *port)
                     send_simple_packet(&g_client, SERVER_ACK_IGNORED);
                 }
                 break;
-            case CLIENT_REQ_FILTER:
-                switch (cmd_buffer[PKT_FILTER_SIGNAL]) {
-                case FILTER_ORIENTATION:
-                    syslog(LOG_INFO, "setting orientation filter to %d samples",
-                           cmd_buffer[PKT_FILTER_SAMPLES]);
-                    imu_set_avg_filter(&g_imu, cmd_buffer[PKT_FILTER_SAMPLES]);
+            case CLIENT_REQ_SFS:
+                // respond to client's request to adjust filter settings
+                samples = cmd_buffer[PKT_SFS_SAMPLES];
+                switch (cmd_buffer[PKT_SFS_SIGNAL]) {
+                case SFS_IMU:
+                    // set averaging filter samples for imu angles
+                    syslog(LOG_INFO, "set %d imu filter samples", samples);
+                    imu_set_avg_filter(&g_imu, samples);
                     break;
-                case FILTER_ALTITUDE:
-                case FILTER_BATTERY:
-                    // TODO: handle filtering these signals
+                case SFS_ALT:
+                    // set averaging filter samples for altitude pwm
+                    syslog(LOG_INFO, "set %d alt filter samples", samples);
+                    gpio_event_set_filter(&g_gpio_alt, samples);
+                    break;
+                case SFS_AUX:
+                    // set averaging filter samples for auxiliary pwm
+                    syslog(LOG_INFO, "set %d aux filter samples", samples);
+                    gpio_event_set_filter(&g_gpio_aux, samples);
+                    break;
+                case SFS_BATT:
+                    // set averaging filter for battery adc
+                    syslog(LOG_INFO, "set %d batt filter samples", samples);
                     send_simple_packet(&g_client, SERVER_ACK_IGNORED);
                     break;
                 }
+                break;
+            case CLIENT_REQ_GFS:
+                // respond to client's request for current filter settings
+                cmd_buffer[PKT_COMMAND] = SERVER_ACK_GFS;
+                cmd_buffer[PKT_LENGTH] = PKT_GFS_LENGTH;
+                cmd_buffer[PKT_GFS_IMU] = imu_get_avg_filter(&g_imu);
+                cmd_buffer[PKT_GFS_ALT] = gpio_event_get_filter(&g_gpio_alt);
+                cmd_buffer[PKT_GFS_AUX] = gpio_event_get_filter(&g_gpio_aux);
+                cmd_buffer[PKT_GFS_BATT] = 0;
+                send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes

@@ -232,3 +232,23 @@ int gpio_event_read(gpio_event_t *event)
     return pulse;
 }
 
+// -----------------------------------------------------------------------------
+int gpio_event_set_filter(gpio_event_t *event, int samples)
+{
+    // TODO: implement me
+    pthread_mutex_lock(&event->lock);
+    event->avg_len = samples;
+    pthread_mutex_unlock(&event->lock);
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+int gpio_event_get_filter(gpio_event_t *event)
+{
+    int rval;
+    pthread_mutex_lock(&event->lock);
+    rval = event->avg_len;
+    pthread_mutex_unlock(&event->lock);
+    return rval;
+}
+

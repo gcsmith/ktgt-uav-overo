@@ -23,13 +23,20 @@ typedef struct gpio_event
     int sample;             // current sample index
     int last_sec;           // last second counter for this event
     int last_usec;          // last microsecond counter for this event
+    int avg_len;            // number of samples to average
 } gpio_event_t;
 
 // initialize the gpio event subsystem
 int gpio_event_init();
 
+// shutdown the gpio event subsystem
+void gpio_event_shutdown();
+
 // attach an event to the specified gpio device index
 int gpio_event_attach(gpio_event_t *event, int gpio);
+
+// detach and destroy the specified gpio event structure
+void gpio_event_detach(gpio_event_t *event);
 
 // perform a synchronous read (block until gpio event triggered)
 int gpio_event_sync_read(gpio_event_t *event);
@@ -37,11 +44,11 @@ int gpio_event_sync_read(gpio_event_t *event);
 // perform an asynchronous (but thread safe) read
 int gpio_event_read(gpio_event_t *event);
 
-// detach and destroy the specified gpio event structure
-void gpio_event_detach(gpio_event_t *event);
+// set the number of samples for the averaging filter
+int gpio_event_set_filter(gpio_event_t *event, int samples);
 
-// shutdown the gpio event subsystem
-void gpio_event_shutdown();
+// get the number of samples for the averaging filter
+int gpio_event_get_filter(gpio_event_t *event);
 
 #endif // _UAV_GPIO_EVENT__H_
 

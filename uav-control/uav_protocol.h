@@ -25,6 +25,7 @@
 #define SERVER_UPDATE_TRACKING  7   // send updated tracking state information
 #define SERVER_UPDATE_CAM_DCI   8   // send updated camera device control info
 #define SERVER_UPDATE_CAM_DCM   9   // send updated camera device control menu
+#define SERVER_ACK_GFS          10
 
 // Packet commands from client to server
 
@@ -39,7 +40,8 @@
 #define CLIENT_REQ_CAM_TC       8   // request change in camera track color
 #define CLIENT_REQ_CAM_DCI      9   // request camera device control info
 #define CLIENT_REQ_CAM_DCC      10  // request camera device control config
-#define CLIENT_REQ_FILTER       11  // request average filter config
+#define CLIENT_REQ_SFS          11  // request set filter samples
+#define CLIENT_REQ_GFS          12  // request get filter samples
 
 // General packet offsets
 
@@ -164,15 +166,24 @@
 #define PKT_TRIM_VALUE      PKT_BASE + 1    // trim value (signed integer)
 #define PKT_TRIM_LENGTH     (sizeof(uint32_t) * (PKT_BASE + 2))
 
-// Averaging filter settings
+// Set filter samples (for a single signal)
 
-#define FILTER_ORIENTATION  0
-#define FILTER_ALTITUDE     1
-#define FILTER_BATTERY      2
+#define SFS_IMU             0
+#define SFS_ALT             1
+#define SFS_AUX             2
+#define SFS_BATT            3
 
-#define PKT_FILTER_SIGNAL   PKT_BASE + 0
-#define PKT_FILTER_SAMPLES  PKT_BASE + 1   
-#define PKT_FILTER_LENGTH   (sizeof(uint32_t) * (PKT_BASE + 2))
+#define PKT_SFS_SIGNAL      PKT_BASE + 0
+#define PKT_SFS_SAMPLES     PKT_BASE + 1   
+#define PKT_SFS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 2))
+
+// Get filter samples (for all signals)
+
+#define PKT_GFS_IMU         PKT_BASE + 0
+#define PKT_GFS_ALT         PKT_BASE + 1
+#define PKT_GFS_AUX         PKT_BASE + 2
+#define PKT_GFS_BATT        PKT_BASE + 3
+#define PKT_GFS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 4))
 
 #endif // _UAV_PROTOCOL__H_
 

@@ -12,7 +12,7 @@
 #include "razor_imu.h"
 
 // -----------------------------------------------------------------------------
-inline void calc_moving_avg(imu_data_t *data, float *new_samples)
+static inline void calc_moving_avg(imu_data_t *data, float *new_samples)
 {
     // subtract out the value to remove from the moving sum
     real_t *samples = &data->samples[data->avg_idx * 3];
@@ -136,7 +136,7 @@ int imu_init(const char *device, int baud, imu_data_t *data)
 }
 
 // -----------------------------------------------------------------------------
-void imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
+int imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
 {
     pthread_mutex_lock(&data->lock);
     
@@ -154,10 +154,17 @@ void imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
     data->moving_sum[1] = 0.0f;
     data->moving_sum[2] = 0.0f;
 
-    if (0 == avg_len) {
+    if (!avg_len) {
         pthread_mutex_unlock(&data->lock);
         syslog(LOG_INFO, "avg_len is zero, disabling filter for imu\n");
-        return;
+        return 1;
+    }
+
+    if (avg_len > 64) {
+        data->avg_len = 0;
+        pthread_mutex_unlock(&data->lock);
+        syslog(LOG_ERR, "imu averaging filter may not exceed 64 samples\n");
+        return 0;
     }
 
     // set the new parameters and allocate the running average buffer
@@ -166,6 +173,17 @@ void imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
 
     pthread_mutex_unlock(&data->lock);
     fprintf(stderr, "setting average filter to %d samples\n", avg_len);
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+int imu_get_avg_filter(imu_data_t *data)
+{
+    int rval;
+    pthread_mutex_lock(&data->lock);
+    rval = data->avg_len;
+    pthread_mutex_unlock(&data->lock);
+    return rval;
 }
 
 // -----------------------------------------------------------------------------
