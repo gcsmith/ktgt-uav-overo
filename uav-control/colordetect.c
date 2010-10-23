@@ -39,27 +39,26 @@ void *color_detect_thread(void *arg)
     struct timespec t0, t1;
     long time = 0;
     long trackingRateTime = (1000000/trackingRate);
-    int frameCount=1;
+    int frameCount=0;
     int skip = 0;
     clock_gettime(CLOCK_REALTIME, &t0);
-    printf("%d FPS\n", trackingRate);
     
     while (data->running) {
-
         clock_gettime(CLOCK_REALTIME, &t1);
         time += compute_delta(&t0, &t1);
         t0 = t1;
-
-        if((frameCount*trackingRateTime - time) > (time/frameCount)){
-            skip = (frameCount*trackingRateTime - time)/(time/frameCount);
-            time = 0;
-            frameCount = 1;
+        if(frameCount != 0){
+            if((frameCount*trackingRateTime - time) > (time/frameCount)){
+                skip = (frameCount*trackingRateTime - time)/(time/frameCount);
+                printf("Skipping the next %d frames.  %d  %ld  %ld\n", skip, frameCount, trackingRateTime, time);
+                time = 0;
+                frameCount = 0;
+            }
+            else if(frameCount == 50){
+                time = 0;
+                frameCount = 0;           
+            }
         }
-        else if(frameCount == 50){
-            time = 0;
-            frameCount = 1;           
-        }
- 
         if (!video_lock(&vid_data, LOCK_SYNC)) {
             // video disabled, non-functioning, or frame not ready
              //printf("FAILURE TO LOCK\n"); fflush(stdout);
