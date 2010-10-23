@@ -55,7 +55,7 @@ typedef struct fc_globals {
 static fc_globals_t globals = { 0 };
 
 // -----------------------------------------------------------------------------
-record_bucket_t *record_create_bucket()
+static record_bucket_t *record_create_bucket()
 {
     record_bucket_t *bkt = (record_bucket_t *)malloc(sizeof(record_bucket_t));
     bkt->count = 0;
@@ -64,7 +64,7 @@ record_bucket_t *record_create_bucket()
 }
 
 // -----------------------------------------------------------------------------
-int fc_get_alive(void)
+static int fc_get_alive(void)
 {
     int alive = 0;
     pthread_mutex_lock(&globals.alive_lock);
@@ -74,7 +74,7 @@ int fc_get_alive(void)
 }
 
 // -----------------------------------------------------------------------------
-void fc_set_alive(int alive)
+static void fc_set_alive(int alive)
 {
     pthread_mutex_lock(&globals.alive_lock);
     globals.alive = alive;
@@ -82,24 +82,19 @@ void fc_set_alive(int alive)
 }
 
 // -----------------------------------------------------------------------------
-void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
+static void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
 {
     int cmp_val = 0;
     
-    // check bounds
-    if (duty < fmin)
-        duty = fmin;
-    else if (duty > fmax)
-        duty = fmax;
-
     // fprintf(stderr, "called assign_duty with %f %f %f\n", fmin, fmax, duty);
+  
+    duty = CLAMP(duty, fmin, fmax);
     cmp_val = (int)(pwm->rng_min + (int)((pwm->rng_max - pwm->rng_min) * duty));
     pwm_set_compare(pwm->handle, cmp_val);
 }
 
 // -----------------------------------------------------------------------------
-void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value, 
-        int kill)
+static void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float val)
 {
     int cmp, max, min;
     unsigned int range, hrange;
@@ -112,90 +107,63 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
     // thro_last_cmp should be set to the current PWM cmp here to avoid
     // checking cmp == 0 at the end of this function.
 
-    if (kill)
-    {
-        // reset signals -
-        // throttle is set to minimum
-        // yaw, pitch, roll are set to their idle positions
-        if (globals.channels[PWM_ALT].handle == pwm->handle)
-            cmp = min;
-        else
-            cmp = min + hrange;
-    }
-    else if (globals.channels[PWM_ALT].handle == pwm->handle)
-    {
+    if (globals.channels[PWM_ALT].handle == pwm->handle) {
         // on the first pass set we need to modify the current PWM signal
-        if (globals.thro_first == 0)
-        {
+        if (globals.thro_first == 0) {
             globals.thro_first = 1;
-            cmp = min + (int)(hrange * value);
-            //fprintf(stderr, "flight_control alt: value = %f, lv = %f\n",
-              //      value, globals.thro_last_value);
+            cmp = min + (int)(hrange * val);
+            //fprintf(stderr, "flight_control alt: val = %f, lv = %f\n",
+            //      val, globals.thro_last_value);
             globals.thro_last_cmp = cmp;
         }
-        else
-        {
-            cmp = globals.thro_last_cmp + (int)(hrange * value * 0.05f);
+        else {
+            cmp = globals.thro_last_cmp + (int)(hrange * val * 0.05f);
+            cmp = CLAMP(cmp, min, max);
 
-            // keep signal within range
-            if (cmp > max)
-                cmp = max;
-            if (cmp < min)
-                cmp = min;
-
-            //fprintf(stderr, "flight_control alt: value = %f, lv = %f, cmp = %d, lc = %d\n", 
-             //       value, globals.thro_last_value, cmp, globals.thro_last_cmp);
+            //fprintf(stderr, "flight_control alt: val = %f, lv = %f, cmp = %d, lc = %d\n", 
+            //       val, globals.thro_last_value, cmp, globals.thro_last_cmp);
             globals.thro_last_cmp = cmp;
          }
 
-         globals.thro_last_value = value;
+         globals.thro_last_value = val;
     }
-    else
-    {
-        cmp = min + hrange + (int)(hrange * value);
+    else {
+        cmp = min + hrange + (int)(hrange * val);
     }
 
     if (cmp == 0)
         return;
 
     // adjust the trim, but keep within the absolute limits of this pwm channel
-    pwm->cmp = MIN(MAX(cmp, pwm->rng_min), pwm->rng_max);
+    pwm->cmp = CLAMP(cmp, pwm->rng_min, pwm->rng_max);
     pwm_set_compare(pwm->handle, pwm->cmp + pwm->trim);
 }
 
 // -----------------------------------------------------------------------------
-void flight_control(ctl_sigs_t *sigs, int chnl_flags)
+static void flight_control(ctl_sigs_t *sigs, int chnl_flags)
 {
-    if (fc_get_alive())
-    {
-        // adjust altitude if specified
-        if (chnl_flags & VCM_AXIS_ALT)
-        {
-            assign_value(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt, 0);
-        }
-       
-        // adjust pitch if specified
-        if (chnl_flags & VCM_AXIS_PITCH)
-        {
-            assign_value(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch, 0);
-        }
-       
-        // adjust roll if specified
-        if (chnl_flags & VCM_AXIS_ROLL)
-        {
-            assign_value(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll, 0);
-        }
-       
-        // adjust yaw if specified
-        if (chnl_flags & VCM_AXIS_YAW)
-        {
-            assign_value(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw, 0);
-        }
-    }
+    if (!fc_get_alive())
+        return;
+
+    // adjust altitude if specified
+    if (chnl_flags & VCM_AXIS_ALT)
+        assign_value(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt);
+
+    // adjust pitch if specified
+    if (chnl_flags & VCM_AXIS_PITCH)
+        assign_value(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch);
+
+    // adjust roll if specified
+    if (chnl_flags & VCM_AXIS_ROLL)
+        assign_value(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll);
+
+    // adjust yaw if specified
+    if (chnl_flags & VCM_AXIS_YAW)
+        assign_value(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw);
 }
 
 // -----------------------------------------------------------------------------
-void *autopilot_thread(void *arg)
+static void *autopilot_thread(void *arg)
 {
     int kill_reached = 0;
     int axes, type;
@@ -263,12 +231,14 @@ void *autopilot_thread(void *arg)
         // reset all signals if flight control is of type kill
         if (type == VCM_TYPE_KILL)
         {
+#if 0
             assign_value(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, 0, 1);
             assign_value(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, 0, 1);
             assign_value(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, 0, 1);
             assign_value(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, 0, 1);
 
             kill_reached = 1;
+#endif
         }
         else if ((type == VCM_TYPE_AUTO) || (type == VCM_TYPE_MIXED))
         {
@@ -295,7 +265,7 @@ void *autopilot_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-void *replay_thread(void *arg)
+static void *replay_thread(void *arg)
 {
     record_bucket_t *bucket;
     input_record_t *record;
@@ -320,7 +290,7 @@ void *replay_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-void *takeoff_thread(void *arg)
+static void *takeoff_thread(void *arg)
 {
     int error, input, last_input = 0, dx_dt, setpoint;
     float last_control = 0.0f;
@@ -410,7 +380,7 @@ void *takeoff_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-void *landing_thread(void *arg)
+static void *landing_thread(void *arg)
 {
     int i;
     int alt, prev_alt = 0, dx_dt;
@@ -462,7 +432,7 @@ void *landing_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-int init_channel(int index, int freq, float duty_lo, float duty_hi, float duty_idle)
+static int init_channel(int index, int freq, float lo, float hi, float idle)
 {
     pwm_channel_t *pwm = &globals.channels[index];
     if (0 > (pwm->handle = pwm_open_device(PWM_DEV_FIRST + index))) {
@@ -476,7 +446,7 @@ int init_channel(int index, int freq, float duty_lo, float duty_hi, float duty_i
     // keep throttle signal at the current value it is
     pwm_set_freq_x100(pwm->handle, freq);
     pwm_get_range(pwm->handle, &pwm->rng_min, &pwm->rng_max);
-    assign_duty(pwm, duty_lo, duty_hi, duty_idle);
+    assign_duty(pwm, lo, hi, idle);
     return 1;
 }
 
@@ -500,15 +470,15 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     pthread_mutex_init(&globals.vcm_lock, NULL);
     pthread_cond_init(&globals.takeoff_cond, NULL);
 
-    if (!init_channel(PWM_ALT, 4580, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
+    if (!init_channel(PWM_ALT, 4581, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
     syslog(LOG_INFO, "flight control: altitude channel opened\n");
 
-    if (!init_channel(PWM_PITCH, 4580, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
+    if (!init_channel(PWM_PITCH, 4581, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
         return 0; 
     syslog(LOG_INFO, "flight control: pitch channel opened\n");
 
-    if (!init_channel(PWM_ROLL, 4580, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
+    if (!init_channel(PWM_ROLL, 4581, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: roll channel opened\n");
 

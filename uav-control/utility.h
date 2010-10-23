@@ -24,6 +24,9 @@
 // return the largest of the three specified values
 #define MAX3(a,b,c) ((a)>(b) ? ((a)>(c) ? (a) : (c)) : ((b)>(c) ? (b) : (c)))
 
+// clamp the value x within the bounds [l, u]
+#define CLAMP(x, l, h) (((x) > (h)) ? (h) : (((x) < (l)) ? (l) : (x)))
+
 // return the number of elements of a statically declared array
 #define ELEMENTS(x) (sizeof(x) / sizeof((x)[0]))
 
