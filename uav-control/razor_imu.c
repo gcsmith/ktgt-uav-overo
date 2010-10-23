@@ -151,6 +151,7 @@ void imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
     data->avg_idx = 0;
 
     if (0 == avg_len) {
+        pthread_mutex_unlock(&data->lock);
         syslog(LOG_INFO, "avg_len is zero, disabling filter for imu\n");
         return;
     }

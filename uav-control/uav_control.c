@@ -460,6 +460,8 @@ void run_server(imu_data_t *imu, const char *port)
             case CLIENT_REQ_FILTER:
                 switch (cmd_buffer[PKT_FILTER_SIGNAL]) {
                 case FILTER_ORIENTATION:
+                    syslog(LOG_INFO, "setting orientation filter to %d samples",
+                           cmd_buffer[PKT_FILTER_SAMPLES]);
                     imu_set_avg_filter(&g_imu, cmd_buffer[PKT_FILTER_SAMPLES]);
                     break;
                 case FILTER_ALTITUDE:
