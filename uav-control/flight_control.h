@@ -55,8 +55,8 @@ typedef struct pwm_channel
 {
     pwm_t handle;
     unsigned int rng_min, rng_max;
-    unsigned int cmp;
-    unsigned int trim;
+    unsigned int cmp, trim;
+    float duty_lo, duty_hi;
 } pwm_channel_t;
 
 // initialize the flight control subsystem

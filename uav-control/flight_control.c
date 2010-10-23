@@ -55,12 +55,71 @@ typedef struct fc_globals {
 static fc_globals_t globals = { 0 };
 
 // -----------------------------------------------------------------------------
-static record_bucket_t *record_create_bucket()
+static record_bucket_t *record_create_bucket(void)
 {
     record_bucket_t *bkt = (record_bucket_t *)malloc(sizeof(record_bucket_t));
     bkt->count = 0;
     bkt->next = NULL;
     return bkt;
+}
+
+// -----------------------------------------------------------------------------
+static void record_insert_sigs(const ctl_sigs_t *sigs)
+{
+    timespec_t curr_time, time_delta;
+    record_bucket_t *bucket = globals.record_tail;
+
+    if (bucket->count >= RECORD_BUCKET_SIZE) {
+        // attach this bucket to the current tail of our linked list
+        bucket = record_create_bucket();
+        globals.record_tail->next = bucket;
+        globals.record_tail = bucket;
+    }
+
+    // record the delta time between controller inputs
+    clock_gettime(CLOCK_REALTIME, &curr_time);
+    timespec_diff(&globals.last_time, &curr_time, &time_delta);
+    globals.last_time = curr_time;
+
+    // insert the record into our bucket
+    bucket->records[bucket->count].delta = time_delta;
+    bucket->records[bucket->count].signals = *sigs;
+    bucket->count++;
+}
+
+// -----------------------------------------------------------------------------
+static void record_write_buckets(void)
+{
+    record_bucket_t *bucket, *curr;
+    FILE *fout;
+    int i;
+
+    // attempt to open the output file for writing
+    fout = fopen(globals.capture_path, "w");
+    if (!fout) {
+        syslog(LOG_ERR, "failed to open %s\n", globals.capture_path);
+        return;
+    }
+    syslog(LOG_INFO, "dumping capture to %s\n", globals.capture_path);
+
+    // iterate over and dump out each record bucket
+    bucket = globals.record_head;
+    while (NULL != bucket) {
+        curr = bucket;
+
+        // write the current bucket out to the file
+        for (i = 0; i < curr->count; i++) {
+            input_record_t *record = &curr->records[i];
+            fprintf(fout, "%ld %ld %f %f %f %f\n",
+                    record->delta.tv_sec, record->delta.tv_nsec,
+                    record->signals.alt, record->signals.yaw,
+                    record->signals.pitch, record->signals.roll);
+        }
+
+        bucket = bucket->next;
+        free(curr);
+    }
+    fclose(fout);
 }
 
 // -----------------------------------------------------------------------------
@@ -82,26 +141,24 @@ static void fc_set_alive(int alive)
 }
 
 // -----------------------------------------------------------------------------
-static void assign_duty(pwm_channel_t *pwm, float fmin, float fmax, float duty)
+static void assign_duty(pwm_channel_t *pwm, float duty)
 {
     int cmp_val = 0;
     
-    // fprintf(stderr, "called assign_duty with %f %f %f\n", fmin, fmax, duty);
-  
-    duty = CLAMP(duty, fmin, fmax);
+    duty = CLAMP(duty, pwm->duty_lo, pwm->duty_hi);
     cmp_val = (int)(pwm->rng_min + (int)((pwm->rng_max - pwm->rng_min) * duty));
     pwm_set_compare(pwm->handle, cmp_val);
 }
 
 // -----------------------------------------------------------------------------
-static void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float val)
+static void assign_value(pwm_channel_t *pwm, float val)
 {
     int cmp, max, min;
     unsigned int range, hrange;
 
     range = pwm->rng_max - pwm->rng_min;
-    min = pwm->rng_min + (int)(range * fmin);
-    max = pwm->rng_min + (int)(range * fmax);
+    min = pwm->rng_min + (int)(range * pwm->duty_lo);
+    max = pwm->rng_min + (int)(range * pwm->duty_hi);
     hrange = (max - min) >> 1;
 
     // thro_last_cmp should be set to the current PWM cmp here to avoid
@@ -132,7 +189,10 @@ static void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float val)
     }
 
     if (cmp == 0)
+    {
+        fprintf(stderr, "something bad happened\n");
         return;
+    }
 
     // adjust the trim, but keep within the absolute limits of this pwm channel
     pwm->cmp = CLAMP(cmp, pwm->rng_min, pwm->rng_max);
@@ -145,21 +205,14 @@ static void flight_control(ctl_sigs_t *sigs, int chnl_flags)
     if (!fc_get_alive())
         return;
 
-    // adjust altitude if specified
     if (chnl_flags & VCM_AXIS_ALT)
-        assign_value(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, sigs->alt);
-
-    // adjust pitch if specified
+        assign_value(&globals.channels[PWM_ALT], sigs->alt);
     if (chnl_flags & VCM_AXIS_PITCH)
-        assign_value(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, sigs->pitch);
-
-    // adjust roll if specified
+        assign_value(&globals.channels[PWM_PITCH], sigs->pitch);
     if (chnl_flags & VCM_AXIS_ROLL)
-        assign_value(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, sigs->roll);
-
-    // adjust yaw if specified
+        assign_value(&globals.channels[PWM_ROLL], sigs->roll);
     if (chnl_flags & VCM_AXIS_YAW)
-        assign_value(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, sigs->yaw);
+        assign_value(&globals.channels[PWM_YAW], sigs->yaw);
 }
 
 // -----------------------------------------------------------------------------
@@ -230,10 +283,10 @@ static void *autopilot_thread(void *arg)
         // reset all signals if flight control is of type kill
         if (type == VCM_TYPE_KILL) {
 #if 0
-            assign_value(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, 0, 1);
-            assign_value(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, 0, 1);
-            assign_value(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, 0, 1);
-            assign_value(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, 0, 1);
+            assign_value(&globals.channels[PWM_ALT], 0);
+            assign_value(&globals.channels[PWM_PITCH], 0);
+            assign_value(&globals.channels[PWM_ROLL], 0);
+            assign_value(&globals.channels[PWM_YAW], 0);
 
             kill_reached = 1;
 #endif
@@ -428,11 +481,13 @@ static int init_channel(int index, int freq, float lo, float hi, float idle)
 
     // reset the trim to the dead center of the duty cycle range
     pwm->trim = 0;
+    pwm->duty_lo = lo;
+    pwm->duty_hi = hi;
 
     // keep throttle signal at the current value it is
     pwm_set_freq_x100(pwm->handle, freq);
     pwm_get_range(pwm->handle, &pwm->rng_min, &pwm->rng_max);
-    assign_duty(pwm, lo, hi, idle);
+    assign_duty(pwm, idle);
     return 1;
 }
 
@@ -497,35 +552,8 @@ void fc_shutdown()
     pthread_cond_destroy(&globals.takeoff_cond);
 
     if (globals.capture_path) {
-        record_bucket_t *bucket, *curr;
-        FILE *fout;
-
-        // attempt to open the output file for writing
-        fout = fopen(globals.capture_path, "w");
-        if (!fout) {
-            syslog(LOG_ERR, "failed to open %s\n", globals.capture_path);
-            return;
-        }
-        syslog(LOG_INFO, "dumping capture to %s\n", globals.capture_path);
-
-        // iterate over and dump out each record bucket
-        bucket = globals.record_head;
-        while (NULL != bucket) {
-            curr = bucket;
-
-            // write the current bucket out to the file
-            for (i = 0; i < curr->count; i++) {
-                input_record_t *record = &curr->records[i];
-                fprintf(fout, "%ld %ld %f %f %f %f\n",
-                        record->delta.tv_sec, record->delta.tv_nsec,
-                        record->signals.alt, record->signals.yaw,
-                        record->signals.pitch, record->signals.roll);
-            }
-
-            bucket = bucket->next;
-            free(curr);
-        }
-        fclose(fout);
+        // save and destroy the record buckets
+        record_write_buckets();
     }
 }
 
@@ -647,10 +675,11 @@ void fc_reset_channels(void)
     globals.thro_last_value = 0.0f;
     globals.thro_last_cmp = 0;
     globals.thro_first = 0;
-    assign_duty(&ch[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
-    assign_duty(&ch[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE);
-    assign_duty(&ch[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE);
-    assign_duty(&ch[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE);
+
+    assign_duty(&ch[PWM_ALT], ALT_DUTY_LO);
+    assign_duty(&ch[PWM_YAW], YAW_DUTY_IDLE);
+    assign_duty(&ch[PWM_PITCH], PITCH_DUTY_IDLE);
+    assign_duty(&ch[PWM_ROLL], ROLL_DUTY_IDLE);
 }
 
 // -----------------------------------------------------------------------------
@@ -685,7 +714,6 @@ void fc_set_vcm(int axes, int type)
 void fc_set_ctl(ctl_sigs_t *sigs)
 {
     int axes;
-    timespec_t curr_time, time_delta;
 
     pthread_mutex_lock(&globals.vcm_lock);
     axes = globals.vcm_axes;
@@ -694,28 +722,11 @@ void fc_set_ctl(ctl_sigs_t *sigs)
     // if the incoming signal is a throttle event from the client, then we
     // target just the altitude control signal so we don't disturb the other
     // control signals
-    fprintf(stderr, "flight control's axes: %d\n", axes);
     flight_control(sigs, axes);
 
-    // if --capture is enabled, store this control signal
     if (globals.capture_path) {
-        record_bucket_t *bucket = globals.record_tail;
-        if (bucket->count >= RECORD_BUCKET_SIZE) {
-            // attach this bucket to the current tail of our linked list
-            bucket = record_create_bucket();
-            globals.record_tail->next = bucket;
-            globals.record_tail = bucket;
-        }
-
-        // record the delta time between controller inputs
-        clock_gettime(CLOCK_REALTIME, &curr_time);
-        timespec_diff(&globals.last_time, &curr_time, &time_delta);
-        globals.last_time = curr_time;
-
-        // insert the record into our bucket
-        bucket->records[bucket->count].delta = time_delta;
-        bucket->records[bucket->count].signals = *sigs;
-        bucket->count++;
+        // if --capture is enabled, store this control signal
+        record_insert_sigs(sigs);
     }
 }
 
