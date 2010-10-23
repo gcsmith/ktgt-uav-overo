@@ -40,6 +40,14 @@ typedef struct client_info
     pthread_mutex_t lock;   // lock to synchronize packet sends
 } client_info_t;
 
+typedef struct cpu_info
+{
+    int user;
+    int nice;
+    int system;    
+    int idle;
+    int percentage;
+} cpu_info_t;
 // turn the calling process into a daemon process
 void daemonize(void);
 
@@ -69,6 +77,9 @@ size_t send_simple_packet(client_info_t *client, uint32_t command);
 
 // close the socket connection to the specified client
 void close_client(client_info_t *client);
+
+// Get cpu utilization
+int get_cpu_utilization(cpu_info_t *past);
 
 #endif // _UAV_UTILITY_IMU__H_
 

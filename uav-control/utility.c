@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "utility.h"
 #include "uav_protocol.h"
@@ -243,4 +244,39 @@ void close_client(client_info_t *client)
     }
     pthread_mutex_unlock(&client->lock);
 }
+//-----------------------------------------------------------------------------
+int get_cpu_utilization(cpu_info_t *past)
+{
+    FILE *fp;
+    char c[10];
+    int user,system,nice,idle;
+    double percentage;
+    
+    if((fp=fopen("/proc/stat","r")) == NULL ){
+      return -1;
+    }
 
+    if(!fscanf(fp, "%s\t%d\t%d\t%d\t%d\n", c, &user,&nice,&system,&idle))
+    {
+        //Faled to read
+        return -1;
+    }
+    fclose(fp);
+    
+    printf("%d %d %d %d\n", user,nice,system,idle);
+    double userdif = user - past->user;
+    double sysdif  = system - past->system;
+    double nicedif = nice - past->nice;
+    double idledif = idle - past->idle;
+    
+    printf("%f %f %f %f\n", userdif,nicedif,sysdif,idledif);
+    percentage = ( (userdif + sysdif) / (userdif + sysdif + nicedif + idledif) ) * 100;
+
+    past->user      = user;
+    past->system    = system;
+    past->idle      = idle;
+    past->nice      = nice;    
+    past->percentage= (int) percentage;
+    return past->percentage;
+    
+}
