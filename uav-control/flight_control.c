@@ -210,8 +210,7 @@ static void *autopilot_thread(void *arg)
     fprintf(stderr, "autopilot starting...\n");
 
     //pthread_mutex_lock(&globals.alive_lock);
-    while (fc_get_alive() && !kill_reached)
-    {
+    while (fc_get_alive() && !kill_reached) {
         // capture pitch
         pthread_mutex_lock(&globals.imu->lock);
         //fd_yaw   = globals.imu->angles[IMU_DATA_YAW];
@@ -229,8 +228,7 @@ static void *autopilot_thread(void *arg)
         pthread_mutex_unlock(&globals.vcm_lock);
 
         // reset all signals if flight control is of type kill
-        if (type == VCM_TYPE_KILL)
-        {
+        if (type == VCM_TYPE_KILL) {
 #if 0
             assign_value(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, 0, 1);
             assign_value(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, 0, 1);
@@ -240,19 +238,16 @@ static void *autopilot_thread(void *arg)
             kill_reached = 1;
 #endif
         }
-        else if ((type == VCM_TYPE_AUTO) || (type == VCM_TYPE_MIXED))
-        {
+        else if ((type == VCM_TYPE_AUTO) || (type == VCM_TYPE_MIXED)) {
             // check pitch bit is 0 for autonomous control
-            if (!(axes & VCM_AXIS_PITCH))
-            {
+            if (!(axes & VCM_AXIS_PITCH)) {
                 pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
                 fc_sigs.pitch = pid_result;
                 flight_control(&fc_sigs, VCM_AXIS_PITCH);
             }
             
             // check altitude bit is 0 for autonomous control
-            if (!(axes & VCM_AXIS_ALT))
-            {
+            if (!(axes & VCM_AXIS_ALT)) {
                 pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
                 fc_sigs.alt = pid_result;
                 //flight_control(&fc_sigs, VCM_AXIS_ALT);
@@ -320,8 +315,7 @@ static void *takeoff_thread(void *arg)
 
     setpoint = 42; // 42 inches ~= 1 meter
 
-    while (fc_get_alive() && ((input = (gpio_event_read(globals.usrf) / 147)) != setpoint))
-    {
+    while (fc_get_alive() && ((input = (gpio_event_read(globals.usrf) / 147)) != setpoint)) {
         fprintf(stderr, "gpio pw = %d\n", input);
 
         // dead reckoning variables
@@ -341,26 +335,22 @@ static void *takeoff_thread(void *arg)
             pthread_mutex_unlock(&globals.vcm_lock);
         }
 #endif
-        if (error > 0)
-        {
+        if (error > 0) {
             // need to climb
-            if (dx_dt < 1)
-            {
+            if (dx_dt < 1) {
                 fprintf(stderr, "need to climb\n");
                 control.alt = 0.20;
                 flight_control(&control, VCM_AXIS_ALT);
             }
 
             // need to slow the rate of climb
-            else if (dx_dt > 3)
-            {
+            else if (dx_dt > 3) {
                 fprintf(stderr, "need to slow down\n");
                 control.alt = last_control * 0.5f;
                 flight_control(&control, VCM_AXIS_ALT);
             }
         }
-        else
-        {
+        else {
             control.alt = -0.1f;
             flight_control(&control, VCM_AXIS_ALT);
         }
@@ -400,20 +390,17 @@ static void *landing_thread(void *arg)
     pthread_mutex_unlock(&globals.vcm_lock);
 
     // monitor altitude
-    while ((alt = gpio_event_read(globals.usrf) / 147) > 6)
-    {
+    while ((alt = gpio_event_read(globals.usrf) / 147) > 6) {
         if (prev_alt == 0)
             prev_alt = alt;
         dx_dt = alt - prev_alt;
         prev_alt = alt;
 
-        if (dx_dt == 0)
-        {
+        if (dx_dt == 0) {
             landing_sigs.alt = -0.1f;
             flight_control(&landing_sigs, VCM_AXIS_ALT);
         }
-        else if (dx_dt <= -3) 
-        {
+        else if (dx_dt <= -3) {
             landing_sigs.alt = 0.05f;
             flight_control(&landing_sigs, VCM_AXIS_ALT);
         }
@@ -422,8 +409,7 @@ static void *landing_thread(void *arg)
     }
     
     landing_sigs.alt = -0.05;
-    for (i = 0; i < 5; i++)
-    {
+    for (i = 0; i < 5; i++) {
         flight_control(&landing_sigs, VCM_AXIS_ALT);
         usleep(100000);
     }
@@ -676,8 +662,7 @@ void fc_set_vcm(int axes, int type)
     curr_type = globals.vcm_type;
     pthread_mutex_unlock(&globals.vcm_lock);
 
-    if (VCM_TYPE_KILL == curr_type)
-    {
+    if (VCM_TYPE_KILL == curr_type) {
         // if we're killed, don't allow any more state transitions
         fprintf(stderr, "not alive. ignoring fc_set_vcm\n");
         return;
@@ -690,10 +675,7 @@ void fc_set_vcm(int axes, int type)
     pthread_mutex_unlock(&globals.vcm_lock);
 
     fc_reset_channels();
-    if (VCM_TYPE_KILL == type || VCM_TYPE_LOCKOUT == type)
-        fc_set_alive(0);
-    else
-        fc_set_alive(1);
+    fc_set_alive((VCM_TYPE_KILL != type) && (VCM_TYPE_LOCKOUT != type));
 
     // save the last timer tick every time we switch state
     clock_gettime(CLOCK_REALTIME, &globals.last_time);
@@ -747,29 +729,25 @@ void fc_get_vcm(int *axes, int *type)
 // -----------------------------------------------------------------------------
 void fc_set_trim(int axes, int value)
 {
-    if (axes & VCM_AXIS_ALT)
-    {
+    if (axes & VCM_AXIS_ALT) {
         pwm_channel_t *alt = &globals.channels[PWM_ALT];
         alt->trim = value;
         pwm_set_compare(alt->handle, alt->cmp + alt->trim);
         syslog(LOG_INFO, "set ALT trim to %d\n", value);
     }
-    if (axes & VCM_AXIS_YAW)
-    {
+    if (axes & VCM_AXIS_YAW) {
         pwm_channel_t *yaw = &globals.channels[PWM_YAW];
         yaw->trim = value;
         pwm_set_compare(yaw->handle, yaw->cmp + yaw->trim);
         syslog(LOG_INFO, "setting YAW trim to %d\n", value);
     }
-    if (axes & VCM_AXIS_PITCH)
-    {
+    if (axes & VCM_AXIS_PITCH) {
         pwm_channel_t *pitch = &globals.channels[PWM_PITCH];
         pitch->trim = value;
         pwm_set_compare(pitch->handle, pitch->cmp + pitch->trim);
         syslog(LOG_INFO, "setting PITCH trim to %d\n", value);
     }
-    if (axes & VCM_AXIS_ROLL)
-    {
+    if (axes & VCM_AXIS_ROLL) {
         pwm_channel_t *roll = &globals.channels[PWM_ROLL];
         roll->trim = value;
         pwm_set_compare(roll->handle, roll->cmp + roll->trim);
@@ -780,8 +758,7 @@ void fc_set_trim(int axes, int value)
 // -----------------------------------------------------------------------------
 int fc_get_trim(int axes)
 {
-    switch (axes)
-    {
+    switch (axes) {
     case VCM_AXIS_ALT:
         return globals.channels[PWM_ALT].trim;
     case VCM_AXIS_YAW:
