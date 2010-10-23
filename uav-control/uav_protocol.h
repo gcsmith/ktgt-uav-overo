@@ -35,9 +35,10 @@
 #define CLIENT_REQ_MJPG_FRAME   4   // request a single frame of video
 #define CLIENT_REQ_SET_CTL_MODE 5   // request a change in control mode
 #define CLIENT_REQ_FLIGHT_CTL   6   // command the helicopter's flight
-#define CLIENT_REQ_CAM_TC       7   // request change in camera track color
-#define CLIENT_REQ_CAM_DCI      8   // request camera device control info
-#define CLIENT_REQ_CAM_DCC      9   // request camera device control config
+#define CLIENT_REQ_TRIM         7   // request software trim update
+#define CLIENT_REQ_CAM_TC       8   // request change in camera track color
+#define CLIENT_REQ_CAM_DCI      9   // request camera device control info
+#define CLIENT_REQ_CAM_DCC      10  // request camera device control config
 
 // General packet offsets
 
@@ -139,7 +140,7 @@
 #define PKT_CAM_DCI_MAX     PKT_BASE + 3    // control value maximum
 #define PKT_CAM_DCI_STEP    PKT_BASE + 4    // control value step quantity
 #define PKT_CAM_DCI_DEFAULT PKT_BASE + 5    // control value default
-#define PKT_CAM_DCI_CURRENT PKT_BASE + 6   // current value of the control
+#define PKT_CAM_DCI_CURRENT PKT_BASE + 6    // current value of the control
 #define PKT_CAM_DCI_NAME    PKT_BASE + 7    // name of device control (32 char)
 #define PKT_CAM_DCI_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 16))
 
@@ -155,6 +156,12 @@
 #define PKT_CAM_DCC_ID      PKT_BASE + 0    // V4L device control id
 #define PKT_CAM_DCC_VALUE   PKT_BASE + 1    // new device control value
 #define PKT_CAM_DCC_LENGTH  (sizeof(uint32_t) * (PKT_BASE + 2))
+
+// Software trim settings
+
+#define PKT_TRIM_AXIS       PKT_BASE + 0    // axis to set trim
+#define PKT_TRIM_VALUE      PKT_BASE + 1    // trim value (signed integer)
+#define PKT_TRIM_LENGTH     (sizeof(uint32_t) * (PKT_BASE + 2))
 
 #endif // _UAV_PROTOCOL__H_
 

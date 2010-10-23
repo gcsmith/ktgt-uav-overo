@@ -55,6 +55,7 @@ typedef struct pwm_channel
 {
     pwm_t handle;
     unsigned int rng_min, rng_max;
+    unsigned int trim;
 } pwm_channel_t;
 
 // initialize the flight control subsystem
@@ -76,13 +77,17 @@ int fc_takeoff();
 int fc_land();
 
 // update vehicle control mode info (control type and enabled axes)
-void fc_update_vcm(int axes, int type);
+void fc_set_vcm(int axes, int type);
 
 // get the current control mode type and enabled axes
 void fc_get_vcm(int *axes, int *type);
 
 // inject manual input control signals
-void fc_update_ctl(ctl_sigs_t *sigs);
+void fc_set_ctl(ctl_sigs_t *sigs);
+
+void fc_set_trim(int channel, int value);
+
+int fc_get_trim(int channel);
 
 #endif // FLIGHT_CONTROL__H_
 

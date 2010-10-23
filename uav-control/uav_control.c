@@ -62,7 +62,7 @@ void *aux_trigger_thread(void *arg)
         // determine if we need to perform a state transition
         if (VCM_TYPE_LOCKOUT != type && pulse > 1475) {
             syslog(LOG_INFO, "AUX: switch from autonomous to manual\n");
-            fc_update_vcm(axes, VCM_TYPE_LOCKOUT);
+            fc_set_vcm(axes, VCM_TYPE_LOCKOUT);
             gpio_set_value(g_muxsel, MUX_SEL_RADIO);
             last_type = type;
 
@@ -74,7 +74,7 @@ void *aux_trigger_thread(void *arg)
         }
         else if (VCM_TYPE_LOCKOUT == type && pulse <= 1475) {
             syslog(LOG_INFO, "AUX: switch from manual to autonomous\n");
-            fc_update_vcm(axes, last_type);
+            fc_set_vcm(axes, last_type);
             gpio_set_value(g_muxsel, MUX_SEL_UPROC);
 
             cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
@@ -394,7 +394,7 @@ void run_server(imu_data_t *imu, const char *port)
                     continue;
                 }
 
-                fc_update_vcm(vcm_axes, vcm_type);
+                fc_set_vcm(vcm_axes, vcm_type);
 
                 cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_CTL_MODE;
                 cmd_buffer[PKT_LENGTH]   = PKT_VCM_LENGTH;
@@ -420,7 +420,12 @@ void run_server(imu_data_t *imu, const char *port)
                         client_sigs.alt, client_sigs.pitch,
                         client_sigs.roll, client_sigs.yaw);
                 
-                fc_update_ctl(&client_sigs);
+                fc_set_ctl(&client_sigs);
+                break;
+            case CLIENT_REQ_TRIM:
+                // update trim for the specified axis
+                fc_set_trim(cmd_buffer[PKT_TRIM_AXIS],
+                            cmd_buffer[PKT_TRIM_VALUE]);
                 break;
             case CLIENT_REQ_CAM_TC:
                 // determine whether color tracking is enabled or disabled
@@ -505,7 +510,7 @@ int main(int argc, char *argv[])
     int flag_verbose = 0, flag_daemonize = 0;
     int flag_no_adc = 0, flag_no_video = 0, flag_no_gpio = 0, flag_no_track = 0;
     int flag_no_fc = 0;
-    int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
+    int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 10;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
     char port_str[DEV_LEN];
     char stty_dev[DEV_LEN] = "/dev/ttyS0";

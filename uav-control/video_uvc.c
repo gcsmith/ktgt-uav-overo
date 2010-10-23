@@ -15,7 +15,7 @@ typedef struct video_globals
     struct vdIn *vd;
     pthread_t camthrd;
     int is_fresh;
-    int unproc;
+    int is_unproc;
 } video_globals_t;
 
 video_globals_t global = { 0 };
@@ -65,7 +65,7 @@ static void *video_capture_thread(void *arg)
 #endif
 
         global.is_fresh = 1;
-        global.unproc = 1;
+        global.is_unproc = 1;
 
         // signal fresh_frame
         pthread_cond_broadcast(&pglobal->db_update);
@@ -107,10 +107,11 @@ void print_enum_ctrl(const struct v4l2_queryctrl *qc)
         type = "menu";
         enum_menu = 1;
         break;
+#ifdef V4L2_CTRL_TYPE_STRING
     case V4L2_CTRL_TYPE_STRING:
         type = "string";
         break;
-        
+#endif
     }
 
     syslog(LOG_INFO, " + %s [type:%s min:%d max:%d step:%d default:%d flags:%d]",
@@ -233,8 +234,8 @@ int video_lock(video_data_t *data, int type)
     pthread_mutex_lock(&global.db);
     
     // type 0 = Heliview Fetch (Use global.is_fresh)
-    // type 1 = Video Processing (use global.unproc)
-    if ((!global.is_fresh && type == 0) || (!global.unproc && type == 1)) {
+    // type 1 = Video Processing (use global.is_unproc)
+    if ((!global.is_fresh && type == 0) || (!global.is_unproc && type == 1)) {
         pthread_mutex_unlock(&global.db);
         return 0;
     }
@@ -243,7 +244,7 @@ int video_lock(video_data_t *data, int type)
         global.is_fresh = 0;
     }
     else if (type == 1) {
-        global.unproc = 0;
+        global.is_unproc = 0;
     } 
 
     // pthread_cond_wait(&global.db_update, &global.db);

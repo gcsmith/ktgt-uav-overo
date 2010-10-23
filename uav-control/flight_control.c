@@ -158,6 +158,10 @@ void assign_value(pwm_channel_t *pwm, float fmin, float fmax, float value,
     if (cmp == 0)
         return;
 
+    // adjust the trim, but keep within the absolute limits of this pwm channel
+    cmp += pwm->trim;
+    cmp = MIN(MAX(cmp, pwm->rng_min), pwm->rng_max);
+
     pwm_set_compare(pwm->handle, cmp);
 }
 
@@ -468,6 +472,9 @@ int init_channel(int index, int freq, float duty_lo, float duty_hi, float duty_i
         return 0; 
     }
 
+    // reset the trim to the dead center of the duty cycle range
+    pwm->trim = 0;
+
     // keep throttle signal at the current value it is
     pwm_set_freq_x100(pwm->handle, freq);
     pwm_get_range(pwm->handle, &pwm->rng_min, &pwm->rng_max);
@@ -677,17 +684,18 @@ int fc_land()
 // -----------------------------------------------------------------------------
 void fc_reset_channels(void)
 {
+    pwm_channel_t *ch = &globals.channels[0];
     globals.thro_last_value = 0.0f;
     globals.thro_last_cmp = 0;
     globals.thro_first = 0;
-    assign_duty(&globals.channels[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
-    assign_duty(&globals.channels[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE);
-    assign_duty(&globals.channels[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE);
-    assign_duty(&globals.channels[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE);
+    assign_duty(&ch[PWM_ALT], ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO);
+    assign_duty(&ch[PWM_YAW], YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE);
+    assign_duty(&ch[PWM_PITCH], PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE);
+    assign_duty(&ch[PWM_ROLL], ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE);
 }
 
 // -----------------------------------------------------------------------------
-void fc_update_vcm(int axes, int type)
+void fc_set_vcm(int axes, int type)
 {
     int curr_type;
 
@@ -698,7 +706,7 @@ void fc_update_vcm(int axes, int type)
     if (VCM_TYPE_KILL == curr_type)
     {
         // if we're killed, don't allow any more state transitions
-        fprintf(stderr, "not alive. ignoring fc_update_vcm\n");
+        fprintf(stderr, "not alive. ignoring fc_set_vcm\n");
         return;
     }
 
@@ -719,7 +727,7 @@ void fc_update_vcm(int axes, int type)
 }
 
 // -----------------------------------------------------------------------------
-void fc_update_ctl(ctl_sigs_t *sigs)
+void fc_set_ctl(ctl_sigs_t *sigs)
 {
     int axes;
     timespec_t curr_time, time_delta;
@@ -762,4 +770,18 @@ void fc_get_vcm(int *axes, int *type)
     *axes = globals.vcm_axes;
     *type = globals.vcm_type;
 }
+
+// -----------------------------------------------------------------------------
+void fc_set_trim(int channel, int value)
+{
+    globals.channels[channel].trim = value;
+}
+
+// -----------------------------------------------------------------------------
+int fc_get_trim(int channel)
+{
+    return globals.channels[channel].trim;
+}
+
+
 
