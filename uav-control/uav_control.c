@@ -450,10 +450,23 @@ void run_server(imu_data_t *imu, const char *port)
                 }
                 break;
             case CLIENT_REQ_CAM_DCC:
+                // attempt to set the device control, ignore if unsupported
                 if (!video_set_devctrl(cmd_buffer[PKT_CAM_DCC_ID],
                                        cmd_buffer[PKT_CAM_DCC_VALUE])) {
                     syslog(LOG_ERR, "failed to set device control\n");
                     send_simple_packet(&g_client, SERVER_ACK_IGNORED);
+                }
+                break;
+            case CLIENT_REQ_FILTER:
+                switch (cmd_buffer[PKT_FILTER_SIGNAL]) {
+                case FILTER_ORIENTATION:
+                    imu_set_avg_filter(&g_imu, cmd_buffer[PKT_FILTER_SAMPLES]);
+                    break;
+                case FILTER_ALTITUDE:
+                case FILTER_BATTERY:
+                    // TODO: handle filtering these signals
+                    send_simple_packet(&g_client, SERVER_ACK_IGNORED);
+                    break;
                 }
                 break;
             default:
@@ -621,7 +634,6 @@ int main(int argc, char *argv[])
         syslog(LOG_ERR, "failed to initialize IMU");
         uav_shutdown(EXIT_FAILURE);
     }
-    imu_set_avg_filter(&g_imu, 16);
 
     // open PWM ports for mixed controlling
     if (!flag_no_fc) {

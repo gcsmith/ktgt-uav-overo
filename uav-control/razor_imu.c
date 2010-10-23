@@ -144,12 +144,19 @@ void imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
     if (data->samples) {
         syslog(LOG_INFO, "clearing avg buffer length %d\n", data->avg_len);
         free(data->samples);
+        data->samples = NULL;
+    }
+
+    data->avg_len = avg_len;
+    data->avg_idx = 0;
+
+    if (0 == avg_len) {
+        syslog(LOG_INFO, "avg_len is zero, disabling filter for imu\n");
+        return;
     }
 
     // set the new parameters and allocate the running average buffer
     data->samples = (real_t *)calloc(avg_len * 3, sizeof(real_t));
-    data->avg_len = avg_len;
-    data->avg_idx = 0;
     data->inv_avg_len = 1.0f / (real_t)avg_len;
 
     pthread_mutex_unlock(&data->lock);

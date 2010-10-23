@@ -39,6 +39,7 @@
 #define CLIENT_REQ_CAM_TC       8   // request change in camera track color
 #define CLIENT_REQ_CAM_DCI      9   // request camera device control info
 #define CLIENT_REQ_CAM_DCC      10  // request camera device control config
+#define CLIENT_REQ_FILTER       11  // request average filter config
 
 // General packet offsets
 
@@ -162,6 +163,16 @@
 #define PKT_TRIM_AXIS       PKT_BASE + 0    // axis to set trim
 #define PKT_TRIM_VALUE      PKT_BASE + 1    // trim value (signed integer)
 #define PKT_TRIM_LENGTH     (sizeof(uint32_t) * (PKT_BASE + 2))
+
+// Averaging filter settings
+
+#define FILTER_ORIENTATION  0
+#define FILTER_ALTITUDE     1
+#define FILTER_BATTERY      2
+
+#define PKT_FILTER_SIGNAL   PKT_BASE + 0
+#define PKT_FILTER_SAMPLES  PKT_BASE + 1   
+#define PKT_FILTER_LENGTH   (sizeof(uint32_t) * (PKT_BASE + 2))
 
 #endif // _UAV_PROTOCOL__H_
 
