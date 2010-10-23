@@ -37,8 +37,7 @@ void *color_detect_thread(void *arg)
     uint32_t cmd_buffer[16];
 
     while (data->running) {
-        //pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
-        if (!video_lock(&vid_data, 1)) {
+        if (!video_lock(&vid_data, LOCK_SYNC)) {
             // video disabled, non-functioning, or frame not ready
              //printf("FAILURE TO LOCK\n"); fflush(stdout);
             continue;

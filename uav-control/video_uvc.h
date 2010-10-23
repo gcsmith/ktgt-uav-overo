@@ -25,6 +25,11 @@ typedef struct video_data
     video_mode_t mode;      // current video mode
 } video_data_t;
 
+typedef enum lock_type {
+    LOCK_ASYNC,
+    LOCK_SYNC
+} lock_type_t;
+
 // initialize the video subsystem, given the specified resolution and framerate
 int video_init(const char *dev, video_mode_t *mode);
 
@@ -32,7 +37,7 @@ int video_init(const char *dev, video_mode_t *mode);
 void video_shutdown(void);
 
 // lock the current frame, and return pointer to its buffer and dimensions
-int video_lock(video_data_t *data, int type);
+int video_lock(video_data_t *data, lock_type_t lock_flag);
 
 // release our lock on the current frame's resources
 void video_unlock();

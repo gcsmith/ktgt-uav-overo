@@ -324,7 +324,7 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_MJPG_FRAME:
                 // syslog(LOG_INFO, "user requested mjpg frame - sending...\n");
-                if (!video_lock(&vid_data, 0)) {
+                if (!video_lock(&vid_data, LOCK_ASYNC)) {
                     // video disabled, non-functioning, or frame not ready
                     continue;
                 }

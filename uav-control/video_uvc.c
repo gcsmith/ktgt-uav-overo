@@ -15,7 +15,6 @@ typedef struct video_globals
     struct vdIn *vd;
     pthread_t camthrd;
     int is_fresh;
-    int is_unproc;
 } video_globals_t;
 
 video_globals_t global = { 0 };
@@ -65,7 +64,6 @@ static void *video_capture_thread(void *arg)
 #endif
 
         global.is_fresh = 1;
-        global.is_unproc = 1;
 
         // signal fresh_frame
         pthread_cond_broadcast(&pglobal->db_update);
@@ -222,30 +220,25 @@ void video_shutdown(void)
 }
 
 // -----------------------------------------------------------------------------
-int video_lock(video_data_t *data, int type)
+int video_lock(video_data_t *data, lock_type_t lock_flags)
 {
     if (!global.enabled) {
-        syslog(LOG_ERR, "attempting to call video_lock prior to init\n");
+        syslog(LOG_ERR, "attempting to call video_async_lock prior to init\n");
         return 0;
     }
     
     pthread_mutex_lock(&global.db);
     
-    // type 0 = Heliview Fetch (Use global.is_fresh)
-    // type 1 = Video Processing (use global.is_unproc)
-    if ((!global.is_fresh && type == 0) || (!global.is_unproc && type == 1)) {
-        pthread_mutex_unlock(&global.db);
-        return 0;
-    }
-    
-    if (type == 0) {
+    if (lock_flags == LOCK_ASYNC) {
+        if (!global.is_fresh) {
+            pthread_mutex_unlock(&global.db);
+            return 0;
+        }
         global.is_fresh = 0;
     }
-    else if (type == 1) {
-        global.is_unproc = 0;
-    } 
-
-    // pthread_cond_wait(&global.db_update, &global.db);
+    else {
+        pthread_cond_wait(&global.db_update, &global.db);
+    }
 
     data->length = (size_t)global.size;
     data->data = (uint8_t *)global.buf;
@@ -256,6 +249,27 @@ int video_lock(video_data_t *data, int type)
 
     return 1;
 }
+
+#if 0
+// -----------------------------------------------------------------------------
+int video_sync_lock(video_data_t *data, lock_type_t lock_flag)
+{
+    if (!global.enabled) {
+        syslog(LOG_ERR, "attempting to call video_async_lock prior to init\n");
+        return 0;
+    }
+    
+    
+    data->length = (size_t)global.size;
+    data->data = (uint8_t *)global.buf;
+
+    data->mode.width  = global.width;
+    data->mode.height = global.height;
+    data->mode.fps    = global.fps;
+
+    return 1;
+}
+#endif
 
 // -----------------------------------------------------------------------------
 void video_unlock()
