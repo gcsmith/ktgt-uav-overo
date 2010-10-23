@@ -772,15 +772,35 @@ void fc_get_vcm(int *axes, int *type)
 }
 
 // -----------------------------------------------------------------------------
-void fc_set_trim(int channel, int value)
+void fc_set_trim(int axes, int value)
 {
-    globals.channels[channel].trim = value;
+    syslog(LOG_ERR, "update trims for channel %d: %d\n", axes, value);
+    if (axes & VCM_AXIS_ALT)
+        globals.channels[PWM_ALT].trim = value;
+    if (axes & VCM_AXIS_YAW)
+        globals.channels[PWM_YAW].trim = value;
+    if (axes & VCM_AXIS_PITCH)
+        globals.channels[PWM_PITCH].trim = value;
+    if (axes & VCM_AXIS_ROLL)
+        globals.channels[PWM_ROLL].trim = value;
 }
 
 // -----------------------------------------------------------------------------
-int fc_get_trim(int channel)
+int fc_get_trim(int axes)
 {
-    return globals.channels[channel].trim;
+    switch (axes)
+    {
+    case VCM_AXIS_ALT:
+        return globals.channels[PWM_ALT].trim;
+    case VCM_AXIS_YAW:
+        return globals.channels[PWM_YAW].trim;
+    case VCM_AXIS_PITCH:
+        return globals.channels[PWM_PITCH].trim;
+    case VCM_AXIS_ROLL:
+        return globals.channels[PWM_ROLL].trim;
+    default:
+        return -1;
+    }
 }
 
 
