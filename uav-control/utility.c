@@ -263,13 +263,13 @@ int get_cpu_utilization(cpu_info_t *past)
     }
     fclose(fp);
     
-    printf("%d %d %d %d\n", user,nice,system,idle);
+   
     double userdif = user - past->user;
     double sysdif  = system - past->system;
     double nicedif = nice - past->nice;
     double idledif = idle - past->idle;
     
-    printf("%f %f %f %f\n", userdif,nicedif,sysdif,idledif);
+    
     percentage = ( (userdif + sysdif) / (userdif + sysdif + nicedif + idledif) ) * 100;
 
     past->user      = user;
