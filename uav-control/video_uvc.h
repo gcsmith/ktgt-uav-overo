@@ -42,6 +42,8 @@ int video_lock(video_data_t *data, lock_type_t lock_flag);
 // release our lock on the current frame's resources
 void video_unlock();
 
+void video_condition_wait();
+
 // override the current video mode (resolution, framerate, etc)
 int video_set_mode(video_mode_t *mode);
 

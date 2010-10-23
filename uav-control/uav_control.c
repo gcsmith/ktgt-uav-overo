@@ -209,6 +209,7 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
+    setTrackingRate(2);
 
     union {
         float f;

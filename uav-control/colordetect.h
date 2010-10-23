@@ -11,6 +11,7 @@
 #define _UAV_COLORDETECT__H_
 
 #include "utility.h"
+#include <time.h>
 
 typedef struct track_color {
     uint8_t r, g, b;    // red/green/blue color channels
@@ -27,6 +28,7 @@ typedef struct {
     int detected;   // 0 if color not detected, 1 if detected
 } track_coords_t;
 
+int trackingRate;
 int colordetect_init(client_info_t *client);
 void colordetect_shutdown(void);
 void colordetect_set_track_color(track_color_t *color);
@@ -67,6 +69,10 @@ void COLORimageRGBtoHSLfixed( uint8_t *rgb_in, int width, int height);
 
 void rgb_to_hsl(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
 void rgb_to_hsl_fp32(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
+
+void setTrackingRate(int fps);
+int getTrackingRate();
+long compute_delta(struct timespec *t0, struct timespec *t1);
 
 #endif // _UAV_COLORDETECT__H_
 
