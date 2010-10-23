@@ -211,7 +211,7 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
-    setTrackingRate(2);
+    setTrackingRate(1);
 
     union {
         float f;
@@ -506,7 +506,7 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_GFS_ALT]  = gpio_event_get_filter(&g_gpio_alt);
                 cmd_buffer[PKT_GFS_AUX]  = gpio_event_get_filter(&g_gpio_aux);
                 cmd_buffer[PKT_GFS_BATT] = 0;
-                send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
+                send_packet(&g_client, cmd_buffer, PKT_GFS_LENGTH);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes
