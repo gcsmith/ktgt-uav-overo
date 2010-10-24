@@ -26,7 +26,7 @@ void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *
 
     curr_diff_error = controller->last_error - controller->prev_error;
 
-    if (*curr_error > PID_RESET)
+    if ((*curr_error > PID_RESET) || (*curr_error < -(PID_RESET)))
         reset = 0.0f;
 
     *u = (float)((controller->Kp * *curr_error) + 
