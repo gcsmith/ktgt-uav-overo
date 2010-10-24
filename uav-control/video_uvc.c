@@ -220,56 +220,42 @@ void video_shutdown(void)
 }
 
 // -----------------------------------------------------------------------------
-int video_lock(video_data_t *data, lock_type_t lock_flags)
+int video_lock(video_data_t *data, lock_type_t type)
 {
     if (!global.enabled) {
         syslog(LOG_ERR, "attempting to call video_async_lock prior to init\n");
         return 0;
     }
-    
     pthread_mutex_lock(&global.db);
     
-    if (lock_flags == LOCK_ASYNC) {
+    switch (type)
+    {
+    case LOCK_ASYNC:
+        // asynchronous lock -- if not fresh, free mutex and exit immediately
         if (!global.is_fresh) {
             pthread_mutex_unlock(&global.db);
             return 0;
         }
         global.is_fresh = 0;
-    }
-    else {
+        break;
+    case LOCK_SYNC:
+        // synchronous lock -- sleep until signalled by next fresh frame
         pthread_cond_wait(&global.db_update, &global.db);
-    }
-
-    data->length = (size_t)global.size;
-    data->data = (uint8_t *)global.buf;
-
-    data->mode.width  = global.width;
-    data->mode.height = global.height;
-    data->mode.fps    = global.fps;
-
-    return 1;
-}
-
-#if 0
-// -----------------------------------------------------------------------------
-int video_sync_lock(video_data_t *data, lock_type_t lock_flag)
-{
-    if (!global.enabled) {
-        syslog(LOG_ERR, "attempting to call video_async_lock prior to init\n");
+        break;
+    default:
+        syslog(LOG_ERR, "specified invalid lock type\n");
+        pthread_mutex_unlock(&global.db);
         return 0;
     }
-    
-    
+
     data->length = (size_t)global.size;
     data->data = (uint8_t *)global.buf;
 
     data->mode.width  = global.width;
     data->mode.height = global.height;
     data->mode.fps    = global.fps;
-
     return 1;
 }
-#endif
 
 // -----------------------------------------------------------------------------
 void video_unlock()

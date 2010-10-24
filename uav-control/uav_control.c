@@ -211,7 +211,6 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
-    color_detect_set_tracking_rate(2);
 
     union {
         float f;
@@ -770,6 +769,7 @@ int main(int argc, char *argv[])
                 syslog(LOG_ERR, "failed to initialize tracking subsystem\n");
                 uav_shutdown(EXIT_FAILURE);
             }
+            color_detect_set_tracking_rate(15);
         }
         else {
             syslog(LOG_INFO, "color tracking not possible without video");

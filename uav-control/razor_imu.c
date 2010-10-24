@@ -142,7 +142,6 @@ int imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
     
     // clear the previous average buffer, if there was one
     if (data->samples) {
-        syslog(LOG_INFO, "clearing avg buffer length %d\n", data->avg_len);
         free(data->samples);
         data->samples = NULL;
     }
@@ -156,7 +155,7 @@ int imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
 
     if (!avg_len) {
         pthread_mutex_unlock(&data->lock);
-        syslog(LOG_INFO, "avg_len is zero, disabling filter for imu\n");
+        syslog(LOG_INFO, "avg_len is zero, disabling imu filter\n");
         return 1;
     }
 
@@ -172,7 +171,6 @@ int imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
     data->inv_avg_len = 1.0f / (real_t)avg_len;
 
     pthread_mutex_unlock(&data->lock);
-    fprintf(stderr, "setting average filter to %d samples\n", avg_len);
     return 1;
 }
 
