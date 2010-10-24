@@ -34,7 +34,8 @@ int adc_fd;
 #define VBATT_MAX       2.0f
 #define VBATT_RANGE     (VBATT_MAX - VBATT_MIN)
 
-#define CPU_HISTORY_LENGTH 10
+#define CPU_HISTORY_SHIFT  4
+#define CPU_HISTORY_LENGTH (1 << CPU_HISTORY_SHIFT)
 static cpu_info_t cpu_history[CPU_HISTORY_LENGTH];
 static int cpu_index = 0;
 static int cpu_moving_avg = 0;
@@ -258,34 +259,33 @@ void close_client(client_info_t *client)
     pthread_mutex_unlock(&client->lock);
 }
 //-----------------------------------------------------------------------------
-int get_cpu_utilization()
+int get_cpu_utilization(void)
 {        
     FILE *fp;
     char c[10];
-    int user,system,nice,idle,iow,hint,sint;
-    double percentage;
+    int user, system, nice, idle, iow, hint, sint;
+    real_t percentage;
 
-    if ((fp=fopen("/proc/stat","r")) == NULL ) {
+    if (!(fp = fopen("/proc/stat","r"))) {
         return -1;
     }
 
     if (!fscanf(fp, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", c,
-                &user,&nice,&system,&idle,&iow,&hint,&sint)) {
-        //Faled to read
+                &user, &nice, &system, &idle, &iow, &hint, &sint)) {
+        // failed to read
         fclose(fp);
         return -1;
     }
     fclose(fp);
 
-
-    double userdif = user   - cpu_history[cpu_index].user;
-    double sysdif  = system - cpu_history[cpu_index].system;
-    double nicedif = nice   - cpu_history[cpu_index].nice;
-    double idledif = idle   - cpu_history[cpu_index].idle;
-    double hintdif = hint   - cpu_history[cpu_index].hint;
-    double sintdif = sint   - cpu_history[cpu_index].sint;
+    // calculate moving average of cpu load
+    real_t userdif = user   - cpu_history[cpu_index].user;
+    real_t sysdif  = system - cpu_history[cpu_index].system;
+    real_t nicedif = nice   - cpu_history[cpu_index].nice;
+    real_t idledif = idle   - cpu_history[cpu_index].idle;
+    real_t hintdif = hint   - cpu_history[cpu_index].hint;
+    real_t sintdif = sint   - cpu_history[cpu_index].sint;
     
-
     percentage = ((userdif + sysdif + hintdif + sintdif) / 
             (userdif + sysdif + nicedif + idledif + hintdif + sintdif)) * 100;
 
@@ -301,10 +301,9 @@ int get_cpu_utilization()
 
     cpu_moving_avg += cpu_history[cpu_index].percentage;
     
-    
     if (++cpu_index >= CPU_HISTORY_LENGTH)
         cpu_index = 0;
     
-    return (int) cpu_moving_avg / CPU_HISTORY_LENGTH;
+    return (int)cpu_moving_avg >> CPU_HISTORY_SHIFT;
 }
 
