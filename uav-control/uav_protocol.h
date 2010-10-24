@@ -132,7 +132,8 @@
 #define PKT_CAM_TC_TH1      PKT_BASE + 6
 #define PKT_CAM_TC_TH2      PKT_BASE + 7
 #define PKT_CAM_TC_FILTER   PKT_BASE + 8
-#define PKT_CAM_TC_LENGTH   (sizeof(uint32_t) * (PKT_BASE + 9))
+#define PKT_CAM_TC_FPS      PKT_BASE + 9
+#define PKT_CAM_TC_LENGTH   (sizeof(uint32_t) * (PKT_BASE + 10))
 
 // Camera Device Control Info
 

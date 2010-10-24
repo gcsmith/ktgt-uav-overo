@@ -211,6 +211,7 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
+    int fps;
 
     union {
         float f;
@@ -438,7 +439,10 @@ void run_server(imu_data_t *imu, const char *port)
                 tc.st = cmd_buffer[PKT_CAM_TC_TH1];
                 tc.lt = cmd_buffer[PKT_CAM_TC_TH2];
                 tc.filter = cmd_buffer[PKT_CAM_TC_FILTER];
+                fps = cmd_buffer[PKT_CAM_TC_FPS];
+                printf("GOT FPS: %d\n",fps);
                 color_detect_set_track_color(&tc);
+                color_detect_set_tracking_rate(fps);
                 // TODO: ack?
                 break;
             case CLIENT_REQ_CAM_DCI:
