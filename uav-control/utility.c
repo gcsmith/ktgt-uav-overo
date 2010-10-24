@@ -273,6 +273,7 @@ int get_cpu_utilization()
     double percentage;
     
     if((fp=fopen("/proc/stat","r")) == NULL ){
+        printf("Failed to open /proc/stat\n");
       return -1;
     }
 
@@ -280,6 +281,7 @@ int get_cpu_utilization()
                      &user,&nice,&system,&idle,&iow,&hint,&sint))
     {
         //Faled to read
+        printf("Failed to scan /proc/stat\n");
         return -1;
     }
     fclose(fp);
