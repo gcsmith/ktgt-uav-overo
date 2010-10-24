@@ -269,14 +269,15 @@ int get_cpu_utilization()
     
     FILE *fp;
     char c[10];
-    int user,system,nice,idle;
+    int user,system,nice,idle,iow,hint,sint;
     double percentage;
     
     if((fp=fopen("/proc/stat","r")) == NULL ){
       return -1;
     }
 
-    if(!fscanf(fp, "%s\t%d\t%d\t%d\t%d\n", c, &user,&nice,&system,&idle))
+    if(!fscanf(fp, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", c,
+                     &user,&nice,&system,&idle,&iow,&hint,&sint))
     {
         //Faled to read
         return -1;
@@ -288,14 +289,19 @@ int get_cpu_utilization()
     double sysdif  = system - cpu_history[cpu_index].system;
     double nicedif = nice   - cpu_history[cpu_index].nice;
     double idledif = idle   - cpu_history[cpu_index].idle;
+    double hintdif = hint   - cpu_history[cpu_index].hint;
+    double sintdif = sint   - cpu_history[cpu_index].sint;
     
     
-    percentage = ( (userdif + sysdif) / (userdif + sysdif + nicedif + idledif) ) * 100;
+    percentage = ( (userdif + sysdif + hintdif + sintdif) / 
+        (userdif + sysdif + nicedif + idledif + hintdif + sintdif) ) * 100;
 
     cpu_history[cpu_index].user      = user;
     cpu_history[cpu_index].system    = system;
     cpu_history[cpu_index].idle      = idle;
     cpu_history[cpu_index].nice      = nice;    
+    cpu_history[cpu_index].hint      = hint; 
+    cpu_history[cpu_index].sint      = sint; 
     
     return (int) percentage;
     

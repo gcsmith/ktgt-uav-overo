@@ -46,6 +46,8 @@ typedef struct cpu_info
     int nice;
     int system;    
     int idle;
+    int hint;
+    int sint;
     //int percentage;
 } cpu_info_t;
 // turn the calling process into a daemon process
