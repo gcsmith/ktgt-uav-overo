@@ -147,7 +147,7 @@ void *color_detect_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-int colordetect_init(client_info_t *client)
+int color_detect_init(client_info_t *client)
 {   
     int rc;
     if (g_globals.running) {
@@ -188,7 +188,7 @@ int colordetect_init(client_info_t *client)
 }
 
 // -----------------------------------------------------------------------------
-void colordetect_shutdown(void)
+void color_detect_shutdown(void)
 {   
     if (!g_globals.running) {
         syslog(LOG_INFO, "calling colordetect_shutdown prior to init\n");
@@ -201,13 +201,13 @@ void colordetect_shutdown(void)
 }
 
 // -----------------------------------------------------------------------------
-void colordetect_set_track_color(track_color_t *color)
+void color_detect_set_track_color(track_color_t *color)
 {
     g_globals.color = *color;
 }
 
 // -----------------------------------------------------------------------------
-void colordetect_enable(int enabled)
+void color_detect_enable(int enabled)
 {
     if (enabled)
         syslog(LOG_INFO, "TODO: requested color tracking enable\n");
@@ -221,14 +221,14 @@ void colordetect_enable(int enabled)
 void color_detect_rgb(const uint8_t *rgb_in,
         const track_color_t *color, track_coords_t *box)
 {
-    findColorRGB(rgb_in, color, box);
+    find_color_rgb(rgb_in, color, box);
 }
 
 // -----------------------------------------------------------------------------
 void color_detect_rgb_dist (const uint8_t *rgb_in, real_t threshold,
         const track_color_t *color, track_coords_t *box)
 {
-    findColorRGB_dist(rgb_in, threshold, color, box);
+    find_color_rgb_dist(rgb_in, threshold, color, box);
 }
 
 // -----------------------------------------------------------------------------
@@ -240,10 +240,10 @@ void color_detect_hsl(uint8_t *rgb_in,
     rgb_to_hsl(&track_color.r, &track_color.g, &track_color.b);                     
                 
     // convert the image to HSL
-    COLORimageRGBtoHSL(rgb_in, box->width, box->height);
+    color_image_rgb_to_hsl(rgb_in, box->width, box->height);
 
     // find HSL values in image 
-    findColorHSL(rgb_in, &track_color, box);
+    find_color_hsl(rgb_in, &track_color, box);
 }
 
 // -----------------------------------------------------------------------------
@@ -255,14 +255,14 @@ void color_detect_hsl_fp32(uint8_t *rgb_in,
     rgb_to_hsl_fp32(&track_color.r, &track_color.g, &track_color.b);                     
                         
     // convert the image to HSL
-    COLORimageRGBtoHSLfixed(rgb_in, box->width, box->height);
+    color_image_rgb_to_hsl_fixed(rgb_in, box->width, box->height);
 
     // find HSL values in image 
-    findColorHSL(rgb_in, &track_color, box);
+    find_color_hsl(rgb_in, &track_color, box);
 }
 
 // -----------------------------------------------------------------------------
-void runColorDetectionFile(const char *infile, const char *outfile,
+void run_color_detection_file(const char *infile, const char *outfile,
         track_color_t *color, track_coords_t *box)
 {
     uint8_t *rgb = NULL;
@@ -276,7 +276,7 @@ void runColorDetectionFile(const char *infile, const char *outfile,
 }
 
 // -----------------------------------------------------------------------------
-void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
+void run_color_detection_memory(const uint8_t *stream_in, unsigned long *length,
         track_color_t *color, track_coords_t *box)
 {
     uint8_t *rgb = NULL;
@@ -290,7 +290,7 @@ void runColorDetectionMemory(const uint8_t *stream_in, unsigned long *length,
 }
 
 // -----------------------------------------------------------------------------
-void COLORimageRGBtoHSL(uint8_t *rgb_in, int width, int height)
+void color_image_rgb_to_hsl(uint8_t *rgb_in, int width, int height)
 {
     int i = 0, j = 0;
     for (i = 0; i < height; i++) {
@@ -304,7 +304,7 @@ void COLORimageRGBtoHSL(uint8_t *rgb_in, int width, int height)
 }
 
 // -----------------------------------------------------------------------------
-void COLORimageRGBtoHSLfixed(uint8_t *rgb_in, int width, int height)
+void color_image_rgb_to_hsl_fixed(uint8_t *rgb_in, int width, int height)
 {
     int i = 0, j = 0;
     for (i = 0; i < height; i++) {
@@ -388,7 +388,7 @@ void rgb_to_hsl_fp32(uint8_t *r_h, uint8_t *g_s, uint8_t *b_l)
 }
 
 // -----------------------------------------------------------------------------
-void findColorHSL(const uint8_t *hsl_in, 
+void find_color_hsl(const uint8_t *hsl_in, 
         track_color_t *color, track_coords_t *box) {
     int x = 0, y = 0, h = 0, s = 0, l = 0, consec = 0, noise_filter = color->filter;
     int img_width = box->width, img_height = box->height;
@@ -455,7 +455,7 @@ void findColorHSL(const uint8_t *hsl_in,
 }
 
 // -----------------------------------------------------------------------------
-void findColorRGB(const uint8_t *rgb_in,
+void find_color_rgb(const uint8_t *rgb_in,
         const track_color_t *color, track_coords_t *box)
 {
     int x = 0, y = 0, consec = 0, noise_filter = color->filter;
@@ -518,7 +518,7 @@ void findColorRGB(const uint8_t *rgb_in,
 }
 
 // -----------------------------------------------------------------------------
-void findColorRGB_dist(const uint8_t *rgb_in, int threshold,
+void find_color_rgb_dist(const uint8_t *rgb_in, int threshold,
         const track_color_t *color, track_coords_t *box)
 {
     int x = 0, y = 0, consec = 0, noise_filter = color->filter;

@@ -166,7 +166,7 @@ void uav_shutdown(int rc)
     imu_shutdown(&g_imu);
 
     syslog(LOG_INFO, "shutting color tracking subsystem...\n");
-    colordetect_shutdown();
+    color_detect_shutdown();
 
     syslog(LOG_INFO, "shutting down video subsystem...\n");
     video_shutdown();
@@ -429,7 +429,7 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_CAM_TC:
                 // determine whether color tracking is enabled or disabled
-                colordetect_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
+                color_detect_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
 
                 // update our color tracking parameters
                 tc.r = cmd_buffer[PKT_CAM_TC_CH0];
@@ -439,7 +439,7 @@ void run_server(imu_data_t *imu, const char *port)
                 tc.st = cmd_buffer[PKT_CAM_TC_TH1];
                 tc.lt = cmd_buffer[PKT_CAM_TC_TH2];
                 tc.filter = cmd_buffer[PKT_CAM_TC_FILTER];
-                colordetect_set_track_color(&tc);
+                color_detect_set_track_color(&tc);
                 // TODO: ack?
                 break;
             case CLIENT_REQ_CAM_DCI:
@@ -765,7 +765,7 @@ int main(int argc, char *argv[])
         if (!flag_no_video) {
             // make a note that tracking isn't possible with video
             syslog(LOG_INFO, "initializing color tracking subsystem\n");
-            if (!colordetect_init(&g_client)) {
+            if (!color_detect_init(&g_client)) {
                 syslog(LOG_ERR, "failed to initialize tracking subsystem\n");
                 uav_shutdown(EXIT_FAILURE);
             }
