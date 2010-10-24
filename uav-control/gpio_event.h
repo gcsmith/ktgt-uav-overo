@@ -10,6 +10,7 @@
 #define _UAV_GPIO_EVENT__H_
 
 #include <pthread.h>
+#include "utility.h"
 
 #define GPIO_COUNT 256
 #define GPIO_SHIFT 4
@@ -42,11 +43,8 @@ int gpio_event_attach(gpio_event_t *event, int gpio);
 // detach and destroy the specified gpio event structure
 void gpio_event_detach(gpio_event_t *event);
 
-// perform a synchronous read (block until gpio event triggered)
-int gpio_event_sync_read(gpio_event_t *event);
-
 // perform an asynchronous (but thread safe) read
-int gpio_event_read(gpio_event_t *event);
+int gpio_event_read(gpio_event_t *event, access_mode_t mode);
 
 // set the number of samples for the averaging filter
 int gpio_event_set_filter(gpio_event_t *event, int samples);

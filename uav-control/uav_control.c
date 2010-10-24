@@ -53,7 +53,7 @@ static void *aux_trigger_thread(void *arg)
 
     for (;;) {
         // go to sleep until we're pinged by the gpio_event subsystem
-        pulse = gpio_event_sync_read(&g_gpio_aux);
+        pulse = gpio_event_read(&g_gpio_aux, ACCESS_SYNC);
         fc_get_vcm(&axes, &type);
 
         if (VCM_TYPE_KILL == type) {
@@ -319,17 +319,14 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_VTI_BATT] = read_vbatt();
 
                 // taken from maxbotix from spec: 147 us == 1 inch
-                cmd_buffer[PKT_VTI_ALT] = gpio_event_read(&g_gpio_alt) / 147;
-                cmd_buffer[PKT_VTI_AUX] = gpio_event_read(&g_gpio_aux);
-
-
+                cmd_buffer[PKT_VTI_ALT] = gpio_event_read(&g_gpio_alt, ACCESS_ASYNC) / 147;
+                cmd_buffer[PKT_VTI_AUX] = gpio_event_read(&g_gpio_aux, ACCESS_ASYNC);
                 cmd_buffer[PKT_VTI_CPU] = get_cpu_utilization();
-                
                 send_packet(&g_client, cmd_buffer, PKT_VTI_LENGTH);
                 break;
             case CLIENT_REQ_MJPG_FRAME:
                 // syslog(LOG_INFO, "user requested mjpg frame - sending...\n");
-                if (!video_lock(&vid_data, LOCK_ASYNC)) {
+                if (!video_lock(&vid_data, ACCESS_ASYNC)) {
                     // video disabled, non-functioning, or frame not ready
                     continue;
                 }

@@ -270,7 +270,7 @@ static void *autopilot_thread(void *arg)
         pthread_mutex_unlock(&globals.imu->lock);
 
         // capture altitude
-        fd_alt = gpio_event_read(globals.usrf) / 147;
+        fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / 147;
 
         // capture flight control's mode and vcm axes
         pthread_mutex_lock(&globals.vcm_lock);
@@ -386,7 +386,7 @@ static void *takeoff_thread(void *arg)
     printf("done ramping up -- switching to pid autopilot thread\n");
 
 #if 0
-    while (fc_get_alive() && ((input = (gpio_event_read(globals.usrf) / 147)) != setpoint)) {
+    while (fc_get_alive() && ((input = (gpio_event_read(globals.usrf, ACCESS_SYNC) / 147)) != setpoint)) {
         fprintf(stderr, "gpio pw = %d\n", input);
 
         // dead reckoning variables
@@ -460,7 +460,7 @@ static void *landing_thread(void *arg)
     pthread_mutex_unlock(&globals.vcm_lock);
 
     // monitor altitude
-    while ((alt = gpio_event_read(globals.usrf) / 147) > 6) {
+    while ((alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / 147) > 6) {
         if (prev_alt == 0)
             prev_alt = alt;
         dx_dt = alt - prev_alt;

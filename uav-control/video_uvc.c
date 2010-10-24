@@ -220,7 +220,7 @@ void video_shutdown(void)
 }
 
 // -----------------------------------------------------------------------------
-int video_lock(video_data_t *data, lock_type_t type)
+int video_lock(video_data_t *data, access_mode_t mode)
 {
     pthread_mutex_lock(&global.db);
 
@@ -230,9 +230,9 @@ int video_lock(video_data_t *data, lock_type_t type)
         return 0;
     }
     
-    switch (type)
+    switch (mode)
     {
-    case LOCK_ASYNC:
+    case ACCESS_ASYNC:
         // asynchronous lock -- if not fresh, free mutex and exit immediately
         if (!global.is_fresh) {
             pthread_mutex_unlock(&global.db);
@@ -240,7 +240,7 @@ int video_lock(video_data_t *data, lock_type_t type)
         }
         global.is_fresh = 0;
         break;
-    case LOCK_SYNC:
+    case ACCESS_SYNC:
         // synchronous lock -- sleep until signalled by next fresh frame
         pthread_cond_wait(&global.db_update, &global.db);
         break;

@@ -229,22 +229,22 @@ void gpio_event_detach(gpio_event_t *event)
 }
 
 // -----------------------------------------------------------------------------
-int gpio_event_sync_read(gpio_event_t *event)
+int gpio_event_read(gpio_event_t *event, access_mode_t mode)
 {
     int pulse = 0;
     pthread_mutex_lock(&event->lock);
-    pthread_cond_wait(&event->cond, &event->lock);
-    pulse = event->pulsewidth;
-    pthread_mutex_unlock(&event->lock);
-    return pulse;
-}
 
-// -----------------------------------------------------------------------------
-int gpio_event_read(gpio_event_t *event)
-{
-    int pulse = 0;
-    pthread_mutex_lock(&event->lock);
-    pulse = event->pulsewidth;
+    switch (mode) {
+    case ACCESS_ASYNC:
+        // access in an asynchronous (non-blocking) fashion
+        pulse = event->pulsewidth;
+        break;
+    case ACCESS_SYNC:
+        // access in a synchronous (blocking) fashion
+        pthread_cond_wait(&event->cond, &event->lock);
+        pulse = event->pulsewidth;
+    }
+
     pthread_mutex_unlock(&event->lock);
     return pulse;
 }

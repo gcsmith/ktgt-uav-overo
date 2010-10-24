@@ -10,6 +10,7 @@
 #define _UAV_VIDEO_UVC__H_
 
 #include "v4l2uvc.h"
+#include "utility.h"
 
 typedef struct video_mode
 {
@@ -25,11 +26,6 @@ typedef struct video_data
     video_mode_t mode;      // current video mode
 } video_data_t;
 
-typedef enum lock_type {
-    LOCK_ASYNC,
-    LOCK_SYNC
-} lock_type_t;
-
 // initialize the video subsystem, given the specified resolution and framerate
 int video_init(const char *dev, video_mode_t *mode);
 
@@ -37,12 +33,10 @@ int video_init(const char *dev, video_mode_t *mode);
 void video_shutdown(void);
 
 // lock the current frame, and return pointer to its buffer and dimensions
-int video_lock(video_data_t *data, lock_type_t lock_flag);
+int video_lock(video_data_t *data, access_mode_t mode);
 
 // release our lock on the current frame's resources
 void video_unlock();
-
-void video_condition_wait();
 
 // override the current video mode (resolution, framerate, etc)
 int video_set_mode(video_mode_t *mode);

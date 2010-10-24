@@ -49,7 +49,7 @@ void *color_detect_thread(void *arg)
             continue;
         }
         
-        if (!video_lock(&vid_data, LOCK_SYNC)) {
+        if (!video_lock(&vid_data, ACCESS_SYNC)) {
             // video disabled, non-functioning, or frame not ready
             //printf("FAILURE TO LOCK\n"); fflush(stdout);
             continue;

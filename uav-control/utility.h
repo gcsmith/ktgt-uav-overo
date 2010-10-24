@@ -51,6 +51,12 @@ typedef struct cpu_info
     int sint;
     int percentage;
 } cpu_info_t;
+
+typedef enum access_mode {
+    ACCESS_ASYNC,   // asynchronous access (non-blocking)
+    ACCESS_SYNC,    // synchronous access (blocking)
+} access_mode_t;
+
 // turn the calling process into a daemon process
 void daemonize(void);
 
