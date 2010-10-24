@@ -760,7 +760,7 @@ void fc_set_trims(int axes, int value)
         pwm_channel_t *alt = &globals.channels[PWM_ALT];
         alt->trim = value;
         pwm_set_compare(alt->handle, alt->cmp + alt->trim);
-        syslog(LOG_INFO, "set ALT trim to %d\n", value);
+        syslog(LOG_INFO, "setting ALT trim to %d\n", value);
     }
     if (axes & VCM_AXIS_YAW) {
         pwm_channel_t *yaw = &globals.channels[PWM_YAW];

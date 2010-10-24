@@ -569,6 +569,7 @@ int main(int argc, char *argv[])
     int flag_no_fc = 0;
     int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 10;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
+    int arg_trim_yaw = 0, arg_trim_pitch = 0, arg_trim_roll = 0, arg_trim_alt = 0;
     char port_str[DEV_LEN];
     char stty_dev[DEV_LEN] = "/dev/ttyS0";
     char v4l_dev[DEV_LEN] = "/dev/video0";
@@ -586,6 +587,10 @@ int main(int argc, char *argv[])
         { "width",      required_argument, NULL, 'x' },
         { "height",     required_argument, NULL, 'y' },
         { "framerate",  required_argument, NULL, 'f' },
+        { "trim-yaw",   required_argument, NULL, 'b' },
+        { "trim-pitch", required_argument, NULL, 'e' },
+        { "trim-roll",  required_argument, NULL, 'i' },
+        { "trim-alt",   required_argument, NULL, 'a' },
         { "daemonize",  no_argument,       NULL, 'D' },
         { "verbose",    no_argument,       NULL, 'V' },
         { "help",       no_argument,       NULL, 'h' },
@@ -601,6 +606,18 @@ int main(int argc, char *argv[])
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
+        case 'b':
+            arg_trim_yaw    = atoi(optarg);
+            break;
+        case 'e':
+            arg_trim_pitch  = atoi(optarg);
+            break;
+        case 'i':
+            arg_trim_roll   = atoi(optarg);
+            break;
+        case 'a':
+            arg_trim_alt    = atoi(optarg);
+            break;  
         case 'c':
             capture_path = strdup(optarg);
             break;
@@ -789,6 +806,12 @@ int main(int argc, char *argv[])
             uav_shutdown(EXIT_FAILURE);
         }
     }
+    
+    // initialize flight control trim
+    fc_set_trims(VCM_AXIS_YAW,   arg_trim_yaw);
+    fc_set_trims(VCM_AXIS_ROLL,  arg_trim_roll);
+    fc_set_trims(VCM_AXIS_PITCH, arg_trim_pitch);
+    fc_set_trims(VCM_AXIS_ALT,   arg_trim_alt);
 
     // server entry point
     run_server(&g_imu, port_str);
