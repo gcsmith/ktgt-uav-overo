@@ -54,6 +54,9 @@ void daemonize(void);
 // compute the delta between two timespecs
 int timespec_diff(const timespec_t *t0, const timespec_t *t1, timespec_t *td);
 
+// compute the delta between two timespecs, return as a scalar (microseconds)
+long timespec_delta(struct timespec *t0, struct timespec *t1);
+
 // initialize analog-to-digital channels for reading
 int adc_open_channels(void);
 

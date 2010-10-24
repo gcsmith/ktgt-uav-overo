@@ -28,7 +28,6 @@ typedef struct {
     int detected;   // 0 if color not detected, 1 if detected
 } track_coords_t;
 
-int trackingRate;
 int colordetect_init(client_info_t *client);
 void colordetect_shutdown(void);
 void colordetect_set_track_color(track_color_t *color);
@@ -70,9 +69,8 @@ void COLORimageRGBtoHSLfixed( uint8_t *rgb_in, int width, int height);
 void rgb_to_hsl(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
 void rgb_to_hsl_fp32(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
 
-void setTrackingRate(int fps);
-int getTrackingRate();
-long compute_delta(struct timespec *t0, struct timespec *t1);
+void color_detect_set_tracking_rate(unsigned int fps);
+int color_detect_get_tracking_rate();
 
 #endif // _UAV_COLORDETECT__H_
 

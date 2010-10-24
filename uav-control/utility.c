@@ -101,6 +101,14 @@ int timespec_diff(const timespec_t *t0, const timespec_t *t1, timespec_t *td)
 }
 
 // -----------------------------------------------------------------------------
+// Return the difference from (t1 - t0) in microseconds.
+long timespec_delta(struct timespec *t0, struct timespec *t1)
+{
+    return (t1->tv_nsec / 1000) - (t0->tv_nsec / 1000) +
+           (t1->tv_sec - t0->tv_sec) * 1000000;
+}
+
+// -----------------------------------------------------------------------------
 uint32_t read_wlan_rssi(int sock)
 {
     static int rssi = 0;
