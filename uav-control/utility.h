@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <pthread.h>
 
 // return the smallest of the two specified values
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))

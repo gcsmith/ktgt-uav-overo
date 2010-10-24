@@ -1,4 +1,5 @@
 #include "pid.h"
+#include "utility.h"
 
 /*****************************************************************************
  * u(t) = Kp *e(t) + Ki * integral(e(t), 0, t) + Kd, * d[e(t)]/dt
@@ -25,5 +26,7 @@ void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *
     *u = (float)((controller->Kp * *curr_error) + 
             (controller->Ki * controller->total_error) + 
             (controller->Kd * curr_diff_error));
+
+    *u = CLAMP(*u, -1.0f, 1.0f);
 }
 
