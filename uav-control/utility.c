@@ -37,6 +37,7 @@ int adc_fd;
 #define CPU_HISTORY_LENGTH 10
 static cpu_info_t cpu_history[CPU_HISTORY_LENGTH];
 static int cpu_index = 0;
+static int cpu_moving_avg = 0;
 
 // -----------------------------------------------------------------------------
 // Daemonize the process by forking from init and chdir-ing to /.
@@ -283,22 +284,27 @@ int get_cpu_utilization()
     double idledif = idle   - cpu_history[cpu_index].idle;
     double hintdif = hint   - cpu_history[cpu_index].hint;
     double sintdif = sint   - cpu_history[cpu_index].sint;
-
+    
 
     percentage = ((userdif + sysdif + hintdif + sintdif) / 
             (userdif + sysdif + nicedif + idledif + hintdif + sintdif)) * 100;
+
+    cpu_moving_avg -= cpu_history[cpu_index].percentage;
 
     cpu_history[cpu_index].user      = user;
     cpu_history[cpu_index].system    = system;
     cpu_history[cpu_index].idle      = idle;
     cpu_history[cpu_index].nice      = nice;    
     cpu_history[cpu_index].hint      = hint; 
-    cpu_history[cpu_index].sint      = sint; 
+    cpu_history[cpu_index].sint      = sint;
+    cpu_history[cpu_index].percentage= percentage;  
 
-
+    cpu_moving_avg += cpu_history[cpu_index].percentage;
+    
+    
     if (++cpu_index >= CPU_HISTORY_LENGTH)
         cpu_index = 0;
-
-    return (int) percentage;
+    
+    return (int) cpu_moving_avg / CPU_HISTORY_LENGTH;
 }
 
