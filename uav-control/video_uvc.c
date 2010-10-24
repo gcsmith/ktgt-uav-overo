@@ -9,7 +9,7 @@ typedef struct video_globals
     int enabled;                // indicate initialization status of video
     int size;                   // size of current frame in bytes
     int width, height, fps;     // resolution and framerate
-    unsigned char *buf;         // pointer to current frame buffer
+    uint8_t *buf;               // pointer to current frame buffer
     pthread_mutex_t db;         // lock frame buffer
     pthread_cond_t  db_update;  // signal frame updates
     struct vdIn *vd;
@@ -222,11 +222,13 @@ void video_shutdown(void)
 // -----------------------------------------------------------------------------
 int video_lock(video_data_t *data, lock_type_t type)
 {
+    pthread_mutex_lock(&global.db);
+
     if (!global.enabled) {
+        pthread_mutex_unlock(&global.db);
         syslog(LOG_ERR, "attempting to call video_async_lock prior to init\n");
         return 0;
     }
-    pthread_mutex_lock(&global.db);
     
     switch (type)
     {
