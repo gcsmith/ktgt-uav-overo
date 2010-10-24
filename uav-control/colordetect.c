@@ -108,7 +108,7 @@ void *color_detect_thread(void *arg)
             
             frameCount++;
         }
-        else if (frameCount == data->trackingRate - 1){
+        else if (frameCount == data->trackingRatio - 1){
             frameCount = 0;
             video_unlock();
         }
@@ -565,7 +565,7 @@ void find_color_rgb_dist(const uint8_t *rgb_in, int threshold,
 void color_detect_set_tracking_rate(unsigned int fps)
 {
     pthread_mutex_lock(&g_globals.lock);
-    g_globals.trackingRate = abs(fps);
+    g_globals.trackingRate = fps;
     if (fps > 0)
         g_globals.trackingRatio = (video_get_fps() / (int)fps);
     pthread_mutex_unlock(&g_globals.lock);
