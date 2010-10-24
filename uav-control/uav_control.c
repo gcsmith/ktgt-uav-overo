@@ -43,7 +43,7 @@ client_info_t g_client;
 static pthread_t g_aux_thread;
 static ctl_sigs_t client_sigs = { 0 };
 static int g_muxsel = -1;
-static cpu_info_t cpu_history;
+//static cpu_info_t cpu_history;
 
 // -----------------------------------------------------------------------------
 static void *aux_trigger_thread(void *arg)
@@ -323,7 +323,8 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_VTI_ALT] = gpio_event_read(&g_gpio_alt) / 147;
                 cmd_buffer[PKT_VTI_AUX] = gpio_event_read(&g_gpio_aux);
 
-                cmd_buffer[PKT_VTI_CPU] = get_cpu_utilization(&cpu_history);
+
+                cmd_buffer[PKT_VTI_CPU] = get_cpu_utilization();
                 
                 send_packet(&g_client, cmd_buffer, PKT_VTI_LENGTH);
                 break;

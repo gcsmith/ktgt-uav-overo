@@ -34,6 +34,10 @@ int adc_fd;
 #define VBATT_MAX       2.0f
 #define VBATT_RANGE     (VBATT_MAX - VBATT_MIN)
 
+#define CPU_HISTORY_LENGTH 10
+static cpu_info_t cpu_history[CPU_HISTORY_LENGTH];
+static int cpu_index = 0;
+
 // -----------------------------------------------------------------------------
 // Daemonize the process by forking from init and chdir-ing to /.
 void daemonize(void)
@@ -253,8 +257,16 @@ void close_client(client_info_t *client)
     pthread_mutex_unlock(&client->lock);
 }
 //-----------------------------------------------------------------------------
-int get_cpu_utilization(cpu_info_t *past)
-{
+int get_cpu_utilization()
+{        
+    if(cpu_index == CPU_HISTORY_LENGTH)
+    {
+        cpu_index = 0;
+    } else {
+        cpu_index++;
+    }
+     
+    
     FILE *fp;
     char c[10];
     int user,system,nice,idle;
@@ -272,19 +284,19 @@ int get_cpu_utilization(cpu_info_t *past)
     fclose(fp);
     
    
-    double userdif = user - past->user;
-    double sysdif  = system - past->system;
-    double nicedif = nice - past->nice;
-    double idledif = idle - past->idle;
+    double userdif = user   - cpu_history[cpu_index].user;
+    double sysdif  = system - cpu_history[cpu_index].system;
+    double nicedif = nice   - cpu_history[cpu_index].nice;
+    double idledif = idle   - cpu_history[cpu_index].idle;
     
     
     percentage = ( (userdif + sysdif) / (userdif + sysdif + nicedif + idledif) ) * 100;
 
-    past->user      = user;
-    past->system    = system;
-    past->idle      = idle;
-    past->nice      = nice;    
-    past->percentage= (int) percentage;
-    return past->percentage;
+    cpu_history[cpu_index].user      = user;
+    cpu_history[cpu_index].system    = system;
+    cpu_history[cpu_index].idle      = idle;
+    cpu_history[cpu_index].nice      = nice;    
+    
+    return (int) percentage;
     
 }
