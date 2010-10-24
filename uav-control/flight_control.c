@@ -22,6 +22,9 @@
 #define YAW_DUTY_HI 0.0948f
 #define YAW_DUTY_IDLE 0.07f
 
+#define DBG_DISABLE_PID
+// #define DBG_USE_RELATIVE
+
 typedef struct fc_globals {
     pthread_t replay_thrd;
     pthread_t takeoff_thrd;
@@ -152,7 +155,7 @@ static void assign_duty(pwm_channel_t *pwm, float duty)
 }
 
 // -----------------------------------------------------------------------------
-static void assign_value(pwm_channel_t *pwm, float val)
+static void assign_value_rel(pwm_channel_t *pwm, float val)
 {
     int cmp, max, min;
     unsigned int range, hrange;
@@ -184,11 +187,26 @@ static void assign_value(pwm_channel_t *pwm, float val)
         cmp = min + hrange + (int)(hrange * val);
     }
 
-    if (cmp == 0)
-    {
-        fprintf(stderr, "something bad happened\n");
-        return;
-    }
+    // adjust the trim, but keep within the absolute limits of this pwm channel
+    pwm->cmp = CLAMP(cmp, pwm->rng_min, pwm->rng_max);
+    pwm_set_compare(pwm->handle, pwm->cmp + pwm->trim);
+}
+
+// -----------------------------------------------------------------------------
+static void assign_value_abs(pwm_channel_t *pwm, float val)
+{
+    int cmp, max, min;
+    unsigned int range, hrange;
+
+    range = pwm->rng_max - pwm->rng_min;
+    min = pwm->rng_min + (int)(range * pwm->duty_lo);
+    max = pwm->rng_min + (int)(range * pwm->duty_hi);
+    hrange = (max - min) >> 1;
+
+    // thro_last_cmp should be set to the current PWM cmp here to avoid
+    // checking cmp == 0 at the end of this function.
+
+    cmp = min + hrange + (int)(hrange * val);
 
     // adjust the trim, but keep within the absolute limits of this pwm channel
     pwm->cmp = CLAMP(cmp, pwm->rng_min, pwm->rng_max);
@@ -196,19 +214,36 @@ static void assign_value(pwm_channel_t *pwm, float val)
 }
 
 // -----------------------------------------------------------------------------
-static int flight_control(const ctl_sigs_t *sigs, int chnl_flags)
+static int fc_control_rel(const ctl_sigs_t *sigs, int chnl_flags)
 {
     if (!fc_get_alive())
         return 0;
 
     if (chnl_flags & VCM_AXIS_ALT)
-        assign_value(&globals.channels[PWM_ALT], sigs->alt);
+        assign_value_rel(&globals.channels[PWM_ALT], sigs->alt);
     if (chnl_flags & VCM_AXIS_PITCH)
-        assign_value(&globals.channels[PWM_PITCH], sigs->pitch);
+        assign_value_rel(&globals.channels[PWM_PITCH], sigs->pitch);
     if (chnl_flags & VCM_AXIS_ROLL)
-        assign_value(&globals.channels[PWM_ROLL], sigs->roll);
+        assign_value_rel(&globals.channels[PWM_ROLL], sigs->roll);
     if (chnl_flags & VCM_AXIS_YAW)
-        assign_value(&globals.channels[PWM_YAW], sigs->yaw);
+        assign_value_rel(&globals.channels[PWM_YAW], sigs->yaw);
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+static int fc_control_abs(const ctl_sigs_t *sigs, int chnl_flags)
+{
+    if (!fc_get_alive())
+        return 0;
+
+    if (chnl_flags & VCM_AXIS_ALT)
+        assign_value_abs(&globals.channels[PWM_ALT], sigs->alt);
+    if (chnl_flags & VCM_AXIS_PITCH)
+        assign_value_abs(&globals.channels[PWM_PITCH], sigs->pitch);
+    if (chnl_flags & VCM_AXIS_ROLL)
+        assign_value_abs(&globals.channels[PWM_ROLL], sigs->roll);
+    if (chnl_flags & VCM_AXIS_YAW)
+        assign_value_abs(&globals.channels[PWM_YAW], sigs->yaw);
     return 1;
 }
 
@@ -282,10 +317,10 @@ static void *autopilot_thread(void *arg)
         switch (vcm_type) {
         case VCM_TYPE_KILL:
             fprintf(stderr, "vcm_type = kill\n");
-            // assign_value(&globals.channels[PWM_ALT], 0);
-            // assign_value(&globals.channels[PWM_PITCH], 0);
-            // assign_value(&globals.channels[PWM_ROLL], 0);
-            // assign_value(&globals.channels[PWM_YAW], 0);
+            // assign_value_abs(&globals.channels[PWM_ALT], 0);
+            // assign_value_abs(&globals.channels[PWM_PITCH], 0);
+            // assign_value_abs(&globals.channels[PWM_ROLL], 0);
+            // assign_value_abs(&globals.channels[PWM_YAW], 0);
             break;
         case VCM_TYPE_AUTO:
             fprintf(stderr, "vcm_type = auto\n");
@@ -302,7 +337,7 @@ static void *autopilot_thread(void *arg)
         if (!(axes & VCM_AXIS_PITCH)) {
             pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
             fc_sigs.pitch = pid_result;
-            flight_control(&fc_sigs, VCM_AXIS_PITCH);
+            fc_control_abs(&fc_sigs, VCM_AXIS_PITCH);
         }
 #endif
 
@@ -311,7 +346,7 @@ static void *autopilot_thread(void *arg)
             pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
             fc_sigs.alt = pid_result;
             fprintf(stderr, "pid set alt to %f\n", fc_sigs.alt);
-            flight_control(&fc_sigs, VCM_AXIS_ALT);
+            fc_control_abs(&fc_sigs, VCM_AXIS_ALT);
         //}
     }
 
@@ -334,7 +369,7 @@ static void *replay_thread(void *arg)
         for (i = 0; i < bucket->count; i++) {
             record = &bucket->records[i];
             clock_nanosleep(CLOCK_REALTIME, 0, &record->delta, 0);
-            flight_control(&record->signals, VCM_AXIS_ALL);
+            fc_control_rel(&record->signals, VCM_AXIS_ALL);
         }
 
         bucket = bucket->next;
@@ -378,62 +413,26 @@ static void *takeoff_thread(void *arg)
     memset(&control, 0, sizeof(control));
     setpoint = 42; // 42 inches ~= 1 meter
 
+#ifdef DBG_USE_RELATIVE
     for (i = 0; i < 575; i++) {
         control.alt = 0.04;
-        flight_control(&control, VCM_AXIS_ALT);
+        fc_control_abs(&control, VCM_AXIS_ALT);
         usleep(10000);
     }
-    printf("done ramping up -- switching to pid autopilot thread\n");
-
-#if 0
-    while (fc_get_alive() && ((input = (gpio_event_read(globals.usrf, ACCESS_SYNC) / 147)) != setpoint)) {
-        fprintf(stderr, "gpio pw = %d\n", input);
-
-        // dead reckoning variables
-        error = setpoint - input;
-        fprintf(stderr, "error = %d", error);
-        if (last_input == 0)
-            last_input = input;
-        dx_dt = input - last_input; // rate of climb [inches per second]
-        last_input = input;
-        // if the helicopter is 20 inches from the setpoint, switch to PID control
-        if ((error <= (setpoint - 20)) && (error >= (setpoint + 20)))
-        {
-            // turn the altitude VCM bit off to indicate autonomous control
-            pthread_mutex_lock(&globals.vcm_lock);
-            globals.vcm_axes &= ~(VCM_AXIS_ALT);
-            pthread_mutex_unlock(&globals.vcm_lock);
-        }
-        if (error > 0) {
-            // need to climb
-            if (dx_dt < 1) {
-                fprintf(stderr, "need to climb\n");
-                control.alt = 0.20;
-                flight_control(&control, VCM_AXIS_ALT);
-            }
-
-            // need to slow the rate of climb
-            else if (dx_dt > 3) {
-                fprintf(stderr, "need to slow down\n");
-                control.alt = last_control * 0.5f;
-                flight_control(&control, VCM_AXIS_ALT);
-            }
-        }
-        else {
-            control.alt = -0.1f;
-            flight_control(&control, VCM_AXIS_ALT);
-        }
-
-        last_control = control.alt;
-
-        // sleep to allow the helicopter to lift
-        usleep(50000);
+#else
+    for (i = 0; i < 100; i++) {
+        control.alt = 0.01;
+        fc_control_abs(&control, VCM_AXIS_ALT);
+        usleep(10000);
     }
 #endif
+    printf("done ramping up -- switching to pid autopilot thread\n");
 
+#ifndef DBG_DISABLE_PID
     pthread_mutex_lock(&globals.takeoff_cond_lock);
     pthread_cond_broadcast(&globals.takeoff_cond);
     pthread_mutex_unlock(&globals.takeoff_cond_lock);
+#endif
 
     fprintf(stderr, "takeoff thread exiting\n");
     pthread_exit(NULL);
@@ -468,11 +467,11 @@ static void *landing_thread(void *arg)
 
         if (dx_dt == 0) {
             landing_sigs.alt = -0.1f;
-            flight_control(&landing_sigs, VCM_AXIS_ALT);
+            fc_control_abs(&landing_sigs, VCM_AXIS_ALT);
         }
         else if (dx_dt <= -3) {
             landing_sigs.alt = 0.05f;
-            flight_control(&landing_sigs, VCM_AXIS_ALT);
+            fc_control_abs(&landing_sigs, VCM_AXIS_ALT);
         }
 
         usleep(50000);
@@ -480,7 +479,7 @@ static void *landing_thread(void *arg)
     
     landing_sigs.alt = -0.05;
     for (i = 0; i < 5; i++) {
-        flight_control(&landing_sigs, VCM_AXIS_ALT);
+        fc_control_abs(&landing_sigs, VCM_AXIS_ALT);
         usleep(100000);
     }
 
@@ -738,7 +737,7 @@ void fc_set_ctl(ctl_sigs_t *sigs)
     // if the incoming signal is a throttle event from the client, then we
     // target just the altitude control signal so we don't disturb the other
     // control signals
-    flight_control(sigs, axes);
+    fc_control_rel(sigs, axes);
     pthread_mutex_unlock(&globals.vcm_lock);
 
     if (globals.capture_path) {
