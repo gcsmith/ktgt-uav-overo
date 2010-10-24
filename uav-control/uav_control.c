@@ -35,15 +35,14 @@
 #define FC_TRGT_SIG_ALL  0
 #define FC_TRGT_SIG_THRO 1
 
-imu_data_t g_imu;
-gpio_event_t g_gpio_alt; // ultrasonic PWM
-gpio_event_t g_gpio_aux; // auxiliary PWM
-client_info_t g_client;
+static imu_data_t g_imu;
+static gpio_event_t g_gpio_alt; // ultrasonic PWM
+static gpio_event_t g_gpio_aux; // auxiliary PWM
+static client_info_t g_client;
 
 static pthread_t g_aux_thread;
 static ctl_sigs_t client_sigs = { 0 };
 static int g_muxsel = -1;
-//static cpu_info_t cpu_history;
 
 // -----------------------------------------------------------------------------
 static void *aux_trigger_thread(void *arg)
@@ -203,7 +202,7 @@ void run_server(imu_data_t *imu, const char *port)
     struct sockaddr_in *sa;
     struct addrinfo info, *r;
     socklen_t addr_sz = sizeof(addr);
-    int hsock, rc, samples;
+    int hsock, rc, samples, track_fps;
     uint32_t cmd_buffer[PKT_BUFF_LEN];
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
@@ -211,12 +210,6 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
-    int fps;
-
-    union {
-        float f;
-        uint32_t i;
-    } temp;
 
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;
@@ -311,9 +304,9 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_LENGTH]  = PKT_VTI_LENGTH;
 
                 pthread_mutex_lock(&imu->lock);
-                temp.f = imu->angles[0]; cmd_buffer[PKT_VTI_YAW]   = temp.i;
-                temp.f = imu->angles[1]; cmd_buffer[PKT_VTI_PITCH] = temp.i;
-                temp.f = imu->angles[2]; cmd_buffer[PKT_VTI_ROLL]  = temp.i;
+                memcpy(&cmd_buffer[PKT_VTI_YAW],   &imu->angles[0], 4);
+                memcpy(&cmd_buffer[PKT_VTI_PITCH], &imu->angles[1], 4);
+                memcpy(&cmd_buffer[PKT_VTI_ROLL],  &imu->angles[2], 4);
                 pthread_mutex_unlock(&imu->lock);
 
                 cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
@@ -407,23 +400,14 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_FLIGHT_CTL:
                 // collect signals
-                temp.i = cmd_buffer[PKT_MCM_AXIS_ALT];
-                client_sigs.alt = temp.f;
+                memcpy(&client_sigs.alt,   &cmd_buffer[PKT_MCM_AXIS_ALT],   4);
+                memcpy(&client_sigs.pitch, &cmd_buffer[PKT_MCM_AXIS_PITCH], 4);
+                memcpy(&client_sigs.roll,  &cmd_buffer[PKT_MCM_AXIS_ROLL],  4);
+                memcpy(&client_sigs.yaw,   &cmd_buffer[PKT_MCM_AXIS_YAW],   4);
 
-                temp.i = cmd_buffer[PKT_MCM_AXIS_PITCH];
-                client_sigs.pitch = temp.f;
-
-                temp.i = cmd_buffer[PKT_MCM_AXIS_ROLL];
-                client_sigs.roll = temp.f;
-
-                temp.i = cmd_buffer[PKT_MCM_AXIS_YAW];
-                client_sigs.yaw = temp.f;
-
-#if 0
-                syslog(LOG_DEBUG, "Received controls: %f, %f, %f, %f\n",
-                        client_sigs.alt, client_sigs.pitch,
-                        client_sigs.roll, client_sigs.yaw);
-#endif
+                //syslog(LOG_DEBUG, "Received controls: %f, %f, %f, %f\n",
+                //        client_sigs.alt, client_sigs.pitch,
+                //        client_sigs.roll, client_sigs.yaw);
                 
                 fc_set_ctl(&client_sigs);
                 break;
@@ -439,13 +423,10 @@ void run_server(imu_data_t *imu, const char *port)
                 tc.st = cmd_buffer[PKT_CAM_TC_TH1];
                 tc.lt = cmd_buffer[PKT_CAM_TC_TH2];
                 tc.filter = cmd_buffer[PKT_CAM_TC_FILTER];
-                fps = cmd_buffer[PKT_CAM_TC_FPS];
-                printf("GOT FPS: %d\n",fps);
+                track_fps = cmd_buffer[PKT_CAM_TC_FPS];
+                // printf("setting tracking fps: %d\n",track_fps);
                 color_detect_set_track_color(&tc);
-                if(fps >= 0){
-                    color_detect_set_tracking_rate(fps);
-                }
-                // TODO: ack?
+                color_detect_set_tracking_rate(track_fps);
                 break;
             case CLIENT_REQ_CAM_DCI:
                 // actual packet sending handled in callback routines
@@ -538,25 +519,29 @@ void print_usage()
 {
     printf("usage: uav_control [options]\n\n"
            "Program options:\n"
-           "  -c [ --capture ] path   : capture and store control inputs\n"
-           "  -r [ --replay ] path    : set autonomous replay from path\n"
-           "  -s [ --stty_dev ] arg   : specify serial device for IMU\n"
-           "  -v [ --v4l_dev ] arg    : specify video device for webcam\n"
-           "  -p [ --port ] arg       : specify port for network socket\n"
-           "  -m [ --mux ] arg        : specify gpio for mux select line\n"
-           "  -u [ --ultrasonic ] arg : specify gpio for ultrasonic pwm\n"
-           "  -o [ --override ] arg   : specify gpio for override pwm\n"
-           "  -x [ --width ] arg      : specify resolution width for webcam\n"
-           "  -y [ --height ] arg     : specify resolution height for webcam\n"
-           "  -f [ --framerate ] arg  : specify capture framerate for webcam\n"
-           "  -D [ --daemonize ]      : run as a background process\n"
-           "  -V [ --verbose ]        : enable verbose logging\n"
-           "  -h [ --help ]           : display this usage message\n"
-           "  --no-adc                : do not capture data from adc\n"
-           "  --no-fc                 : do not enable autonomous flight\n"
-           "  --no-gpio               : do not perform any gpio processing\n"
-           "  --no-track              : do not perform color tracking\n"
-           "  --no-video              : do not capture video from webcam\n");
+           "  -c, --capture=PATH        capture and store control inputs\n"
+           "  -r, --replay=PATH         set autonomous replay from path\n"
+           "  -s, --stty_dev=DEV        specify serial device for IMU\n"
+           "  -v, --v4l_dev=DEV         specify video device for webcam\n"
+           "  -p, --port=NUM            specify port for network socket\n"
+           "  -m, --mux=NUM             specify gpio for mux select line\n"
+           "  -u, --ultrasonic=NUM      specify gpio for ultrasonic pwm\n"
+           "  -o, --override=NUM        specify gpio for override pwm\n"
+           "  -x, --width=NUM           specify resolution width for webcam\n"
+           "  -y, --height=NUM          specify resolution height for webcam\n"
+           "  -f, --framerate=NUM       specify capture framerate for webcam\n"
+           "      --trim-yaw=NUM        specify trim value for yaw axis\n"
+           "      --trim-pitch=NUM      specify trim value for pitch axis\n"
+           "      --trim-roll=NUM       specify trim value for roll axis\n"
+           "      --trim-alt=NUM        specify trim value for altitude\n"
+           "  -D, --daemonize ]         run as a background process\n"
+           "  -V, --verbose ]           enable verbose logging\n"
+           "  -h, --help ]              display this usage message\n"
+           "      --no-adc              do not capture data from adc\n"
+           "      --no-fc               do not enable autonomous flight\n"
+           "      --no-gpio             do not perform any gpio processing\n"
+           "      --no-track            do not perform color tracking\n"
+           "      --no-video            do not capture video from webcam\n");
 }
 
 // -----------------------------------------------------------------------------
@@ -567,9 +552,9 @@ int main(int argc, char *argv[])
     int flag_verbose = 0, flag_daemonize = 0;
     int flag_no_adc = 0, flag_no_video = 0, flag_no_gpio = 0, flag_no_track = 0;
     int flag_no_fc = 0;
-    int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 10;
+    int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
-    int arg_trim_yaw = 0, arg_trim_pitch = 0, arg_trim_roll = 0, arg_trim_alt = 0;
+    int arg_yaw = 0, arg_pitch = 0, arg_roll = 0, arg_alt = 0;
     char port_str[DEV_LEN];
     char stty_dev[DEV_LEN] = "/dev/ttyS0";
     char v4l_dev[DEV_LEN] = "/dev/video0";
@@ -587,10 +572,10 @@ int main(int argc, char *argv[])
         { "width",      required_argument, NULL, 'x' },
         { "height",     required_argument, NULL, 'y' },
         { "framerate",  required_argument, NULL, 'f' },
-        { "trim-yaw",   required_argument, NULL, 'b' },
-        { "trim-pitch", required_argument, NULL, 'e' },
-        { "trim-roll",  required_argument, NULL, 'i' },
-        { "trim-alt",   required_argument, NULL, 'a' },
+        { "trim-yaw",   required_argument, NULL, 'Y' },
+        { "trim-pitch", required_argument, NULL, 'P' },
+        { "trim-roll",  required_argument, NULL, 'R' },
+        { "trim-alt",   required_argument, NULL, 'A' },
         { "daemonize",  no_argument,       NULL, 'D' },
         { "verbose",    no_argument,       NULL, 'V' },
         { "help",       no_argument,       NULL, 'h' },
@@ -602,21 +587,21 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "c:r:s:v:p:m:u:o:x:y:f:DVh?";
+    static const char *str = "c:r:s:v:p:m:u:o:x:y:f:Y:P:R:A:DVh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
-        case 'b':
-            arg_trim_yaw    = atoi(optarg);
+        case 'Y':
+            arg_yaw = atoi(optarg);
             break;
-        case 'e':
-            arg_trim_pitch  = atoi(optarg);
+        case 'P':
+            arg_pitch = atoi(optarg);
             break;
-        case 'i':
-            arg_trim_roll   = atoi(optarg);
+        case 'R':
+            arg_roll = atoi(optarg);
             break;
-        case 'a':
-            arg_trim_alt    = atoi(optarg);
+        case 'A':
+            arg_alt = atoi(optarg);
             break;  
         case 'c':
             capture_path = strdup(optarg);
@@ -696,7 +681,7 @@ int main(int argc, char *argv[])
         uav_shutdown(EXIT_FAILURE);
     }
 
-    // open PWM ports for mixed controlling
+    // attempt to initialize the flight control subsystem
     if (!flag_no_fc) {
         syslog(LOG_INFO, "opening flight control\n");
         if (!fc_init(&g_gpio_alt, &g_imu)) {
@@ -704,6 +689,13 @@ int main(int argc, char *argv[])
             uav_shutdown(EXIT_FAILURE);
         }
 
+        // initialize flight control trims (default zero)
+        fc_set_trims(VCM_AXIS_YAW,   arg_yaw);
+        fc_set_trims(VCM_AXIS_PITCH, arg_pitch);
+        fc_set_trims(VCM_AXIS_ROLL,  arg_roll);
+        fc_set_trims(VCM_AXIS_ALT,   arg_alt);
+
+        // check if we're capturing or replaying a trace
         if (capture_path && replay_path) {
             // does not make sense to specify both at once
             syslog(LOG_ERR, "cannot specify both --capture and --replay\n");
@@ -807,12 +799,6 @@ int main(int argc, char *argv[])
         }
     }
     
-    // initialize flight control trim
-    fc_set_trims(VCM_AXIS_YAW,   arg_trim_yaw);
-    fc_set_trims(VCM_AXIS_ROLL,  arg_trim_roll);
-    fc_set_trims(VCM_AXIS_PITCH, arg_trim_pitch);
-    fc_set_trims(VCM_AXIS_ALT,   arg_trim_alt);
-
     // server entry point
     run_server(&g_imu, port_str);
     
