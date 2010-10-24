@@ -23,7 +23,6 @@ typedef struct color_detect_args
     unsigned int   tracking;
     pthread_t      thread;      // handle to color detect thread
     unsigned int   trackingRate;
-    unsigned int   trackingRatio;
     pthread_mutex_t lock;
 } color_detect_args_t;
 
@@ -38,7 +37,7 @@ void *color_detect_thread(void *arg)
     unsigned long buff_sz = 0;
     uint8_t *jpg_buf = NULL, *rgb_buff = NULL;
     uint32_t cmd_buffer[16];
-    int frameCount = 0;
+    int counter = 0;
     
     while (data->running) {
 
@@ -50,15 +49,18 @@ void *color_detect_thread(void *arg)
             continue;
         }
         
-        pthread_mutex_unlock(&data->lock);
-
         if (!video_lock(&vid_data, LOCK_SYNC)) {
             // video disabled, non-functioning, or frame not ready
             //printf("FAILURE TO LOCK\n"); fflush(stdout);
             continue;
         }
 
-        if (frameCount == 0) {
+        counter += data->trackingRate;
+        pthread_mutex_unlock(&data->lock);
+        
+        if(counter >= video_get_fps())
+        {
+            counter -= video_get_fps();
             // copy the jpeg to our buffer now that we're safely locked
             if (buff_sz < vid_data.length) {
                 free(jpg_buf);
@@ -103,15 +105,9 @@ void *color_detect_thread(void *arg)
                 printf("lost target...\n");
             }
             fflush(stdout);
-            
-            frameCount++;
-        }
-        else if (frameCount >= data->trackingRatio) {
-            frameCount = 0;
-            video_unlock();
         }
         else {
-            frameCount++;
+            printf("Skipping frame  counter = %d\n", counter);
             video_unlock();
         }
     }
@@ -563,9 +559,10 @@ void find_color_rgb_dist(const uint8_t *rgb_in, int threshold,
 void color_detect_set_tracking_rate(unsigned int fps)
 {
     pthread_mutex_lock(&g_globals.lock);
-    g_globals.trackingRate = fps;
-    if (fps > 0)
-        g_globals.trackingRatio = (video_get_fps() / (int)fps);
+    if(fps > video_get_fps())
+        g_globals.trackingRate = video_get_fps();
+    else
+        g_globals.trackingRate = fps;
     pthread_mutex_unlock(&g_globals.lock);
 }
 
