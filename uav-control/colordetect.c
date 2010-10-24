@@ -121,7 +121,7 @@ void *color_detect_thread(void *arg)
                 if (frameCount != 0 && initial == 1) {
                     if ((frameCount*data->trackingTime - time) > (time / frameCount)) {
                         skip = (frameCount*data->trackingTime - time) / (time / frameCount);
-                        printf("Skipping the next %d frames.  %d  %d  %ld\n",
+                        fprintf(stderr, "Skipping the next %d frames.  %d  %d  %ld\n",
                                  skip, frameCount, data->trackingTime, time);
                         time = 0;
                         frameCount = 0;
