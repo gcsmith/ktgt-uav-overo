@@ -58,9 +58,7 @@ void *color_detect_thread(void *arg)
             continue;
         }
 
-        if(frameCount == 0)
-        {
-            fprintf(stderr, "processing frame %d\n", frameCount);
+        if (frameCount == 0) {
             // copy the jpeg to our buffer now that we're safely locked
             if (buff_sz < vid_data.length) {
                 free(jpg_buf);
@@ -108,7 +106,7 @@ void *color_detect_thread(void *arg)
             
             frameCount++;
         }
-        else if (frameCount == data->trackingRatio - 1){
+        else if (frameCount >= data->trackingRatio) {
             frameCount = 0;
             video_unlock();
         }
