@@ -259,44 +259,34 @@ void close_client(client_info_t *client)
 //-----------------------------------------------------------------------------
 int get_cpu_utilization()
 {        
-    if(cpu_index == CPU_HISTORY_LENGTH)
-    {
-        cpu_index = 0;
-    } else {
-        cpu_index++;
-    }
-     
-    
     FILE *fp;
     char c[10];
     int user,system,nice,idle,iow,hint,sint;
     double percentage;
-    
-    if((fp=fopen("/proc/stat","r")) == NULL ){
-        printf("Failed to open /proc/stat\n");
-      return -1;
+
+    if ((fp=fopen("/proc/stat","r")) == NULL ) {
+        return -1;
     }
 
-    if(!fscanf(fp, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", c,
-                     &user,&nice,&system,&idle,&iow,&hint,&sint))
-    {
+    if (!fscanf(fp, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", c,
+                &user,&nice,&system,&idle,&iow,&hint,&sint)) {
         //Faled to read
-        printf("Failed to scan /proc/stat\n");
+        fclose(fp);
         return -1;
     }
     fclose(fp);
-    
-   
+
+
     double userdif = user   - cpu_history[cpu_index].user;
     double sysdif  = system - cpu_history[cpu_index].system;
     double nicedif = nice   - cpu_history[cpu_index].nice;
     double idledif = idle   - cpu_history[cpu_index].idle;
     double hintdif = hint   - cpu_history[cpu_index].hint;
     double sintdif = sint   - cpu_history[cpu_index].sint;
-    
-    
-    percentage = ( (userdif + sysdif + hintdif + sintdif) / 
-        (userdif + sysdif + nicedif + idledif + hintdif + sintdif) ) * 100;
+
+
+    percentage = ((userdif + sysdif + hintdif + sintdif) / 
+            (userdif + sysdif + nicedif + idledif + hintdif + sintdif)) * 100;
 
     cpu_history[cpu_index].user      = user;
     cpu_history[cpu_index].system    = system;
@@ -304,7 +294,11 @@ int get_cpu_utilization()
     cpu_history[cpu_index].nice      = nice;    
     cpu_history[cpu_index].hint      = hint; 
     cpu_history[cpu_index].sint      = sint; 
-    
+
+
+    if (++cpu_index >= CPU_HISTORY_LENGTH)
+        cpu_index = 0;
+
     return (int) percentage;
-    
 }
+
