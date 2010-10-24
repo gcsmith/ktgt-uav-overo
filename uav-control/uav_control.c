@@ -529,7 +529,8 @@ void print_usage()
            "  -o, --override=NUM        specify gpio for override pwm\n"
            "  -x, --width=NUM           specify resolution width for webcam\n"
            "  -y, --height=NUM          specify resolution height for webcam\n"
-           "  -f, --framerate=NUM       specify capture framerate for webcam\n"
+           "  -f, --fps=NUM             specify capture framerate for webcam\n"
+           "  -F, --track-fps=NUM       specify color tracking framerate\n"
            "      --trim-yaw=NUM        specify trim value for yaw axis\n"
            "      --trim-pitch=NUM      specify trim value for pitch axis\n"
            "      --trim-roll=NUM       specify trim value for roll axis\n"
@@ -552,7 +553,8 @@ int main(int argc, char *argv[])
     int flag_verbose = 0, flag_daemonize = 0;
     int flag_no_adc = 0, flag_no_video = 0, flag_no_gpio = 0, flag_no_track = 0;
     int flag_no_fc = 0;
-    int arg_port = 8090, arg_width = 320, arg_height = 240, arg_fps = 15;
+    int arg_port = 8090, arg_width = 320, arg_height = 240;
+    int arg_fps = 15, arg_track_fps = 5;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
     int arg_yaw = 0, arg_pitch = 0, arg_roll = 0, arg_alt = 0;
     char port_str[DEV_LEN];
@@ -571,7 +573,8 @@ int main(int argc, char *argv[])
         { "override",   required_argument, NULL, 'o' },
         { "width",      required_argument, NULL, 'x' },
         { "height",     required_argument, NULL, 'y' },
-        { "framerate",  required_argument, NULL, 'f' },
+        { "fps",        required_argument, NULL, 'f' },
+        { "track-fps",  required_argument, NULL, 'F' },
         { "trim-yaw",   required_argument, NULL, 'Y' },
         { "trim-pitch", required_argument, NULL, 'P' },
         { "trim-roll",  required_argument, NULL, 'R' },
@@ -587,7 +590,7 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 }
     };
 
-    static const char *str = "c:r:s:v:p:m:u:o:x:y:f:Y:P:R:A:DVh?";
+    static const char *str = "c:r:s:v:p:m:u:o:x:y:f:F:Y:P:R:A:DVh?";
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
@@ -635,6 +638,9 @@ int main(int argc, char *argv[])
             break;
         case 'f':
             arg_fps = atoi(optarg);
+            break;
+        case 'F':
+            arg_track_fps = atoi(optarg);
             break;
         case 'D':
             flag_daemonize = 1;
@@ -783,7 +789,9 @@ int main(int argc, char *argv[])
                 syslog(LOG_ERR, "failed to initialize tracking subsystem\n");
                 uav_shutdown(EXIT_FAILURE);
             }
-            color_detect_set_tracking_rate(4);
+
+            // set the initial tracking framerate (not tied to webcam framerate)
+            color_detect_set_tracking_rate(arg_track_fps);
         }
         else {
             syslog(LOG_INFO, "color tracking not possible without video");
