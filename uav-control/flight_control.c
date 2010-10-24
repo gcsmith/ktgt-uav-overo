@@ -235,8 +235,8 @@ static void *autopilot_thread(void *arg)
     // altitude controller
     pid_alt_ctlr.setpoint    = 42.0f;
     pid_alt_ctlr.Kp          = 0.001f;
-    pid_alt_ctlr.Ki          = 0.001f;
-    pid_alt_ctlr.Kd          = 0.001f;
+    pid_alt_ctlr.Ki          = 0.000f;
+    pid_alt_ctlr.Kd          = 0.002f;
     pid_alt_ctlr.prev_error  = 0.0f;
     pid_alt_ctlr.last_error  = 0.0f;
     pid_alt_ctlr.total_error = 0.0f;
@@ -307,12 +307,12 @@ static void *autopilot_thread(void *arg)
 #endif
 
         // check altitude bit is 0 for autonomous control
-        if (!(axes & VCM_AXIS_ALT)) {
+        //if (!(axes & VCM_AXIS_ALT)) {
             pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
             fc_sigs.alt = pid_result;
             fprintf(stderr, "pid set alt to %f\n", fc_sigs.alt);
             flight_control(&fc_sigs, VCM_AXIS_ALT);
-        }
+        //}
     }
 
     fprintf(stderr, "autopilot thread exiting\n");
@@ -378,8 +378,8 @@ static void *takeoff_thread(void *arg)
     memset(&control, 0, sizeof(control));
     setpoint = 42; // 42 inches ~= 1 meter
 
-    for (i = 0; i < 600; i++) {
-        control.alt = 0.02;
+    for (i = 0; i < 575; i++) {
+        control.alt = 0.04;
         flight_control(&control, VCM_AXIS_ALT);
         usleep(10000);
     }
@@ -528,19 +528,19 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     pthread_mutex_init(&globals.vcm_lock, NULL);
     pthread_cond_init(&globals.takeoff_cond, NULL);
 
-    if (!init_channel(PWM_ALT, 4581, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
+    if (!init_channel(PWM_ALT, 4582, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
     syslog(LOG_INFO, "flight control: altitude channel opened\n");
 
-    if (!init_channel(PWM_PITCH, 4581, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
+    if (!init_channel(PWM_PITCH, 4582, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
         return 0; 
     syslog(LOG_INFO, "flight control: pitch channel opened\n");
 
-    if (!init_channel(PWM_ROLL, 4581, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
+    if (!init_channel(PWM_ROLL, 4582, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: roll channel opened\n");
 
-    if (!init_channel(PWM_YAW, 4581, YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE))
+    if (!init_channel(PWM_YAW, 4582, YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
@@ -734,12 +734,12 @@ void fc_set_ctl(ctl_sigs_t *sigs)
 
     pthread_mutex_lock(&globals.vcm_lock);
     axes = globals.vcm_axes;
-    pthread_mutex_unlock(&globals.vcm_lock);
 
     // if the incoming signal is a throttle event from the client, then we
     // target just the altitude control signal so we don't disturb the other
     // control signals
     flight_control(sigs, axes);
+    pthread_mutex_unlock(&globals.vcm_lock);
 
     if (globals.capture_path) {
         // if --capture is enabled, store this control signal

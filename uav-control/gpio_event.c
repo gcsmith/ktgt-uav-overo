@@ -97,8 +97,9 @@ static void *gpio_thread(void *pargs)
                 mean >>= GPIO_SHIFT;
                 sq = (mean - delta) * (mean - delta);
 
-                if (sq > 10000000)
-                    fprintf(stderr, "skipping - %8d %8d %8d\n", delta, mean, sq);
+                if (sq > 10000000) {
+                    //fprintf(stderr, "skipping - %8d %8d %8d\n", delta, mean, sq);
+                }
                 else
                     pevent->pulsewidth = delta;
 

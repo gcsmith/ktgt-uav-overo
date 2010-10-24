@@ -418,9 +418,11 @@ void run_server(imu_data_t *imu, const char *port)
                 temp.i = cmd_buffer[PKT_MCM_AXIS_YAW];
                 client_sigs.yaw = temp.f;
 
+#if 0
                 syslog(LOG_DEBUG, "Received controls: %f, %f, %f, %f\n",
                         client_sigs.alt, client_sigs.pitch,
                         client_sigs.roll, client_sigs.yaw);
+#endif
                 
                 fc_set_ctl(&client_sigs);
                 break;
