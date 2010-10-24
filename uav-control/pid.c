@@ -1,7 +1,8 @@
 #include "pid.h"
 #include "utility.h"
 
-#define PID_RESET 30
+#define PID_MAX_ERROR 12
+#define PID_RESET     30
 
 /*****************************************************************************
  * u(t) = Kp *e(t) + Ki * integral(e(t), 0, t) + Kd, * d[e(t)]/dt
@@ -26,6 +27,8 @@ void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *
 
     curr_diff_error = controller->last_error - controller->prev_error;
 
+    controller->total_error = CLAMP(controller->total_error, -(PID_MAX_ERROR), PID_MAX_ERROR);
+
     if ((*curr_error > PID_RESET) || (*curr_error < -(PID_RESET)))
         reset = 0.0f;
 
@@ -48,6 +51,8 @@ void p_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u)
 
     curr_diff_error = controller->last_error - controller->prev_error;
 
+    controller->total_error = CLAMP(controller->total_error, -(PID_MAX_ERROR), PID_MAX_ERROR);
+
     *u = (float)((controller->Kp * *curr_error)); 
 
     *u = CLAMP(*u, -1.0f, 1.0f);
@@ -64,6 +69,8 @@ void pd_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u
     controller->last_error = *curr_error;
 
     curr_diff_error = controller->last_error - controller->prev_error;
+
+    controller->total_error = CLAMP(controller->total_error, -(PID_MAX_ERROR), PID_MAX_ERROR);
 
     *u = (float)((controller->Kp * *curr_error) + (controller->Kd * curr_diff_error));
 
@@ -82,6 +89,8 @@ void pi_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u
     controller->last_error = *curr_error;
 
     curr_diff_error = controller->last_error - controller->prev_error;
+
+    controller->total_error = CLAMP(controller->total_error, -(PID_MAX_ERROR), PID_MAX_ERROR);
 
     if (*curr_error > PID_RESET)
         reset = 0.0f;
