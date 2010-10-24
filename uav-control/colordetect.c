@@ -23,7 +23,7 @@ typedef struct color_detect_args
     unsigned int   tracking;
     pthread_t      thread;      // handle to color detect thread
     unsigned int   trackingRate;
-    unsigned int   trackingTime;
+    unsigned int   trackingRatio;
     pthread_mutex_t lock;
 } color_detect_args_t;
 
@@ -38,11 +38,7 @@ void *color_detect_thread(void *arg)
     unsigned long buff_sz = 0;
     uint8_t *jpg_buf = NULL, *rgb_buff = NULL;
     uint32_t cmd_buffer[16];
-    struct timespec t0, t1;
-    long time = 0;
     int frameCount = 0;
-    int skip = 0;
-    int initial = 0;
     
     while (data->running) {
 
@@ -53,7 +49,7 @@ void *color_detect_thread(void *arg)
             sleep(1);
             continue;
         }
-
+        
         pthread_mutex_unlock(&data->lock);
 
         if (!video_lock(&vid_data, LOCK_SYNC)) {
@@ -62,7 +58,8 @@ void *color_detect_thread(void *arg)
             continue;
         }
 
-        if (skip == 0) {
+        if(frameCount == 0)
+        {
             fprintf(stderr, "processing frame %d\n", frameCount);
             // copy the jpeg to our buffer now that we're safely locked
             if (buff_sz < vid_data.length) {
@@ -109,38 +106,16 @@ void *color_detect_thread(void *arg)
             }
             fflush(stdout);
             
-            if(initial == 0){
-                clock_gettime(CLOCK_REALTIME, &t0);
-                initial = 1;
-            }
-            else {
-                clock_gettime(CLOCK_REALTIME, &t1);
-                time += timespec_delta(&t0, &t1);
-                t0 = t1;
-                
-                if (frameCount != 0 && initial == 1) {
-                    if ((frameCount*data->trackingTime - time) > (time / frameCount)) {
-                        skip = (frameCount*data->trackingTime - time) / (time / frameCount);
-                        fprintf(stderr, "Skipping the next %d frames.  %d  %d  %ld\n",
-                                 skip, frameCount, data->trackingTime, time);
-                        time = 0;
-                        frameCount = 0;
-                    }
-                    else if (frameCount == 50) {
-                        time = 0;
-                        frameCount = 0;
-                    }
-                }
-            }
-            
             frameCount++;
-      
+        }
+        else if (frameCount == data->trackingRate - 1){
+            frameCount = 0;
+            video_unlock();
         }
         else {
-            fprintf(stderr, "skipping frame %d\n", frameCount);
-            skip--;
+            frameCount++;
             video_unlock();
-        } 
+        }
     }
 
     pthread_exit(NULL);
@@ -592,7 +567,7 @@ void color_detect_set_tracking_rate(unsigned int fps)
     pthread_mutex_lock(&g_globals.lock);
     g_globals.trackingRate = abs(fps);
     if (fps > 0)
-        g_globals.trackingTime = (1000000 / g_globals.trackingRate);
+        g_globals.trackingRatio = (video_get_fps() / (int)fps);
     pthread_mutex_unlock(&g_globals.lock);
 }
 

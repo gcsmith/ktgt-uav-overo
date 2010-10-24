@@ -296,3 +296,9 @@ int video_get_devctrl(int id)
     return v4l2GetControl(global.vd, id);
 }
 
+// -----------------------------------------------------------------------------
+int video_get_fps()
+{
+    return global.fps;
+}
+

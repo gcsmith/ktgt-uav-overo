@@ -56,5 +56,7 @@ int video_set_devctrl(int id, int value);
 // get the specified device control value
 int video_get_devctrl(int id);
 
+int video_get_fps();
+
 #endif // _UAV_VIDEO_UVC__H_
 
