@@ -42,9 +42,8 @@ void *color_detect_thread(void *arg)
     long time = 0;
     int frameCount = 0;
     int skip = 0;
+    int initial = 0;
     
-    clock_gettime(CLOCK_REALTIME, &t0);
-
     while (data->running) {
 
         pthread_mutex_lock(&data->lock);
@@ -55,22 +54,6 @@ void *color_detect_thread(void *arg)
             continue;
         }
 
-        clock_gettime(CLOCK_REALTIME, &t1);
-        time += timespec_delta(&t0, &t1);
-        t0 = t1;
-        if (frameCount != 0) {
-            if ((frameCount*data->trackingTime - time) > (time / frameCount)) {
-                skip = (frameCount*data->trackingTime - time) / (time / frameCount);
-                printf("Skipping the next %d frames.  %d  %d  %ld\n",
-                         skip, frameCount, data->trackingTime, time);
-                time = 0;
-                frameCount = 0;
-            }
-            else if (frameCount == 50) {
-                time = 0;
-                frameCount = 0;
-            }
-        }
         pthread_mutex_unlock(&data->lock);
 
         if (!video_lock(&vid_data, LOCK_SYNC)) {
@@ -125,7 +108,33 @@ void *color_detect_thread(void *arg)
                 printf("lost target...\n");
             }
             fflush(stdout);
+            
+            if(initial == 0){
+                clock_gettime(CLOCK_REALTIME, &t0);
+                initial = 1;
+            }
+            else {
+                clock_gettime(CLOCK_REALTIME, &t1);
+                time += timespec_delta(&t0, &t1);
+                t0 = t1;
+                
+                if (frameCount != 0 && initial == 1) {
+                    if ((frameCount*data->trackingTime - time) > (time / frameCount)) {
+                        skip = (frameCount*data->trackingTime - time) / (time / frameCount);
+                        printf("Skipping the next %d frames.  %d  %d  %ld\n",
+                                 skip, frameCount, data->trackingTime, time);
+                        time = 0;
+                        frameCount = 0;
+                    }
+                    else if (frameCount == 50) {
+                        time = 0;
+                        frameCount = 0;
+                    }
+                }
+            }
+            
             frameCount++;
+      
         }
         else {
             fprintf(stderr, "skipping frame %d\n", frameCount);
