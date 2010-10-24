@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <syslog.h>
 #include "flight_control.h"
@@ -169,16 +170,11 @@ static void assign_value(pwm_channel_t *pwm, float val)
         if (globals.thro_first == 0) {
             globals.thro_first = 1;
             cmp = min + (int)(hrange * val);
-            //fprintf(stderr, "flight_control alt: val = %f, lv = %f\n",
-            //      val, globals.thro_last_value);
             globals.thro_last_cmp = cmp;
         }
         else {
             cmp = globals.thro_last_cmp + (int)(hrange * val * 0.05f);
             cmp = CLAMP(cmp, min, max);
-
-            //fprintf(stderr, "flight_control alt: val = %f, lv = %f, cmp = %d, lc = %d\n", 
-            //       val, globals.thro_last_value, cmp, globals.thro_last_cmp);
             globals.thro_last_cmp = cmp;
          }
 
@@ -200,10 +196,10 @@ static void assign_value(pwm_channel_t *pwm, float val)
 }
 
 // -----------------------------------------------------------------------------
-static void flight_control(ctl_sigs_t *sigs, int chnl_flags)
+static int flight_control(const ctl_sigs_t *sigs, int chnl_flags)
 {
     if (!fc_get_alive())
-        return;
+        return 0;
 
     if (chnl_flags & VCM_AXIS_ALT)
         assign_value(&globals.channels[PWM_ALT], sigs->alt);
@@ -213,13 +209,13 @@ static void flight_control(ctl_sigs_t *sigs, int chnl_flags)
         assign_value(&globals.channels[PWM_ROLL], sigs->roll);
     if (chnl_flags & VCM_AXIS_YAW)
         assign_value(&globals.channels[PWM_YAW], sigs->yaw);
+    return 1;
 }
 
 // -----------------------------------------------------------------------------
 static void *autopilot_thread(void *arg)
 {
-    int kill_reached = 0;
-    int axes, type;
+    int vcm_axes, vcm_type;
     float pid_result, curr_error;
 
     // flight dynamics
@@ -263,7 +259,9 @@ static void *autopilot_thread(void *arg)
     fprintf(stderr, "autopilot starting...\n");
 
     //pthread_mutex_lock(&globals.alive_lock);
-    while (fc_get_alive() && !kill_reached) {
+    while (fc_get_alive()) {
+        int axes = VCM_AXIS_ALL;
+
         // capture pitch
         pthread_mutex_lock(&globals.imu->lock);
         //fd_yaw   = globals.imu->angles[IMU_DATA_YAW];
@@ -276,35 +274,44 @@ static void *autopilot_thread(void *arg)
 
         // capture flight control's mode and vcm axes
         pthread_mutex_lock(&globals.vcm_lock);
-        axes = globals.vcm_axes;
-        type = globals.vcm_type;
+        vcm_axes = globals.vcm_axes;
+        vcm_type = globals.vcm_type;
         pthread_mutex_unlock(&globals.vcm_lock);
 
         // reset all signals if flight control is of type kill
-        if (type == VCM_TYPE_KILL) {
-#if 0
-            assign_value(&globals.channels[PWM_ALT], 0);
-            assign_value(&globals.channels[PWM_PITCH], 0);
-            assign_value(&globals.channels[PWM_ROLL], 0);
-            assign_value(&globals.channels[PWM_YAW], 0);
-
-            kill_reached = 1;
-#endif
+        switch (vcm_type) {
+        case VCM_TYPE_KILL:
+            fprintf(stderr, "vcm_type = kill\n");
+            // assign_value(&globals.channels[PWM_ALT], 0);
+            // assign_value(&globals.channels[PWM_PITCH], 0);
+            // assign_value(&globals.channels[PWM_ROLL], 0);
+            // assign_value(&globals.channels[PWM_YAW], 0);
+            break;
+        case VCM_TYPE_AUTO:
+            fprintf(stderr, "vcm_type = auto\n");
+            axes = 0;
+            break;
+        case VCM_TYPE_MIXED:
+            fprintf(stderr, "vcm_type = mixed\n");
+            axes = vcm_axes;
+            break;
         }
-        else if ((type == VCM_TYPE_AUTO) || (type == VCM_TYPE_MIXED)) {
-            // check pitch bit is 0 for autonomous control
-            if (!(axes & VCM_AXIS_PITCH)) {
-                pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
-                fc_sigs.pitch = pid_result;
-                flight_control(&fc_sigs, VCM_AXIS_PITCH);
-            }
             
-            // check altitude bit is 0 for autonomous control
-            if (!(axes & VCM_AXIS_ALT)) {
-                pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
-                fc_sigs.alt = pid_result;
-                //flight_control(&fc_sigs, VCM_AXIS_ALT);
-            }
+#if 0
+        // check pitch bit is 0 for autonomous control
+        if (!(axes & VCM_AXIS_PITCH)) {
+            pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
+            fc_sigs.pitch = pid_result;
+            flight_control(&fc_sigs, VCM_AXIS_PITCH);
+        }
+#endif
+
+        // check altitude bit is 0 for autonomous control
+        if (!(axes & VCM_AXIS_ALT)) {
+            pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
+            fc_sigs.alt = pid_result;
+            fprintf(stderr, "pid set alt to %f\n", fc_sigs.alt);
+            flight_control(&fc_sigs, VCM_AXIS_ALT);
         }
     }
 
@@ -340,8 +347,11 @@ static void *replay_thread(void *arg)
 // -----------------------------------------------------------------------------
 static void *takeoff_thread(void *arg)
 {
+#if 0
     int error, input, last_input = 0, dx_dt, setpoint;
     float last_control = 0.0f;
+#endif
+    int i, setpoint;
     ctl_sigs_t control;
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
@@ -360,14 +370,22 @@ static void *takeoff_thread(void *arg)
 
     pthread_mutex_lock(&globals.vcm_lock);
     globals.vcm_axes |= VCM_AXIS_ALT;
-    //vcm_axes = vcm_axes & ~(VCM_AXIS_PITCH);
-    pthread_mutex_unlock(&globals.vcm_lock);
 
     // spawn autopilot thread
     pthread_create(&globals.auto_thrd, NULL, autopilot_thread, NULL);
+    pthread_mutex_unlock(&globals.vcm_lock);
 
+    memset(&control, 0, sizeof(control));
     setpoint = 42; // 42 inches ~= 1 meter
 
+    for (i = 0; i < 600; i++) {
+        control.alt = 0.02;
+        flight_control(&control, VCM_AXIS_ALT);
+        usleep(10000);
+    }
+    printf("done ramping up -- switching to pid autopilot thread\n");
+
+#if 0
     while (fc_get_alive() && ((input = (gpio_event_read(globals.usrf) / 147)) != setpoint)) {
         fprintf(stderr, "gpio pw = %d\n", input);
 
@@ -378,7 +396,6 @@ static void *takeoff_thread(void *arg)
             last_input = input;
         dx_dt = input - last_input; // rate of climb [inches per second]
         last_input = input;
-#if 0
         // if the helicopter is 20 inches from the setpoint, switch to PID control
         if ((error <= (setpoint - 20)) && (error >= (setpoint + 20)))
         {
@@ -387,7 +404,6 @@ static void *takeoff_thread(void *arg)
             globals.vcm_axes &= ~(VCM_AXIS_ALT);
             pthread_mutex_unlock(&globals.vcm_lock);
         }
-#endif
         if (error > 0) {
             // need to climb
             if (dx_dt < 1) {
@@ -413,6 +429,7 @@ static void *takeoff_thread(void *arg)
         // sleep to allow the helicopter to lift
         usleep(50000);
     }
+#endif
 
     pthread_mutex_lock(&globals.takeoff_cond_lock);
     pthread_cond_broadcast(&globals.takeoff_cond);

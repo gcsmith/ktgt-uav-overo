@@ -78,7 +78,8 @@ static void *gpio_thread(void *pargs)
         case GPIO_EventFallingEdge:
             // stop timing on the falling edge of the pwm
             if (pevent->last_usec != 0) {
-                int delta = event.time.tv_usec - pevent->last_usec;
+                int mean = 0, i = 0, sq = 0, delta = event.time.tv_usec - pevent->last_usec;
+
                 if (pevent->last_sec < event.time.tv_sec) {
                     // account for microsecond overflow
                     delta += 1000000;
@@ -87,8 +88,21 @@ static void *gpio_thread(void *pargs)
                 // update data for this event
                 pthread_mutex_lock(&pevent->lock);
 
-                pevent->pulsewidth = delta;
-                pevent->sample++;
+                pevent->samples[pevent->samp_idx] = delta;
+                if (++pevent->samp_idx >= GPIO_MEM)
+                    pevent->samp_idx = 0;
+
+                for (i = 0; i < GPIO_MEM; i++)
+                    mean += pevent->samples[i];
+                mean >>= GPIO_SHIFT;
+                sq = (mean - delta) * (mean - delta);
+
+                if (sq > 10000000)
+                    fprintf(stderr, "skipping - %8d %8d %8d\n", delta, mean, sq);
+                else
+                    pevent->pulsewidth = delta;
+
+                pevent->num_samples++;
 
                 pthread_cond_broadcast(&pevent->cond);
                 pthread_mutex_unlock(&pevent->lock);
@@ -165,6 +179,9 @@ int gpio_event_attach(gpio_event_t *event, int gpio)
     GPIO_EventMonitor_t monitor;
     int rc;
 
+    // zero out the entire structure... just in case
+    memset(event, 0, sizeof(gpio_event_t));
+
     // initialize monitor for this gpio, detect both rising/falling edges
     monitor.gpio = gpio;
     monitor.onOff = 1;
@@ -173,7 +190,7 @@ int gpio_event_attach(gpio_event_t *event, int gpio)
 
     event->gpio = gpio;
     event->enabled = 1;
-    event->sample = 0;
+    event->num_samples = 0;
     event->last_sec = 0;
     event->last_usec = 0;
     globals.gpio[gpio] = event;

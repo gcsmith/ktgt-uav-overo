@@ -107,7 +107,6 @@ void *color_detect_thread(void *arg)
             fflush(stdout);
         }
         else {
-            printf("Skipping frame  counter = %d\n", counter);
             video_unlock();
         }
     }

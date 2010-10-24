@@ -769,7 +769,7 @@ int main(int argc, char *argv[])
                 syslog(LOG_ERR, "failed to initialize tracking subsystem\n");
                 uav_shutdown(EXIT_FAILURE);
             }
-            color_detect_set_tracking_rate(1);
+            color_detect_set_tracking_rate(4);
         }
         else {
             syslog(LOG_INFO, "color tracking not possible without video");
