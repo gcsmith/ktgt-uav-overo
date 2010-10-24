@@ -234,8 +234,8 @@ static void *autopilot_thread(void *arg)
 
     // altitude controller
     pid_alt_ctlr.setpoint    = 42.0f;
-    pid_alt_ctlr.Kp          = 0.01f;
-    pid_alt_ctlr.Ki          = 0.01f;
+    pid_alt_ctlr.Kp          = 0.001f;
+    pid_alt_ctlr.Ki          = 0.001f;
     pid_alt_ctlr.Kd          = 0.001f;
     pid_alt_ctlr.prev_error  = 0.0f;
     pid_alt_ctlr.last_error  = 0.0f;

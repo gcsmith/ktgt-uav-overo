@@ -35,5 +35,11 @@ struct _pid
 // -----------------------------------------------------------------------------
 void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
 
+void p_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
+
+void pd_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
+
+void pi_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
+
 #endif // _UAV_PID__H_
 
