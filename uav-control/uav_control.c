@@ -442,7 +442,9 @@ void run_server(imu_data_t *imu, const char *port)
                 fps = cmd_buffer[PKT_CAM_TC_FPS];
                 printf("GOT FPS: %d\n",fps);
                 color_detect_set_track_color(&tc);
-                color_detect_set_tracking_rate(fps);
+                if(fps >= 0){
+                    color_detect_set_tracking_rate(fps);
+                }
                 // TODO: ack?
                 break;
             case CLIENT_REQ_CAM_DCI:
