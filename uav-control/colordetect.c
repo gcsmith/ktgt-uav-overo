@@ -3,6 +3,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "uav_protocol.h"
 #include "readwritejpeg.h"
@@ -38,10 +39,13 @@ void *color_detect_thread(void *arg)
     uint8_t *jpg_buf = NULL, *rgb_buff = NULL;
     uint32_t cmd_buffer[16];
     int counter = 0;
+    int frame_counter = 0;
+    struct timespec t0, t1; 
     
     while (data->running) {
 
         pthread_mutex_lock(&data->lock);
+        clock_gettime(CLOCK_REALTIME, &t0);
         if (data->trackingRate <= 0) {
             // release the lock and sleep for a second
             pthread_mutex_unlock(&data->lock);
@@ -105,6 +109,12 @@ void *color_detect_thread(void *arg)
                 printf("lost target...\n");
             }
             fflush(stdout);
+            frame_counter++;
+            if(frame_counter == 25){
+                clock_gettime(CLOCK_REALTIME, &t1);
+                fprintf(stderr, "Tracking FPS = %f\n", (15.0 / (double)timespec_delta(&t0, &t1) / 1000000.0));
+                frame_counter = 0;
+            }
         }
         else {
             video_unlock();
