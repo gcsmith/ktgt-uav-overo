@@ -22,8 +22,8 @@
 #define YAW_DUTY_HI 0.0948f
 #define YAW_DUTY_IDLE 0.07f
 
-#define DBG_DISABLE_PID
-// #define DBG_USE_RELATIVE
+// #define DBG_DISABLE_PID
+#define DBG_USE_RELATIVE
 
 typedef struct fc_globals {
     pthread_t replay_thrd;
@@ -31,8 +31,7 @@ typedef struct fc_globals {
     pthread_t land_thrd;
     pthread_t auto_thrd;
 
-    pthread_cond_t takeoff_cond;
-
+    pthread_cond_t  takeoff_cond;
     pthread_mutex_t alive_lock;
     pthread_mutex_t vcm_lock;
     pthread_mutex_t takeoff_cond_lock;
@@ -45,7 +44,6 @@ typedef struct fc_globals {
     int vcm_type;
     int alive;
 
-    float thro_last_value;
     int thro_last_cmp;
     int thro_first;
 
@@ -173,15 +171,12 @@ static void assign_value_rel(pwm_channel_t *pwm, float val)
         if (globals.thro_first == 0) {
             globals.thro_first = 1;
             cmp = min + (int)(hrange * val);
-            globals.thro_last_cmp = cmp;
         }
         else {
-            cmp = globals.thro_last_cmp + (int)(hrange * val * 0.05f);
-            cmp = CLAMP(cmp, min, max);
-            globals.thro_last_cmp = cmp;
+            cmp = globals.thro_last_cmp + (int)(hrange * val); // * 0.05f);
          }
-
-         globals.thro_last_value = val;
+        cmp = CLAMP(cmp, min, max);
+        globals.thro_last_cmp = cmp;
     }
     else {
         cmp = min + hrange + (int)(hrange * val);
@@ -206,7 +201,10 @@ static void assign_value_abs(pwm_channel_t *pwm, float val)
     // thro_last_cmp should be set to the current PWM cmp here to avoid
     // checking cmp == 0 at the end of this function.
 
-    cmp = min + hrange + (int)(hrange * val);
+    if (globals.channels[PWM_ALT].handle == pwm->handle)
+        cmp = min + (int)(range * val);
+    else
+        cmp = min + hrange + (int)(hrange * val);
 
     // adjust the trim, but keep within the absolute limits of this pwm channel
     pwm->cmp = CLAMP(cmp, pwm->rng_min, pwm->rng_max);
@@ -254,7 +252,8 @@ static void *autopilot_thread(void *arg)
     float pid_result, curr_error;
 
     // flight dynamics
-    float fd_pitch, fd_alt; // , fd_yaw, fd_roll;
+    //float fd_pitch, fd_alt; // , fd_yaw, fd_roll;
+    float fd_alt;
 
     // flight control's signal structure
     ctl_sigs_t fc_sigs;
@@ -269,9 +268,9 @@ static void *autopilot_thread(void *arg)
 
     // altitude controller
     pid_alt_ctlr.setpoint    = 42.0f;
-    pid_alt_ctlr.Kp          = 0.001f;
+    pid_alt_ctlr.Kp          = 0.00025;
     pid_alt_ctlr.Ki          = 0.000f;
-    pid_alt_ctlr.Kd          = 0.002f;
+    pid_alt_ctlr.Kd          = 0.000f;
     pid_alt_ctlr.prev_error  = 0.0f;
     pid_alt_ctlr.last_error  = 0.0f;
     pid_alt_ctlr.total_error = 0.0f;
@@ -297,12 +296,14 @@ static void *autopilot_thread(void *arg)
     while (fc_get_alive()) {
         int axes = VCM_AXIS_ALL;
 
+#if 0
         // capture pitch
         pthread_mutex_lock(&globals.imu->lock);
         //fd_yaw   = globals.imu->angles[IMU_DATA_YAW];
         fd_pitch = globals.imu->angles[IMU_DATA_PITCH];
         //fd_roll  = globals.imu->angles[IMU_DATA_ROLL];
         pthread_mutex_unlock(&globals.imu->lock);
+#endif
 
         // capture altitude
         fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / 147;
@@ -346,36 +347,15 @@ static void *autopilot_thread(void *arg)
             pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
             fc_sigs.alt = pid_result;
             fprintf(stderr, "pid set alt to %f\n", fc_sigs.alt);
+#ifndef DBG_USE_RELATIVE
             fc_control_abs(&fc_sigs, VCM_AXIS_ALT);
+#else
+            fc_control_rel(&fc_sigs, VCM_AXIS_ALT);
+#endif
         //}
     }
 
     fprintf(stderr, "autopilot thread exiting\n");
-    pthread_exit(NULL);
-}
-
-// -----------------------------------------------------------------------------
-static void *replay_thread(void *arg)
-{
-    record_bucket_t *bucket;
-    input_record_t *record;
-    int i;
-
-    fprintf(stderr, "FLIGHT CONTROL: executing replay_thread\n");
-
-    bucket = globals.record_head;
-    while (NULL != bucket) {
-
-        for (i = 0; i < bucket->count; i++) {
-            record = &bucket->records[i];
-            clock_nanosleep(CLOCK_REALTIME, 0, &record->delta, 0);
-            fc_control_rel(&record->signals, VCM_AXIS_ALL);
-        }
-
-        bucket = bucket->next;
-    }
-
-    fprintf(stderr, "completed replay_thread\n");
     pthread_exit(NULL);
 }
 
@@ -415,18 +395,20 @@ static void *takeoff_thread(void *arg)
 
 #ifdef DBG_USE_RELATIVE
     for (i = 0; i < 575; i++) {
-        control.alt = 0.04;
-        fc_control_abs(&control, VCM_AXIS_ALT);
+        control.alt = 0.04 * .05f;
+        fc_control_rel(&control, VCM_AXIS_ALT);
         usleep(10000);
     }
+    printf("done ramping (rel) -- switching to pid autopilot thread\n");
 #else
-    for (i = 0; i < 100; i++) {
-        control.alt = 0.01;
+    control.alt = 0.0f;
+    for (i = 0; i < 575; i++) {
+        control.alt += 0.00005;
         fc_control_abs(&control, VCM_AXIS_ALT);
         usleep(10000);
     }
+    printf("done ramping (abs) -- switching to pid autopilot thread\n");
 #endif
-    printf("done ramping up -- switching to pid autopilot thread\n");
 
 #ifndef DBG_DISABLE_PID
     pthread_mutex_lock(&globals.takeoff_cond_lock);
@@ -435,6 +417,31 @@ static void *takeoff_thread(void *arg)
 #endif
 
     fprintf(stderr, "takeoff thread exiting\n");
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+static void *replay_thread(void *arg)
+{
+    record_bucket_t *bucket;
+    input_record_t *record;
+    int i;
+
+    fprintf(stderr, "FLIGHT CONTROL: executing replay_thread\n");
+
+    bucket = globals.record_head;
+    while (NULL != bucket) {
+
+        for (i = 0; i < bucket->count; i++) {
+            record = &bucket->records[i];
+            clock_nanosleep(CLOCK_REALTIME, 0, &record->delta, 0);
+            fc_control_rel(&record->signals, VCM_AXIS_ALL);
+        }
+
+        bucket = bucket->next;
+    }
+
+    fprintf(stderr, "completed replay_thread\n");
     pthread_exit(NULL);
 }
 
@@ -513,7 +520,6 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     globals.vcm_type = VCM_TYPE_AUTO;
     globals.vcm_axes = VCM_AXIS_ALL;
 
-    globals.thro_last_value = 0.0f;
     globals.thro_last_cmp = 0;
     globals.thro_first = 0;
 
@@ -688,7 +694,6 @@ int fc_land()
 void fc_reset_channels(void)
 {
     pwm_channel_t *ch = &globals.channels[0];
-    globals.thro_last_value = 0.0f;
     globals.thro_last_cmp = 0;
     globals.thro_first = 0;
 
@@ -734,9 +739,9 @@ void fc_set_ctl(ctl_sigs_t *sigs)
     pthread_mutex_lock(&globals.vcm_lock);
     axes = globals.vcm_axes;
 
-    // if the incoming signal is a throttle event from the client, then we
-    // target just the altitude control signal so we don't disturb the other
-    // control signals
+    // scale down the throttle signal, as the default [-1, 1] is too sensitive
+    sigs->alt *= 0.05f;
+
     fc_control_rel(sigs, axes);
     pthread_mutex_unlock(&globals.vcm_lock);
 
