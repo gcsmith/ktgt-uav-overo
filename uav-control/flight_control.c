@@ -203,8 +203,7 @@ static void *autopilot_thread(void *arg)
     float pid_result, curr_error;
 
     // flight dynamics
-    //float fd_pitch, fd_alt; // , fd_yaw, fd_roll;
-    float fd_alt;
+    float fd_alt, fd_yaw, fd_pitch, fd_roll;
 
     // flight control's signal structure
     ctl_sigs_t fc_sigs;
@@ -244,17 +243,15 @@ static void *autopilot_thread(void *arg)
     while (fc_get_alive()) {
         int axes = VCM_AXIS_ALL;
 
-#if 0
-        // capture pitch
+        // capture yaw, pitch and roll
         pthread_mutex_lock(&globals.imu->lock);
-        //fd_yaw   = globals.imu->angles[IMU_DATA_YAW];
+        fd_yaw   = globals.imu->angles[IMU_DATA_YAW];
         fd_pitch = globals.imu->angles[IMU_DATA_PITCH];
-        //fd_roll  = globals.imu->angles[IMU_DATA_ROLL];
+        fd_roll  = globals.imu->angles[IMU_DATA_ROLL];
         pthread_mutex_unlock(&globals.imu->lock);
-#endif
 
         // capture altitude
-        fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / 147;
+        fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
 
         // capture flight control's mode and vcm axes
         pthread_mutex_lock(&globals.vcm_lock);
