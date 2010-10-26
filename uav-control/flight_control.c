@@ -52,7 +52,10 @@ typedef struct fc_globals {
     record_bucket_t *record_head, *record_tail;
     timespec_t last_time;
     
-    pid_ctrl_t pid_alt_ctlr; //autopilot's altitude controller
+    pid_ctrl_t pid_alt;     //autopilot's altitude (throttle) controller
+    pid_ctrl_t pid_yaw;     //autopilot's yaw controller
+    pid_ctrl_t pid_pitch;   //autopilot's pitch controller
+    pid_ctrl_t pid_roll;    //autopilot's roll controller
 } fc_globals_t;
 
 static fc_globals_t globals = { 0 };
@@ -207,36 +210,26 @@ static void *autopilot_thread(void *arg)
 
     // flight control's signal structure
     ctl_sigs_t fc_sigs;
+    memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
     
-    // flight control's PID controllers
-    pid_ctrl_t pid_pitch_ctlr;
-
-    fc_sigs.alt   = 0.0f;
-    fc_sigs.pitch = 0.0f;
-    fc_sigs.roll  = 0.0f;
-    fc_sigs.yaw   = 0.0f;
+    memset(&globals.pid_alt,   0, sizeof(pid_ctrl_t));
+    memset(&globals.pid_yaw,   0, sizeof(pid_ctrl_t));
+    memset(&globals.pid_pitch, 0, sizeof(pid_ctrl_t));
+    memset(&globals.pid_roll,  0, sizeof(pid_ctrl_t));
 
     // altitude controller
-    globals.pid_alt_ctlr.setpoint    = 42.0f;
-    globals.pid_alt_ctlr.prev_error  = 0.0f;
-    globals.pid_alt_ctlr.last_error  = 0.0f;
-    globals.pid_alt_ctlr.total_error = 0.0f;
+    globals.pid_alt.setpoint    = 42.0f;
     
     // pitch controller
-    pid_pitch_ctlr.setpoint    = 5.0f;
-    pid_pitch_ctlr.Kp          = 0.01f;
-    pid_pitch_ctlr.Ki          = 0.01f;
-    pid_pitch_ctlr.Kd          = 0.001f;
-    pid_pitch_ctlr.prev_error  = 0.0f;
-    pid_pitch_ctlr.last_error  = 0.0f;
-    pid_pitch_ctlr.total_error = 0.0f;
+    globals.pid_pitch.setpoint    = 5.0f;
+    globals.pid_pitch.Kp          = 0.01f;
+    globals.pid_pitch.Ki          = 0.01f;
+    globals.pid_pitch.Kd          = 0.001f;
 
     fprintf(stderr, "autopilot waiting...\n");
-    
     pthread_mutex_lock(&globals.takeoff_cond_lock);
     pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_cond_lock);
     pthread_mutex_unlock(&globals.takeoff_cond_lock);
-
     fprintf(stderr, "autopilot starting...\n");
 
     //pthread_mutex_lock(&globals.alive_lock);
@@ -259,14 +252,10 @@ static void *autopilot_thread(void *arg)
         vcm_type = globals.vcm_type;
         pthread_mutex_unlock(&globals.vcm_lock);
 
-        // reset all signals if flight control is of type kill
         switch (vcm_type) {
         case VCM_TYPE_KILL:
             fprintf(stderr, "vcm_type = kill\n");
-            // assign_value(&globals.channels[PWM_ALT], 0);
-            // assign_value(&globals.channels[PWM_PITCH], 0);
-            // assign_value(&globals.channels[PWM_ROLL], 0);
-            // assign_value(&globals.channels[PWM_YAW], 0);
+            // reset all signals if flight control is of type kill
             break;
         case VCM_TYPE_AUTO:
             fprintf(stderr, "vcm_type = auto\n");
@@ -290,7 +279,7 @@ static void *autopilot_thread(void *arg)
         // check altitude bit is 0 for autonomous control
         //if (!(axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
-            pid_compute(&globals.pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
+            pid_compute(&globals.pid_alt, fd_alt, &curr_error, &pid_result);
             pthread_mutex_unlock(&globals.pid_lock);
 #ifndef DBG_USE_RELATIVE
             fc_sigs.alt = .585f + pid_result;
@@ -480,9 +469,9 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     pthread_cond_init(&globals.takeoff_cond, NULL);
     pthread_mutex_init(&globals.pid_lock, NULL);
     
-    globals.pid_alt_ctlr.Kp = 0.0f;
-    globals.pid_alt_ctlr.Ki = 0.0f;
-    globals.pid_alt_ctlr.Kd = 0.0f;
+    globals.pid_alt.Kp = 0.0f;
+    globals.pid_alt.Ki = 0.0f;
+    globals.pid_alt.Kd = 0.0f;
 
     if (!init_channel(PWM_ALT, 4582, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
@@ -763,16 +752,16 @@ int fc_set_pid_param(int param, float value)
     pthread_mutex_lock(&globals.pid_lock);
     switch (param) {
     case PID_PARAM_KP:
-        globals.pid_alt_ctlr.Kp = value;
-        fprintf(stderr, "Proportional value = %f\n", globals.pid_alt_ctlr.Kp);
+        globals.pid_alt.Kp = value;
+        fprintf(stderr, "Proportional value = %f\n", globals.pid_alt.Kp);
         break;
     case PID_PARAM_KI:
-        globals.pid_alt_ctlr.Ki = value;
-        fprintf(stderr, "Integral value = %f\n", globals.pid_alt_ctlr.Ki);
+        globals.pid_alt.Ki = value;
+        fprintf(stderr, "Integral value = %f\n", globals.pid_alt.Ki);
         break;
     case PID_PARAM_KD:
-        globals.pid_alt_ctlr.Kd = value;
-        fprintf(stderr, "Derivative value = %f\n", globals.pid_alt_ctlr.Kd);
+        globals.pid_alt.Kd = value;
+        fprintf(stderr, "Derivative value = %f\n", globals.pid_alt.Kd);
         break;
     default:
         return -1;
