@@ -206,7 +206,6 @@ void run_server(imu_data_t *imu, const char *port)
     struct addrinfo info, *r;
     socklen_t addr_sz = sizeof(addr);
     int hsock, rc, samples, track_fps;
-    float pid_val;
     uint32_t cmd_buffer[PKT_BUFF_LEN];
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
@@ -214,7 +213,7 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
-    float pid_params[PID_PARAM_COUNT] = { 0 };
+    float pid_val, pid_params[PID_PARAM_COUNT] = { 0 };
 
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;

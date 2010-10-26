@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------------
 // File:    pid.h
-// Authors: Kevin Macksamie
+// Authors: Kevin Macksamie, Garrett Smith
 // Created: 09-30-2010
 //
 // Definitions for proportional-integral-derivative controller algorithm.
@@ -9,8 +9,7 @@
 #ifndef _UAV_PID__H_
 #define _UAV_PID__H_
 
-typedef struct _pid pid_ctrl_t;
-struct _pid
+typedef struct pid_ctrl
 {
     float setpoint;     /* Desired value of controller */
     float Kp;           /* Proportion constant */
@@ -19,7 +18,9 @@ struct _pid
     float prev_error;   /* Error from previous sample */
     float last_error;   /* Latest error collected */
     float total_error;  /* Error sum */
-};
+} pid_ctrl_t;
+
+void pid_init(pid_ctrl_t *controller, float sp, float kp, float ki, float kd);
 
 // -----------------------------------------------------------------------------
 // Function: pid_compute

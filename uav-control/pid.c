@@ -1,19 +1,28 @@
+// -----------------------------------------------------------------------------
+// File:    pid.c
+// Authors: Kevin Macksamie, Garrett Smith
+// Created: 09-30-2010
+//
+// Definitions for proportional-integral-derivative controller algorithm.
+// -----------------------------------------------------------------------------
+
 #include "pid.h"
 #include "utility.h"
 
 #define PID_MAX_ERROR 12
 #define PID_RESET     30
 
-/*****************************************************************************
- * u(t) = Kp *e(t) + Ki * integral(e(t), 0, t) + Kd, * d[e(t)]/dt
- * 
- * where:
- * u(t) is the controller output
- * e(t) is the error input into the controller
- * Kp is the proportional parameter
- * Ki is the integral parameter
- * Kd is the derivative parameter
- *****************************************************************************/
+void pid_init(pid_ctrl_t *controller, float sp, float kp, float ki, float kd)
+{
+    controller->setpoint = sp;
+    controller->Kp = kp;
+    controller->Ki = ki;
+    controller->Kd = kd;
+    controller->prev_error = 0;
+    controller->last_error = 0;
+    controller->total_error = 0;
+}
+
 void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u)
 {
     float curr_diff_error = 0.0f;
