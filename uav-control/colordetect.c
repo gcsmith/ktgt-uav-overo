@@ -47,15 +47,18 @@ void *color_detect_thread(void *arg)
     unsigned long buff_sz = 0;
     uint8_t *jpg_buf = NULL, *rgb_buff = NULL;
     uint32_t cmd_buffer[16];
-    int counter = 0, video_fps = 0;
+    int error = 0, tracking_fps = 0, streaming_fps = 0;
     int frame_counter = 0;
     struct timespec t0, t1; 
     
     while (data->running) {
 
         pthread_mutex_lock(&data->lock);
-        clock_gettime(CLOCK_REALTIME, &t0);
-        if (data->trackingRate <= 0) {
+
+        streaming_fps = video_get_fps();
+        tracking_fps = MIN(data->trackingRate, streaming_fps);
+        
+        if (tracking_fps <= 0) {
             // release the lock and sleep for a second, then check for a change
             pthread_mutex_unlock(&data->lock);
             sleep(1);
@@ -67,70 +70,67 @@ void *color_detect_thread(void *arg)
             continue;
         }
 
-        video_fps = video_get_fps();
-        counter += data->trackingRate;
+        error += tracking_fps;
         pthread_mutex_unlock(&data->lock);
 
-        if (counter < video_fps) {
-            // 
+        if (error < streaming_fps) {
+            // don't track frames until error exceeds the streaming rate
             video_unlock();
+            continue;
         }
-        
-        if (counter >= video_fps) {
-            counter -= video_fps;
-            // copy the jpeg to our buffer now that we're safely locked
-            if (buff_sz < vid_data.length) {
-                free(jpg_buf);
-                buff_sz = (vid_data.length);
-                jpg_buf = (uint8_t *)malloc(buff_sz);
-            }
+        error -= streaming_fps;
 
-            memcpy(jpg_buf, vid_data.data, vid_data.length);     
-            video_unlock();
-
-            if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height)) {
-                color_detect_hsl_fp32(rgb_buff, color, box);
-            }
-
-            if (box->detected) {
-
-                cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
-                cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
-                cmd_buffer[PKT_CTS_STATE] = CTS_STATE_DETECTED;
-                cmd_buffer[PKT_CTS_X1]    = (uint32_t)box->x1;
-                cmd_buffer[PKT_CTS_Y1]    = (uint32_t)box->y1;
-                cmd_buffer[PKT_CTS_X2]    = (uint32_t)box->x2;
-                cmd_buffer[PKT_CTS_Y2]    = (uint32_t)box->y2;
-                cmd_buffer[PKT_CTS_XC]    = (uint32_t)box->xc;
-                cmd_buffer[PKT_CTS_YC]    = (uint32_t)box->yc;
-
-                send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
-                data->tracking = 1;
-
-                printf("Bounding box: (%d,%d) (%d,%d)\n",
-                        box->x1, box->y1, box->x2, box->y2);
-            }
-            else if (data->tracking) {
-
-                memset(cmd_buffer, 0, PKT_CTS_LENGTH);
-                cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
-                cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
-                cmd_buffer[PKT_CTS_STATE] = CTS_STATE_SEARCHING;
-                send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
-                data->tracking = 0;
-
-                printf("lost target...\n");
-            }
-            fflush(stdout);
-            frame_counter++;
-            if(frame_counter == 25){
-                clock_gettime(CLOCK_REALTIME, &t1);
-                fprintf(stderr, "Tracking FPS = %f\n", (15.0 / (double)timespec_delta(&t0, &t1) / 1000000.0));
-                frame_counter = 0;
-            }
+        // copy the jpeg to our buffer now that we're safely locked
+        if (buff_sz < vid_data.length) {
+            free(jpg_buf);
+            buff_sz = (vid_data.length);
+            jpg_buf = (uint8_t *)malloc(buff_sz);
         }
-        else {
-            video_unlock();
+
+        memcpy(jpg_buf, vid_data.data, vid_data.length);     
+        video_unlock();
+
+        if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height)) {
+            color_detect_hsl_fp32(rgb_buff, color, box);
+        }
+
+        if (box->detected) {
+
+            cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
+            cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
+            cmd_buffer[PKT_CTS_STATE] = CTS_STATE_DETECTED;
+            cmd_buffer[PKT_CTS_X1]    = (uint32_t)box->x1;
+            cmd_buffer[PKT_CTS_Y1]    = (uint32_t)box->y1;
+            cmd_buffer[PKT_CTS_X2]    = (uint32_t)box->x2;
+            cmd_buffer[PKT_CTS_Y2]    = (uint32_t)box->y2;
+            cmd_buffer[PKT_CTS_XC]    = (uint32_t)box->xc;
+            cmd_buffer[PKT_CTS_YC]    = (uint32_t)box->yc;
+
+            send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
+            data->tracking = 1;
+
+            printf("Bounding box: (%d,%d) (%d,%d)\n",
+                    box->x1, box->y1, box->x2, box->y2);
+        }
+        else if (data->tracking) {
+
+            memset(cmd_buffer, 0, PKT_CTS_LENGTH);
+            cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
+            cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
+            cmd_buffer[PKT_CTS_STATE] = CTS_STATE_SEARCHING;
+            send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
+            data->tracking = 0;
+
+            printf("lost target...\n");
+        }
+        fflush(stdout);
+        frame_counter++;
+
+        if (frame_counter == streaming_fps) {
+            clock_gettime(CLOCK_REALTIME, &t1);
+            fprintf(stderr, "Tracking FPS = %f\n", (streaming_fps / ((double)timespec_delta(&t0, &t1) / 1000000.0)));
+            frame_counter = 0;
+            clock_gettime(CLOCK_REALTIME, &t0);
         }
     }
 
@@ -216,7 +216,7 @@ void color_detect_enable(int enabled)
 void color_detect_set_tracking_rate(unsigned int fps)
 {
     pthread_mutex_lock(&g_globals.lock);
-    if(fps > video_get_fps())
+    if (fps > video_get_fps())
         g_globals.trackingRate = video_get_fps();
     else
         g_globals.trackingRate = fps;
