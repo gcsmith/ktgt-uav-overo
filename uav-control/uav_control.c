@@ -214,6 +214,7 @@ void run_server(imu_data_t *imu, const char *port)
     video_data_t vid_data;
     track_color_t tc;
     union  { int i; float f; } temp;
+    float pid_params[PID_PARAM_COUNT] = { 0 };
 
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;
@@ -528,6 +529,26 @@ void run_server(imu_data_t *imu, const char *port)
                     fc_set_pid_param(PID_PARAM_KD, temp.f);
                     break;
                 }
+                break;
+            case CLIENT_REQ_GPIDS:
+                // respond to client's request for current PID parameters
+                fc_get_pid_params(pid_params);
+                cmd_buffer[PKT_COMMAND]  = SERVER_ACK_GPIDS;
+                cmd_buffer[PKT_LENGTH]   = PKT_GPIDS_LENGTH;
+
+                // pack PID Kp into buffer
+                temp.f = pid_params[PID_PARAM_KP];
+                cmd_buffer[PKT_GPIDS_KP] = temp.i;
+
+                // pack PID Ki into buffer
+                temp.f = pid_params[PID_PARAM_KI];
+                cmd_buffer[PKT_GPIDS_KI] = temp.i;
+
+                // pack PID Kd into buffer
+                temp.f = pid_params[PID_PARAM_KD];
+                cmd_buffer[PKT_GPIDS_KD] = temp.i;
+                
+                send_packet(&g_client, cmd_buffer, PKT_GPIDS_LENGTH);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes

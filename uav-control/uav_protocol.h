@@ -28,6 +28,7 @@
 #define SERVER_ACK_GTS          10
 #define SERVER_ACK_GFS          11
 #define SERVER_UPDATE_COLOR     12   // send updated tracking state information
+#define SERVER_ACK_GPIDS        13   
 
 // Packet commands from client to server
 
@@ -47,6 +48,7 @@
 #define CLIENT_REQ_SFS          13  // request set filter samples
 #define CLIENT_REQ_GFS          14  // request get filter samples
 #define CLIENT_REQ_SPIDS        15  // request set PID settings
+#define CLIENT_REQ_GPIDS        16  // request get PID settings
 
 // General packet offsets
 
@@ -201,6 +203,7 @@
 #define PKT_GFS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 4))
 
 // Set PID settings
+
 #define SPIDS_KP            0
 #define SPIDS_KI            1
 #define SPIDS_KD            2
@@ -208,6 +211,13 @@
 #define PKT_SPIDS_PARAM     PKT_BASE + 0
 #define PKT_SPIDS_VALUE     PKT_BASE + 1
 #define PKT_SPIDS_LENGTH    (sizeof(uint32_t) * (PKT_BASE + 2))
+
+// Get PID settings
+
+#define PKT_GPIDS_KP        PKT_BASE + 0
+#define PKT_GPIDS_KI        PKT_BASE + 1
+#define PKT_GPIDS_KD        PKT_BASE + 2
+#define PKT_GPIDS_LENGTH    (sizeof(uint32_t) * (PKT_BASE + 3))
 
 #endif // _UAV_PROTOCOL__H_
 

@@ -770,3 +770,13 @@ int fc_set_pid_param(int param, float value)
     return 0;
 }
 
+// -----------------------------------------------------------------------------
+void fc_get_pid_params(float params[PID_PARAM_COUNT])
+{
+    pthread_mutex_lock(&globals.pid_lock);
+    params[PID_PARAM_KP] = globals.pid_alt.Kp;
+    params[PID_PARAM_KI] = globals.pid_alt.Ki;
+    params[PID_PARAM_KD] = globals.pid_alt.Kd;
+    pthread_mutex_unlock(&globals.pid_lock);
+}
+

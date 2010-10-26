@@ -38,6 +38,7 @@
 #define PID_PARAM_KP    0
 #define PID_PARAM_KI    1
 #define PID_PARAM_KD    2
+#define PID_PARAM_COUNT 3
 
 typedef struct ctl_sigs
 {
@@ -98,6 +99,9 @@ int fc_get_trim(int axis);
 
 // tune a PID parameter
 int fc_set_pid_param(int param, float value);
+
+// get PID parameters
+void fc_get_pid_params(float params[PID_PARAM_COUNT]);
 
 #endif // FLIGHT_CONTROL__H_
 
