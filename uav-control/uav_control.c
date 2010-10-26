@@ -205,7 +205,8 @@ void run_server(imu_data_t *imu, const char *port)
     struct sockaddr_in *sa;
     struct addrinfo info, *r;
     socklen_t addr_sz = sizeof(addr);
-    int hsock, rc, samples, track_fps, pid_val;
+    int hsock, rc, samples, track_fps;
+    float pid_val;
     uint32_t cmd_buffer[PKT_BUFF_LEN];
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
