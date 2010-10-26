@@ -1,3 +1,12 @@
+// -----------------------------------------------------------------------------
+// File:    colordetect.c
+// Authors: Tyler Thierolf, Timothy Miller, Garrett Smith
+// Created: 10-01-2010
+//
+// Routines for detecting solid colors within RGB or HSL images, as well as
+// algorithms to convert between color spaces.
+// -----------------------------------------------------------------------------
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +47,7 @@ void *color_detect_thread(void *arg)
     unsigned long buff_sz = 0;
     uint8_t *jpg_buf = NULL, *rgb_buff = NULL;
     uint32_t cmd_buffer[16];
-    int counter = 0;
+    int counter = 0, video_fps = 0;
     int frame_counter = 0;
     struct timespec t0, t1; 
     
@@ -47,24 +56,28 @@ void *color_detect_thread(void *arg)
         pthread_mutex_lock(&data->lock);
         clock_gettime(CLOCK_REALTIME, &t0);
         if (data->trackingRate <= 0) {
-            // release the lock and sleep for a second
+            // release the lock and sleep for a second, then check for a change
             pthread_mutex_unlock(&data->lock);
             sleep(1);
             continue;
         }
         
         if (!video_lock(&vid_data, ACCESS_SYNC)) {
-            // video disabled, non-functioning, or frame not ready
-            //printf("FAILURE TO LOCK\n"); fflush(stdout);
+            syslog(LOG_ERR, "colordetect failed to lock frame\n");
             continue;
         }
 
+        video_fps = video_get_fps();
         counter += data->trackingRate;
         pthread_mutex_unlock(&data->lock);
+
+        if (counter < video_fps) {
+            // 
+            video_unlock();
+        }
         
-        if(counter >= video_get_fps())
-        {
-            counter -= video_get_fps();
+        if (counter >= video_fps) {
+            counter -= video_fps;
             // copy the jpeg to our buffer now that we're safely locked
             if (buff_sz < vid_data.length) {
                 free(jpg_buf);
@@ -197,6 +210,27 @@ void color_detect_enable(int enabled)
         syslog(LOG_INFO, "TODO: requested color tracking enable\n");
     else
         syslog(LOG_INFO, "TODO: requested color tracking disable\n");
+}
+
+//------------------------------------------------------------------------------
+void color_detect_set_tracking_rate(unsigned int fps)
+{
+    pthread_mutex_lock(&g_globals.lock);
+    if(fps > video_get_fps())
+        g_globals.trackingRate = video_get_fps();
+    else
+        g_globals.trackingRate = fps;
+    pthread_mutex_unlock(&g_globals.lock);
+}
+
+//------------------------------------------------------------------------------
+int color_detect_get_tracking_rate()
+{
+    int rval;
+    pthread_mutex_lock(&g_globals.lock);
+    rval = g_globals.trackingRate;
+    pthread_mutex_unlock(&g_globals.lock);
+    return rval;
 }
 
 #endif
@@ -568,26 +602,5 @@ void find_color_rgb_dist(const uint8_t *rgb_in, int threshold,
         // color was detected
         box->detected = 1;
     }
-}
-
-//------------------------------------------------------------------------------
-void color_detect_set_tracking_rate(unsigned int fps)
-{
-    pthread_mutex_lock(&g_globals.lock);
-    if(fps > video_get_fps())
-        g_globals.trackingRate = video_get_fps();
-    else
-        g_globals.trackingRate = fps;
-    pthread_mutex_unlock(&g_globals.lock);
-}
-
-//------------------------------------------------------------------------------
-int color_detect_get_tracking_rate()
-{
-    int rval;
-    pthread_mutex_lock(&g_globals.lock);
-    rval = g_globals.trackingRate;
-    pthread_mutex_unlock(&g_globals.lock);
-    return rval;
 }
 

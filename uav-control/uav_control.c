@@ -1,6 +1,9 @@
 // -----------------------------------------------------------------------------
-// UAV control software for Gumstix Overo
-// Garrett Smith 2010
+// File:    uav_control.c
+// Authors: Garrett Smith, Kevin Macksamie, Tyler Thierolf, Timothy Miller
+// Created: 08-23-2010
+//
+// UAV control software for Gumstix Overo & Blade CX-2 RC helicoptor.
 // -----------------------------------------------------------------------------
 
 #include <sys/resource.h>

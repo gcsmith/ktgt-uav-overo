@@ -34,6 +34,8 @@
 // allow us to toggle the precision of all internal floating point algorithms
 typedef float real_t;
 typedef struct timespec timespec_t;
+typedef uint8_t u8;
+typedef uint16_t u16;
 
 typedef struct client_info
 {

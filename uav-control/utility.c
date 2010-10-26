@@ -18,10 +18,6 @@
 
 #include "utility.h"
 #include "uav_protocol.h"
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-
 #include "twl4030-madc.h"
 
 struct twl4030_madc_user_parms parms;
@@ -41,7 +37,6 @@ static int cpu_index = 0;
 static int cpu_moving_avg = 0;
 
 // -----------------------------------------------------------------------------
-// Daemonize the process by forking from init and chdir-ing to /.
 void daemonize(void)
 {
     pid_t pid, sid;
@@ -107,7 +102,6 @@ int timespec_diff(const timespec_t *t0, const timespec_t *t1, timespec_t *td)
 }
 
 // -----------------------------------------------------------------------------
-// Return the difference from (t1 - t0) in microseconds.
 long timespec_delta(struct timespec *t0, struct timespec *t1)
 {
     return (t1->tv_nsec / 1000) - (t0->tv_nsec / 1000) +
