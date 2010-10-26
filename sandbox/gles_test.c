@@ -92,6 +92,7 @@ int main(int argc, char *argv[])
     uint8_t *jpg_buff = NULL, *rgb_buff = NULL;
     unsigned long buff_sz = 0;
     int width = 320, height = 240, fps = 10;
+    video_mode_t mode = { width, height, fps };
     video_data_t vid_data;
 
     const float rx = 320.0f / 512.0f;
@@ -124,7 +125,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    if (!video_init("/dev/video0", width, height, fps)) {
+    if (!video_init("/dev/video0", &mode)) {
         fprintf(stderr, "failed to initialize video subsystem\n");
         return EXIT_FAILURE;
     }
@@ -192,7 +193,7 @@ int main(int argc, char *argv[])
         video_unlock();
 
         if (0 != jpeg_rd_mem(jpg_buff, buff_sz, &rgb_buff, &width, &height)) {
-            fprintf(stderr, "decompressed frame size %ld\n", vid_data.length);
+            fprintf(stderr, "decompressed frame size %zu\n", vid_data.length);
 
             for (i = 0; i < 240; i++) {
                 for (j = 0; j < 320; j++) {

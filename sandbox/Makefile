@@ -83,7 +83,7 @@ evnt_test: ${EVNT_OBJS}
 
 gles_test: ${GLES_OBJS}
 	@echo "[LD] $@"
-	$(CC) $(LDFLAGS) -lpthread -ljpeg -lGLES_CM -lEGL -o $@ $^
+	$(CC) $(LDFLAGS) -lpthread -ljpeg -lGLES_CM -lEGL -lv4l2 -o $@ $^
 
 gpio_test: ${GPIO_OBJS}
 	@echo "[LD] $@"
@@ -103,7 +103,7 @@ madc_test: ${MADC_OBJS}
 
 mjpg_test: ${MJPG_OBJS}
 	@echo "[LD] $@"
-	$(CC) $(LDFLAGS) -lpthread -ljpeg -o $@ $^
+	$(CC) $(LDFLAGS) -lpthread -ljpeg -lv4l2 -o $@ $^
 
 pwm_test: ${PWM_OBJS}
 	@echo "[LD] $@"

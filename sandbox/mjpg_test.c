@@ -27,11 +27,12 @@ int main (int argc, char **argv)
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
     video_data_t vid_data;
+    video_mode_t vid_mode = { width, height, fps };
 
     // register CTRL+C to exit
     signal(SIGINT, sig_handler);
 
-    if (!video_init(v4l_dev, width, height, fps)) {
+    if (!video_init(v4l_dev, &vid_mode)) {
         fprintf(stderr, "failed to initialize video subsystem\n");
         return EXIT_FAILURE;
     }
@@ -52,7 +53,7 @@ int main (int argc, char **argv)
         memcpy(jpg_buf, vid_data.data, vid_data.length);
         video_unlock();
 
-        fprintf(stderr, "read frame size %ld\n", vid_data.length);
+        fprintf(stderr, "read frame size %zu\n", vid_data.length);
     }
 
     fprintf(stderr, "freeing resources and shutting down...\n");
