@@ -53,10 +53,11 @@ void *color_detect_thread(void *arg)
     
     while (data->running) {
 
+        // lock the colordetect parameters and determine our tracking fps
         pthread_mutex_lock(&data->lock);
-
         streaming_fps = video_get_fps();
         tracking_fps = MIN(data->trackingRate, streaming_fps);
+        pthread_mutex_unlock(&data->lock);
         
         if (tracking_fps <= 0) {
             // release the lock and sleep for a second, then check for a change
@@ -66,13 +67,13 @@ void *color_detect_thread(void *arg)
         }
         
         if (!video_lock(&vid_data, ACCESS_SYNC)) {
+            // video error on synchronous access, sleep and try again
             syslog(LOG_ERR, "colordetect failed to lock frame\n");
+            sleep(1);
             continue;
         }
 
         error += tracking_fps;
-        pthread_mutex_unlock(&data->lock);
-
         if (error < streaming_fps) {
             // don't track frames until error exceeds the streaming rate
             video_unlock();
@@ -95,7 +96,7 @@ void *color_detect_thread(void *arg)
         }
 
         if (box->detected) {
-
+            // we've detected an object, send the updated bounding box
             cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
             cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
             cmd_buffer[PKT_CTS_STATE] = CTS_STATE_DETECTED;
@@ -109,11 +110,11 @@ void *color_detect_thread(void *arg)
             send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
             data->tracking = 1;
 
-            printf("Bounding box: (%d,%d) (%d,%d)\n",
+            fprintf(stderr, "Bounding box: (%d,%d) (%d,%d)\n",
                     box->x1, box->y1, box->x2, box->y2);
         }
         else if (data->tracking) {
-
+            // this means we were tracking, but lost our target. tell the client
             memset(cmd_buffer, 0, PKT_CTS_LENGTH);
             cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
             cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
@@ -121,16 +122,17 @@ void *color_detect_thread(void *arg)
             send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
             data->tracking = 0;
 
-            printf("lost target...\n");
+            printf(stderr, "lost target...\n");
         }
-        fflush(stdout);
-        frame_counter++;
 
+        frame_counter++;
         if (frame_counter == streaming_fps) {
+            // every time we hit the streaming fps, dump out the tracking rate
             clock_gettime(CLOCK_REALTIME, &t1);
-            fprintf(stderr, "Tracking FPS = %f\n", (streaming_fps / ((double)timespec_delta(&t0, &t1) / 1000000.0)));
-            frame_counter = 0;
+            double delta_sec = ((double)timespec_delta(&t0, &t1) / 1000000.0);
+            fprintf(stderr, "Tracking FPS = %f\n", streaming_fps / delta_sec);
             clock_gettime(CLOCK_REALTIME, &t0);
+            frame_counter = 0;
         }
     }
 
