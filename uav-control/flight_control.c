@@ -44,9 +44,6 @@ typedef struct fc_globals {
     int vcm_type;
     int alive;
 
-    int thro_last_cmp;
-    int thro_first;
-
     const char *capture_path;
     const char *replay_path;
     float curr_alt;
@@ -157,17 +154,18 @@ static void assign_duty(pwm_channel_t *pwm, float duty)
 static void assign_value(pwm_channel_t *pwm, float val)
 {
     int cmp, max, min;
-    unsigned int range, hrange;
+    unsigned int cmp_range, range, hrange;
 
-    range = pwm->rng_max - pwm->rng_min;
-    min = pwm->rng_min + (int)(range * pwm->duty_lo);
-    max = pwm->rng_min + (int)(range * pwm->duty_hi);
-    hrange = (max - min) >> 1;
+    cmp_range = pwm->rng_max - pwm->rng_min;
+    min = pwm->rng_min + (int)(cmp_range * pwm->duty_lo);
+    max = pwm->rng_min + (int)(cmp_range * pwm->duty_hi);
+    range = max - min;
+    hrange = range >> 1;
 
     if (globals.channels[PWM_ALT].handle == pwm->handle) {
-        cmp = min + (int)(hrange * val);
+        cmp = min + (int)(range * val);
         cmp = CLAMP(cmp, min, max);
-        globals.thro_last_cmp = cmp;
+        fprintf(stderr, "val %f\n", val);
     }
     else {
         cmp = min + hrange + (int)(hrange * val);
@@ -218,9 +216,9 @@ static void *autopilot_thread(void *arg)
 
     // altitude controller
     pid_alt_ctlr.setpoint    = 42.0f;
-    pid_alt_ctlr.Kp          = 0.001f;
-    pid_alt_ctlr.Ki          = 0.000f;
-    pid_alt_ctlr.Kd          = 0.000f;
+    pid_alt_ctlr.Kp          = 0.03f;
+    pid_alt_ctlr.Ki          = 0.00f;
+    pid_alt_ctlr.Kd          = 0.00f;
     pid_alt_ctlr.prev_error  = 0.0f;
     pid_alt_ctlr.last_error  = 0.0f;
     pid_alt_ctlr.total_error = 0.0f;
@@ -295,13 +293,12 @@ static void *autopilot_thread(void *arg)
         // check altitude bit is 0 for autonomous control
         //if (!(axes & VCM_AXIS_ALT)) {
             pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
-            fc_sigs.alt = pid_result;
-            fprintf(stderr, "pid set alt to %f\n", fc_sigs.alt);
 #ifndef DBG_USE_RELATIVE
-            fc_control(&fc_sigs, VCM_AXIS_ALT);
+            fc_sigs.alt = .585f + pid_result;
+            fprintf(stderr, "abs pid (%f) set alt to %f\n", pid_result, fc_sigs.alt);
 #else
-            fc_control(&fc_sigs, VCM_AXIS_ALT);
 #endif
+            fc_control(&fc_sigs, VCM_AXIS_ALT);
         //}
     }
 
@@ -353,7 +350,7 @@ static void *takeoff_thread(void *arg)
 #else
     control.alt = 0.0f;
     for (i = 0; i < 575; i++) {
-        control.alt += 0.00005;
+        control.alt += 0.0014;
         fc_control(&control, VCM_AXIS_ALT);
         usleep(10000);
     }
@@ -364,6 +361,9 @@ static void *takeoff_thread(void *arg)
     pthread_mutex_lock(&globals.takeoff_cond_lock);
     pthread_cond_broadcast(&globals.takeoff_cond);
     pthread_mutex_unlock(&globals.takeoff_cond_lock);
+#else
+    control.alt = 0.0f;
+    fc_control(&control, VCM_AXIS_ALT);
 #endif
 
     fprintf(stderr, "takeoff thread exiting\n");
@@ -469,9 +469,6 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
 {
     globals.vcm_type = VCM_TYPE_AUTO;
     globals.vcm_axes = VCM_AXIS_ALL;
-
-    globals.thro_last_cmp = 0;
-    globals.thro_first = 0;
 
     // direct flight control to ultrasonic sensor
     globals.usrf = pwm_usrf;
@@ -644,8 +641,6 @@ int fc_land()
 void fc_reset_channels(void)
 {
     pwm_channel_t *ch = &globals.channels[0];
-    globals.thro_last_cmp = 0;
-    globals.thro_first = 0;
     globals.curr_alt = 0.0f;
 
     assign_duty(&ch[PWM_ALT], ALT_DUTY_LO);
@@ -691,8 +686,9 @@ void fc_set_ctl(ctl_sigs_t *sigs)
     axes = globals.vcm_axes;
 
     // scale down the throttle signal, as the default [-1, 1] is too sensitive
-    globals.curr_alt = CLAMP(globals.curr_alt + sigs->alt * 0.05f, -1, 1);
+    globals.curr_alt = CLAMP(globals.curr_alt + sigs->alt * 0.01, 0, 1);
     sigs->alt = globals.curr_alt;
+    sigs->yaw *= 0.25f;
 
     fc_control(sigs, axes);
     pthread_mutex_unlock(&globals.vcm_lock);
