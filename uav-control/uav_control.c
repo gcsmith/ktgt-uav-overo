@@ -549,6 +549,9 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_GPIDS_KD] = temp.i;
                 
                 send_packet(&g_client, cmd_buffer, PKT_GPIDS_LENGTH);
+                fprintf(stderr, "sent: p = %f, i = %f, d = %f\n", 
+                        pid_params[PID_PARAM_KP], pid_params[PID_PARAM_KI],
+                        pid_params[PID_PARAM_KD]);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes
