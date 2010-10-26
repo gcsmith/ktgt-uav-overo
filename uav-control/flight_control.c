@@ -23,7 +23,7 @@
 #define YAW_DUTY_IDLE 0.07f
 
 // #define DBG_DISABLE_PID
-#define DBG_USE_RELATIVE
+// #define DBG_USE_RELATIVE
 
 typedef struct fc_globals {
     pthread_t replay_thrd;
@@ -49,6 +49,7 @@ typedef struct fc_globals {
 
     const char *capture_path;
     const char *replay_path;
+    float curr_alt;
 
     record_bucket_t *record_head, *record_tail;
     timespec_t last_time;
@@ -153,7 +154,7 @@ static void assign_duty(pwm_channel_t *pwm, float duty)
 }
 
 // -----------------------------------------------------------------------------
-static void assign_value_rel(pwm_channel_t *pwm, float val)
+static void assign_value(pwm_channel_t *pwm, float val)
 {
     int cmp, max, min;
     unsigned int range, hrange;
@@ -163,18 +164,8 @@ static void assign_value_rel(pwm_channel_t *pwm, float val)
     max = pwm->rng_min + (int)(range * pwm->duty_hi);
     hrange = (max - min) >> 1;
 
-    // thro_last_cmp should be set to the current PWM cmp here to avoid
-    // checking cmp == 0 at the end of this function.
-
     if (globals.channels[PWM_ALT].handle == pwm->handle) {
-        // on the first pass set we need to modify the current PWM signal
-        if (globals.thro_first == 0) {
-            globals.thro_first = 1;
-            cmp = min + (int)(hrange * val);
-        }
-        else {
-            cmp = globals.thro_last_cmp + (int)(hrange * val); // * 0.05f);
-         }
+        cmp = min + (int)(hrange * val);
         cmp = CLAMP(cmp, min, max);
         globals.thro_last_cmp = cmp;
     }
@@ -188,60 +179,19 @@ static void assign_value_rel(pwm_channel_t *pwm, float val)
 }
 
 // -----------------------------------------------------------------------------
-static void assign_value_abs(pwm_channel_t *pwm, float val)
-{
-    int cmp, max, min;
-    unsigned int range, hrange;
-
-    range = pwm->rng_max - pwm->rng_min;
-    min = pwm->rng_min + (int)(range * pwm->duty_lo);
-    max = pwm->rng_min + (int)(range * pwm->duty_hi);
-    hrange = (max - min) >> 1;
-
-    // thro_last_cmp should be set to the current PWM cmp here to avoid
-    // checking cmp == 0 at the end of this function.
-
-    if (globals.channels[PWM_ALT].handle == pwm->handle)
-        cmp = min + (int)(range * val);
-    else
-        cmp = min + hrange + (int)(hrange * val);
-
-    // adjust the trim, but keep within the absolute limits of this pwm channel
-    pwm->cmp = CLAMP(cmp, pwm->rng_min, pwm->rng_max);
-    pwm_set_compare(pwm->handle, pwm->cmp + pwm->trim);
-}
-
-// -----------------------------------------------------------------------------
-static int fc_control_rel(const ctl_sigs_t *sigs, int chnl_flags)
+static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 {
     if (!fc_get_alive())
         return 0;
 
     if (chnl_flags & VCM_AXIS_ALT)
-        assign_value_rel(&globals.channels[PWM_ALT], sigs->alt);
+        assign_value(&globals.channels[PWM_ALT], sigs->alt);
     if (chnl_flags & VCM_AXIS_PITCH)
-        assign_value_rel(&globals.channels[PWM_PITCH], sigs->pitch);
+        assign_value(&globals.channels[PWM_PITCH], sigs->pitch);
     if (chnl_flags & VCM_AXIS_ROLL)
-        assign_value_rel(&globals.channels[PWM_ROLL], sigs->roll);
+        assign_value(&globals.channels[PWM_ROLL], sigs->roll);
     if (chnl_flags & VCM_AXIS_YAW)
-        assign_value_rel(&globals.channels[PWM_YAW], sigs->yaw);
-    return 1;
-}
-
-// -----------------------------------------------------------------------------
-static int fc_control_abs(const ctl_sigs_t *sigs, int chnl_flags)
-{
-    if (!fc_get_alive())
-        return 0;
-
-    if (chnl_flags & VCM_AXIS_ALT)
-        assign_value_abs(&globals.channels[PWM_ALT], sigs->alt);
-    if (chnl_flags & VCM_AXIS_PITCH)
-        assign_value_abs(&globals.channels[PWM_PITCH], sigs->pitch);
-    if (chnl_flags & VCM_AXIS_ROLL)
-        assign_value_abs(&globals.channels[PWM_ROLL], sigs->roll);
-    if (chnl_flags & VCM_AXIS_YAW)
-        assign_value_abs(&globals.channels[PWM_YAW], sigs->yaw);
+        assign_value(&globals.channels[PWM_YAW], sigs->yaw);
     return 1;
 }
 
@@ -268,7 +218,7 @@ static void *autopilot_thread(void *arg)
 
     // altitude controller
     pid_alt_ctlr.setpoint    = 42.0f;
-    pid_alt_ctlr.Kp          = 0.00025;
+    pid_alt_ctlr.Kp          = 0.001f;
     pid_alt_ctlr.Ki          = 0.000f;
     pid_alt_ctlr.Kd          = 0.000f;
     pid_alt_ctlr.prev_error  = 0.0f;
@@ -318,10 +268,10 @@ static void *autopilot_thread(void *arg)
         switch (vcm_type) {
         case VCM_TYPE_KILL:
             fprintf(stderr, "vcm_type = kill\n");
-            // assign_value_abs(&globals.channels[PWM_ALT], 0);
-            // assign_value_abs(&globals.channels[PWM_PITCH], 0);
-            // assign_value_abs(&globals.channels[PWM_ROLL], 0);
-            // assign_value_abs(&globals.channels[PWM_YAW], 0);
+            // assign_value(&globals.channels[PWM_ALT], 0);
+            // assign_value(&globals.channels[PWM_PITCH], 0);
+            // assign_value(&globals.channels[PWM_ROLL], 0);
+            // assign_value(&globals.channels[PWM_YAW], 0);
             break;
         case VCM_TYPE_AUTO:
             fprintf(stderr, "vcm_type = auto\n");
@@ -338,7 +288,7 @@ static void *autopilot_thread(void *arg)
         if (!(axes & VCM_AXIS_PITCH)) {
             pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
             fc_sigs.pitch = pid_result;
-            fc_control_abs(&fc_sigs, VCM_AXIS_PITCH);
+            fc_control(&fc_sigs, VCM_AXIS_PITCH);
         }
 #endif
 
@@ -348,9 +298,9 @@ static void *autopilot_thread(void *arg)
             fc_sigs.alt = pid_result;
             fprintf(stderr, "pid set alt to %f\n", fc_sigs.alt);
 #ifndef DBG_USE_RELATIVE
-            fc_control_abs(&fc_sigs, VCM_AXIS_ALT);
+            fc_control(&fc_sigs, VCM_AXIS_ALT);
 #else
-            fc_control_rel(&fc_sigs, VCM_AXIS_ALT);
+            fc_control(&fc_sigs, VCM_AXIS_ALT);
 #endif
         //}
     }
@@ -395,8 +345,8 @@ static void *takeoff_thread(void *arg)
 
 #ifdef DBG_USE_RELATIVE
     for (i = 0; i < 575; i++) {
-        control.alt = 0.04 * .05f;
-        fc_control_rel(&control, VCM_AXIS_ALT);
+        control.alt = 0.045 * .05f;
+        fc_control(&control, VCM_AXIS_ALT);
         usleep(10000);
     }
     printf("done ramping (rel) -- switching to pid autopilot thread\n");
@@ -404,7 +354,7 @@ static void *takeoff_thread(void *arg)
     control.alt = 0.0f;
     for (i = 0; i < 575; i++) {
         control.alt += 0.00005;
-        fc_control_abs(&control, VCM_AXIS_ALT);
+        fc_control(&control, VCM_AXIS_ALT);
         usleep(10000);
     }
     printf("done ramping (abs) -- switching to pid autopilot thread\n");
@@ -435,7 +385,7 @@ static void *replay_thread(void *arg)
         for (i = 0; i < bucket->count; i++) {
             record = &bucket->records[i];
             clock_nanosleep(CLOCK_REALTIME, 0, &record->delta, 0);
-            fc_control_rel(&record->signals, VCM_AXIS_ALL);
+            fc_control(&record->signals, VCM_AXIS_ALL);
         }
 
         bucket = bucket->next;
@@ -474,11 +424,11 @@ static void *landing_thread(void *arg)
 
         if (dx_dt == 0) {
             landing_sigs.alt = -0.1f;
-            fc_control_abs(&landing_sigs, VCM_AXIS_ALT);
+            fc_control(&landing_sigs, VCM_AXIS_ALT);
         }
         else if (dx_dt <= -3) {
             landing_sigs.alt = 0.05f;
-            fc_control_abs(&landing_sigs, VCM_AXIS_ALT);
+            fc_control(&landing_sigs, VCM_AXIS_ALT);
         }
 
         usleep(50000);
@@ -486,7 +436,7 @@ static void *landing_thread(void *arg)
     
     landing_sigs.alt = -0.05;
     for (i = 0; i < 5; i++) {
-        fc_control_abs(&landing_sigs, VCM_AXIS_ALT);
+        fc_control(&landing_sigs, VCM_AXIS_ALT);
         usleep(100000);
     }
 
@@ -696,6 +646,7 @@ void fc_reset_channels(void)
     pwm_channel_t *ch = &globals.channels[0];
     globals.thro_last_cmp = 0;
     globals.thro_first = 0;
+    globals.curr_alt = 0.0f;
 
     assign_duty(&ch[PWM_ALT], ALT_DUTY_LO);
     assign_duty(&ch[PWM_YAW], YAW_DUTY_IDLE);
@@ -740,9 +691,10 @@ void fc_set_ctl(ctl_sigs_t *sigs)
     axes = globals.vcm_axes;
 
     // scale down the throttle signal, as the default [-1, 1] is too sensitive
-    sigs->alt *= 0.05f;
+    globals.curr_alt = CLAMP(globals.curr_alt + sigs->alt * 0.05f, -1, 1);
+    sigs->alt = globals.curr_alt;
 
-    fc_control_rel(sigs, axes);
+    fc_control(sigs, axes);
     pthread_mutex_unlock(&globals.vcm_lock);
 
     if (globals.capture_path) {
