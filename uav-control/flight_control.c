@@ -767,12 +767,15 @@ int fc_set_pid_param(int param, float value)
     switch (param) {
     case PID_PARAM_KP:
         globals.pid_alt_ctlr.Kp = value;
+        fprintf(stderr, "Proportional value = %f\n", globals.pid_alt_ctlr.Kp);
         break;
     case PID_PARAM_KI:
         globals.pid_alt_ctlr.Ki = value;
+        fprintf(stderr, "Integral value = %f\n", globals.pid_alt_ctlr.Ki);
         break;
     case PID_PARAM_KD:
         globals.pid_alt_ctlr.Kd = value;
+        fprintf(stderr, "Derivative value = %f\n", globals.pid_alt_ctlr.Kd);
         break;
     default:
         return -1;
