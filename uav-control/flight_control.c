@@ -209,7 +209,7 @@ static void *autopilot_thread(void *arg)
     ctl_sigs_t fc_sigs;
     
     // flight control's PID controllers
-    pid_ctrl_t pid_alt_ctlr, pid_pitch_ctlr;
+    pid_ctrl_t pid_pitch_ctlr;
 
     fc_sigs.alt   = 0.0f;
     fc_sigs.pitch = 0.0f;
@@ -217,10 +217,10 @@ static void *autopilot_thread(void *arg)
     fc_sigs.yaw   = 0.0f;
 
     // altitude controller
-    pid_alt_ctlr.setpoint    = 42.0f;
-    pid_alt_ctlr.prev_error  = 0.0f;
-    pid_alt_ctlr.last_error  = 0.0f;
-    pid_alt_ctlr.total_error = 0.0f;
+    globals.pid_alt_ctlr.setpoint    = 42.0f;
+    globals.pid_alt_ctlr.prev_error  = 0.0f;
+    globals.pid_alt_ctlr.last_error  = 0.0f;
+    globals.pid_alt_ctlr.total_error = 0.0f;
     
     // pitch controller
     pid_pitch_ctlr.setpoint    = 5.0f;
@@ -290,7 +290,7 @@ static void *autopilot_thread(void *arg)
         // check altitude bit is 0 for autonomous control
         //if (!(axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
-            pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
+            pid_compute(&globals.pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
             pthread_mutex_unlock(&globals.pid_lock);
 #ifndef DBG_USE_RELATIVE
             fc_sigs.alt = .585f + pid_result;
