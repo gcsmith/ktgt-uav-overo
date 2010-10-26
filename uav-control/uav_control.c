@@ -205,7 +205,7 @@ void run_server(imu_data_t *imu, const char *port)
     struct sockaddr_in *sa;
     struct addrinfo info, *r;
     socklen_t addr_sz = sizeof(addr);
-    int hsock, rc, samples, track_fps;
+    int hsock, rc, samples, track_fps, pid_val;
     uint32_t cmd_buffer[PKT_BUFF_LEN];
     uint32_t *jpg_buf = NULL;
     unsigned long buff_sz = 0;
@@ -213,7 +213,6 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
-    union  { int i; float f; } temp;
     float pid_params[PID_PARAM_COUNT] = { 0 };
 
     memset(&info, 0, sizeof(info));
@@ -516,19 +515,8 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_SPIDS:
                 // update specific PID parameter in flight control
-                temp.i = cmd_buffer[PKT_SPIDS_VALUE];
-                switch (cmd_buffer[PKT_SPIDS_PARAM])
-                {
-                case PID_PARAM_KP:
-                    fc_set_pid_param(PID_PARAM_KP, temp.f);
-                    break;
-                case PID_PARAM_KI:
-                    fc_set_pid_param(PID_PARAM_KI, temp.f);
-                    break;
-                case PID_PARAM_KD:
-                    fc_set_pid_param(PID_PARAM_KD, temp.f);
-                    break;
-                }
+                memcpy(&pid_val, &cmd_buffer[PKT_SPIDS_VALUE], 4);
+                fc_set_pid_param(cmd_buffer[PKT_SPIDS_PARAM], pid_val);
                 break;
             case CLIENT_REQ_GPIDS:
                 // respond to client's request for current PID parameters
@@ -536,19 +524,12 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_COMMAND]  = SERVER_ACK_GPIDS;
                 cmd_buffer[PKT_LENGTH]   = PKT_GPIDS_LENGTH;
 
-                // pack PID Kp into buffer
-                temp.f = pid_params[PID_PARAM_KP];
-                cmd_buffer[PKT_GPIDS_KP] = temp.i;
-
-                // pack PID Ki into buffer
-                temp.f = pid_params[PID_PARAM_KI];
-                cmd_buffer[PKT_GPIDS_KI] = temp.i;
-
-                // pack PID Kd into buffer
-                temp.f = pid_params[PID_PARAM_KD];
-                cmd_buffer[PKT_GPIDS_KD] = temp.i;
-                
+                // pack PID Kp/Ki/Kd into buffer
+                memcpy(&cmd_buffer[PKT_GPIDS_KP], &pid_params[PID_PARAM_KP], 4);
+                memcpy(&cmd_buffer[PKT_GPIDS_KI], &pid_params[PID_PARAM_KI], 4);
+                memcpy(&cmd_buffer[PKT_GPIDS_KD], &pid_params[PID_PARAM_KD], 4);
                 send_packet(&g_client, cmd_buffer, PKT_GPIDS_LENGTH);
+
                 fprintf(stderr, "sent: p = %f, i = %f, d = %f\n", 
                         pid_params[PID_PARAM_KP], pid_params[PID_PARAM_KI],
                         pid_params[PID_PARAM_KD]);
