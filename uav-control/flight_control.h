@@ -33,6 +33,12 @@
 
 #define RECORD_BUCKET_SIZE 1024
 
+// PID parameter definitions
+
+#define PID_PARAM_KP    0
+#define PID_PARAM_KI    1
+#define PID_PARAM_KD    2
+
 typedef struct ctl_sigs
 {
     float alt, pitch, roll, yaw;
@@ -89,6 +95,9 @@ void fc_set_ctl(ctl_sigs_t *sigs);
 void fc_set_trims(int axes, int value);
 
 int fc_get_trim(int axis);
+
+// tune a PID parameter
+int fc_set_pid_param(int param, float value);
 
 #endif // FLIGHT_CONTROL__H_
 

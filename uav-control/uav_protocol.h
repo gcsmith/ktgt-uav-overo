@@ -46,6 +46,7 @@
 #define CLIENT_REQ_GTS          12  // request get trim settings
 #define CLIENT_REQ_SFS          13  // request set filter samples
 #define CLIENT_REQ_GFS          14  // request get filter samples
+#define CLIENT_REQ_SPIDS        15  // request set PID settings
 
 // General packet offsets
 
@@ -198,6 +199,15 @@
 #define PKT_GFS_AUX         PKT_BASE + 2
 #define PKT_GFS_BATT        PKT_BASE + 3
 #define PKT_GFS_LENGTH      (sizeof(uint32_t) * (PKT_BASE + 4))
+
+// Set PID settings
+#define SPIDS_KP            0
+#define SPIDS_KI            1
+#define SPIDS_KD            2
+
+#define PKT_SPIDS_PARAM     PKT_BASE + 0
+#define PKT_SPIDS_VALUE     PKT_BASE + 1
+#define PKT_SPIDS_LENGTH    (sizeof(uint32_t) * (PKT_BASE + 2))
 
 #endif // _UAV_PROTOCOL__H_
 

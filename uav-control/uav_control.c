@@ -213,6 +213,7 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
+    union  { int i; float f; } temp;
 
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;
@@ -515,6 +516,22 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_GFS_AUX]  = gpio_event_get_filter(&g_gpio_aux);
                 cmd_buffer[PKT_GFS_BATT] = 0;
                 send_packet(&g_client, cmd_buffer, PKT_GFS_LENGTH);
+                break;
+            case CLIENT_REQ_SPIDS:
+                // update specific PID parameter in flight control
+                temp.i = cmd_buffer[PKT_SPIDS_VALUE];
+                switch (cmd_buffer[PKT_SPIDS_PARAM])
+                {
+                case PID_PARAM_KP:
+                    fc_set_pid_param(PID_PARAM_KP, temp.f);
+                    break;
+                case PID_PARAM_KI:
+                    fc_set_pid_param(PID_PARAM_KI, temp.f);
+                    break;
+                case PID_PARAM_KD:
+                    fc_set_pid_param(PID_PARAM_KD, temp.f);
+                    break;
+                }
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes

@@ -35,6 +35,7 @@ typedef struct fc_globals {
     pthread_mutex_t alive_lock;
     pthread_mutex_t vcm_lock;
     pthread_mutex_t takeoff_cond_lock;
+    pthread_mutex_t pid_lock;
 
     pwm_channel_t channels[4];
     gpio_event_t *usrf; // ultrasonic range finder pwm
@@ -50,6 +51,8 @@ typedef struct fc_globals {
 
     record_bucket_t *record_head, *record_tail;
     timespec_t last_time;
+    
+    pid_ctrl_t pid_alt_ctlr; //autopilot's altitude controller
 } fc_globals_t;
 
 static fc_globals_t globals = { 0 };
@@ -216,9 +219,6 @@ static void *autopilot_thread(void *arg)
 
     // altitude controller
     pid_alt_ctlr.setpoint    = 42.0f;
-    pid_alt_ctlr.Kp          = 0.03f;
-    pid_alt_ctlr.Ki          = 0.00f;
-    pid_alt_ctlr.Kd          = 0.00f;
     pid_alt_ctlr.prev_error  = 0.0f;
     pid_alt_ctlr.last_error  = 0.0f;
     pid_alt_ctlr.total_error = 0.0f;
@@ -292,7 +292,9 @@ static void *autopilot_thread(void *arg)
 
         // check altitude bit is 0 for autonomous control
         //if (!(axes & VCM_AXIS_ALT)) {
+            pthread_mutex_lock(&globals.pid_lock);
             pid_compute(&pid_alt_ctlr, fd_alt, &curr_error, &pid_result);
+            pthread_mutex_unlock(&globals.pid_lock);
 #ifndef DBG_USE_RELATIVE
             fc_sigs.alt = .585f + pid_result;
             fprintf(stderr, "abs pid (%f) set alt to %f\n", pid_result, fc_sigs.alt);
@@ -479,6 +481,11 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     pthread_mutex_init(&globals.alive_lock, NULL);
     pthread_mutex_init(&globals.vcm_lock, NULL);
     pthread_cond_init(&globals.takeoff_cond, NULL);
+    pthread_mutex_init(&globals.pid_lock, NULL);
+    
+    globals.pid_alt_ctlr.Kp = 0.0f;
+    globals.pid_alt_ctlr.Ki = 0.0f;
+    globals.pid_alt_ctlr.Kd = 0.0f;
 
     if (!init_channel(PWM_ALT, 4582, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
@@ -519,6 +526,7 @@ void fc_shutdown()
     pthread_mutex_destroy(&globals.alive_lock);
     pthread_mutex_destroy(&globals.vcm_lock);
     pthread_cond_destroy(&globals.takeoff_cond);
+    pthread_mutex_destroy(&globals.pid_lock);
 
     if (globals.capture_path) {
         // save and destroy the record buckets
@@ -750,5 +758,26 @@ int fc_get_trim(int axes)
     default:
         return -1;
     }
+}
+
+// -----------------------------------------------------------------------------
+int fc_set_pid_param(int param, float value)
+{
+    pthread_mutex_lock(&globals.pid_lock);
+    switch (param) {
+    case PID_PARAM_KP:
+        globals.pid_alt_ctlr.Kp = value;
+        break;
+    case PID_PARAM_KI:
+        globals.pid_alt_ctlr.Ki = value;
+        break;
+    case PID_PARAM_KD:
+        globals.pid_alt_ctlr.Kd = value;
+        break;
+    default:
+        return -1;
+    }
+    pthread_mutex_unlock(&globals.pid_lock);
+    return 0;
 }
 
