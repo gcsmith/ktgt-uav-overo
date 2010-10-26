@@ -185,6 +185,12 @@ void color_detect_set_track_color(track_color_t *color)
 }
 
 // -----------------------------------------------------------------------------
+track_color_t color_detect_get_track_color()
+{
+    return g_globals.color;
+}
+
+// -----------------------------------------------------------------------------
 void color_detect_enable(int enabled)
 {
     if (enabled)

@@ -10,7 +10,7 @@
 #define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x00000008  // uav_control protocal version
+#define IDENT_VERSION   0x00000009  // uav_control protocal version
 #define PKT_BUFF_LEN    2048        // max possible packet length
 
 // Packet commands from server to client
@@ -27,6 +27,7 @@
 #define SERVER_UPDATE_CAM_DCM   9   // send updated camera device control menu
 #define SERVER_ACK_GTS          10
 #define SERVER_ACK_GFS          11
+#define SERVER_UPDATE_COLOR     12   // send updated tracking state information
 
 // Packet commands from client to server
 
@@ -40,10 +41,11 @@
 #define CLIENT_REQ_CAM_TC       7   // request change in camera track color
 #define CLIENT_REQ_CAM_DCI      8   // request camera device control info
 #define CLIENT_REQ_CAM_DCC      9   // request camera device control config
-#define CLIENT_REQ_STS          10  // request set trim settings
-#define CLIENT_REQ_GTS          11  // request get trim settings
-#define CLIENT_REQ_SFS          12  // request set filter samples
-#define CLIENT_REQ_GFS          13  // request get filter samples
+#define CLIENT_REQ_CAM_COLORS   10  // request camera Color Tracking info
+#define CLIENT_REQ_STS          11  // request set trim settings
+#define CLIENT_REQ_GTS          12  // request get trim settings
+#define CLIENT_REQ_SFS          13  // request set filter samples
+#define CLIENT_REQ_GFS          14  // request get filter samples
 
 // General packet offsets
 

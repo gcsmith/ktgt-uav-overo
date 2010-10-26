@@ -428,6 +428,25 @@ void run_server(imu_data_t *imu, const char *port)
                 color_detect_set_track_color(&tc);
                 color_detect_set_tracking_rate(track_fps);
                 break;
+             case CLIENT_REQ_CAM_COLORS:
+                // determine whether color tracking is enabled or disabled
+                //color_detect_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
+                 printf("******************Requested cam colors*************************************************\n");
+                tc = color_detect_get_track_color();
+                cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_COLOR;
+                cmd_buffer[PKT_LENGTH]   = PKT_CAM_TC_LENGTH;
+                // update our color tracking parameters
+                cmd_buffer[PKT_CAM_TC_CH0] = tc.r;
+                cmd_buffer[PKT_CAM_TC_CH1] = tc.g;
+                cmd_buffer[PKT_CAM_TC_CH2] = tc.b;
+                cmd_buffer[PKT_CAM_TC_TH0] = tc.ht;
+                cmd_buffer[PKT_CAM_TC_TH1] = tc.st;
+                cmd_buffer[PKT_CAM_TC_FILTER] = tc.filter;
+                cmd_buffer[PKT_CAM_TC_FPS] = color_detect_get_tracking_rate();
+                send_packet(&g_client, cmd_buffer, PKT_CAM_TC_LENGTH);
+                printf("******************Sent cam colors*************************************************\n");
+                
+                break;
             case CLIENT_REQ_CAM_DCI:
                 // actual packet sending handled in callback routines
                 if (!video_enum_devctrl(send_enum_ctrl, send_enum_menu)) {
