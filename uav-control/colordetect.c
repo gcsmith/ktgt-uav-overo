@@ -61,7 +61,6 @@ void *color_detect_thread(void *arg)
         
         if (tracking_fps <= 0) {
             // release the lock and sleep for a second, then check for a change
-            pthread_mutex_unlock(&data->lock);
             sleep(1);
             continue;
         }
