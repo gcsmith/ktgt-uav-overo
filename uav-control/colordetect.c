@@ -121,7 +121,7 @@ void *color_detect_thread(void *arg)
             send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
             data->tracking = 0;
 
-            printf(stderr, "lost target...\n");
+            fprintf(stderr, "lost target...\n");
         }
 
         frame_counter++;
