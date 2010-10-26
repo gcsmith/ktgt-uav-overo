@@ -20,7 +20,7 @@ typedef struct pid_ctrl
     float total_error;  /* Error sum */
 } pid_ctrl_t;
 
-void pid_init(pid_ctrl_t *controller, float sp, float kp, float ki, float kd);
+void pid_reset(pid_ctrl_t *controller, float sp);
 
 // -----------------------------------------------------------------------------
 // Function: pid_compute

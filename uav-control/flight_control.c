@@ -52,10 +52,10 @@ typedef struct fc_globals {
     record_bucket_t *record_head, *record_tail;
     timespec_t last_time;
 
-    float alt_kp, alt_ki, alt_kd;
-    float yaw_kp, yaw_ki, yaw_kd;
-    float pitch_kp, pitch_ki, pitch_kd;
-    float roll_dp, roll_ki, roll_kd;
+    pid_ctrl_t pid_alt;
+    pid_ctrl_t pid_yaw;
+    pid_ctrl_t pid_pitch;
+    pid_ctrl_t pid_roll;
 } fc_globals_t;
 
 static fc_globals_t globals = { 0 };
@@ -207,14 +207,13 @@ static void *autopilot_thread(void *arg)
 
     // flight dynamics
     float fd_alt, fd_yaw, fd_pitch, fd_roll;
-    pid_ctrl_t pid_alt;
 
     // flight control's signal structure
     ctl_sigs_t fc_sigs;
     memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
 
     // initialize the pid controllers
-    pid_init(&pid_alt, 42.0f, globals.alt_kp, globals.alt_ki, globals.alt_kd);
+    pid_reset(&globals.pid_alt, 42.0f);
     // pid_init(&globals.pid_pitch, 5.0f, 0.01f, 0.01f, 0.001f);
     
     fprintf(stderr, "autopilot waiting...\n");
@@ -270,7 +269,7 @@ static void *autopilot_thread(void *arg)
         // check altitude bit is 0 for autonomous control
         if (!(axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
-            pid_compute(&pid_alt, fd_alt, &curr_error, &pid_result);
+            pid_compute(&globals.pid_alt, fd_alt, &curr_error, &pid_result);
             pthread_mutex_unlock(&globals.pid_lock);
             fc_sigs.alt = .585f + pid_result;
             fprintf(stderr, "abs pid (%f) set alt to %f\n", pid_result, fc_sigs.alt);
@@ -734,20 +733,21 @@ int fc_set_pid_param(int param, float value)
     pthread_mutex_lock(&globals.pid_lock);
     switch (param) {
     case PID_PARAM_KP:
-        globals.alt_kp = value;
-        fprintf(stderr, "alt kp = %f\n", globals.alt_kp);
+        globals.pid_alt.Kp = value;
+        fprintf(stderr, "alt kp = %f\n", value);
         break;
     case PID_PARAM_KI:
-        globals.alt_ki = value;
-        fprintf(stderr, "alt ki = %f\n", globals.alt_ki);
+        globals.pid_alt.Ki = value;
+        fprintf(stderr, "alt ki = %f\n", value);
         break;
     case PID_PARAM_KD:
-        globals.alt_kd = value;
-        fprintf(stderr, "alt kd = %f\n", globals.alt_kd);
+        globals.pid_alt.Kd = value;
+        fprintf(stderr, "alt kd = %f\n", value);
         break;
     default:
         return -1;
     }
+    pid_reset(&globals.pid_alt, 42.0f);
     pthread_mutex_unlock(&globals.pid_lock);
     return 0;
 }
@@ -756,9 +756,9 @@ int fc_set_pid_param(int param, float value)
 void fc_get_pid_params(float params[PID_PARAM_COUNT])
 {
     pthread_mutex_lock(&globals.pid_lock);
-    params[PID_PARAM_KP] = globals.alt_kp;
-    params[PID_PARAM_KI] = globals.alt_ki;
-    params[PID_PARAM_KD] = globals.alt_kd;
+    params[PID_PARAM_KP] = globals.pid_alt.Kp;
+    params[PID_PARAM_KI] = globals.pid_alt.Ki;
+    params[PID_PARAM_KD] = globals.pid_alt.Kd;
     pthread_mutex_unlock(&globals.pid_lock);
 }
 

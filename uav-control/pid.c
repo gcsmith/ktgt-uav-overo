@@ -12,12 +12,9 @@
 #define PID_MAX_ERROR 12
 #define PID_RESET     30
 
-void pid_init(pid_ctrl_t *controller, float sp, float kp, float ki, float kd)
+void pid_reset(pid_ctrl_t *controller, float sp)
 {
     controller->setpoint = sp;
-    controller->Kp = kp;
-    controller->Ki = ki;
-    controller->Kd = kd;
     controller->prev_error = 0;
     controller->last_error = 0;
     controller->total_error = 0;
