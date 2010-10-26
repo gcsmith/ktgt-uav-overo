@@ -213,7 +213,7 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
-    float pid_val, pid_params[PID_PARAM_COUNT] = { 0 };
+    float curr_alt, pid_val, pid_params[PID_PARAM_COUNT] = { 0 };
 
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;
@@ -317,7 +317,9 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_VTI_BATT] = read_vbatt();
 
                 // taken from maxbotix from spec: 147 us == 1 inch
-                cmd_buffer[PKT_VTI_ALT] = gpio_event_read(&g_gpio_alt, ACCESS_ASYNC) / 147;
+                curr_alt = gpio_event_read(&g_gpio_alt, ACCESS_ASYNC) / 147.0f;
+                memcpy(&cmd_buffer[PKT_VTI_ALT], &curr_alt, 4);
+
                 cmd_buffer[PKT_VTI_AUX] = gpio_event_read(&g_gpio_aux, ACCESS_ASYNC);
                 cmd_buffer[PKT_VTI_CPU] = get_cpu_utilization();
                 send_packet(&g_client, cmd_buffer, PKT_VTI_LENGTH);
