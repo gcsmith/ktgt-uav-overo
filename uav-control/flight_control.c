@@ -22,8 +22,8 @@
 #define YAW_DUTY_HI 0.0948f
 #define YAW_DUTY_IDLE 0.07f
 
-// #define DBG_DISABLE_PID
-// #define DBG_USE_RELATIVE
+#define DBG_DO_TAKEOFF
+#define DBG_DO_AUTONOMOUS
 
 typedef struct fc_globals {
     pthread_t replay_thrd;
@@ -212,11 +212,6 @@ static void *autopilot_thread(void *arg)
     ctl_sigs_t fc_sigs;
     memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
     
-    memset(&globals.pid_alt,   0, sizeof(pid_ctrl_t));
-    memset(&globals.pid_yaw,   0, sizeof(pid_ctrl_t));
-    memset(&globals.pid_pitch, 0, sizeof(pid_ctrl_t));
-    memset(&globals.pid_roll,  0, sizeof(pid_ctrl_t));
-
     // altitude controller
     globals.pid_alt.setpoint    = 42.0f;
     
@@ -277,17 +272,14 @@ static void *autopilot_thread(void *arg)
 #endif
 
         // check altitude bit is 0 for autonomous control
-        //if (!(axes & VCM_AXIS_ALT)) {
+        if (!(axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
             pid_compute(&globals.pid_alt, fd_alt, &curr_error, &pid_result);
             pthread_mutex_unlock(&globals.pid_lock);
-#ifndef DBG_USE_RELATIVE
             fc_sigs.alt = .585f + pid_result;
             fprintf(stderr, "abs pid (%f) set alt to %f\n", pid_result, fc_sigs.alt);
-#else
-#endif
             fc_control(&fc_sigs, VCM_AXIS_ALT);
-        //}
+        }
     }
 
     fprintf(stderr, "autopilot thread exiting\n");
@@ -301,7 +293,7 @@ static void *takeoff_thread(void *arg)
     int error, input, last_input = 0, dx_dt, setpoint;
     float last_control = 0.0f;
 #endif
-    int i, setpoint;
+    int setpoint;
     ctl_sigs_t control;
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
@@ -328,14 +320,8 @@ static void *takeoff_thread(void *arg)
     memset(&control, 0, sizeof(control));
     setpoint = 42; // 42 inches ~= 1 meter
 
-#ifdef DBG_USE_RELATIVE
-    for (i = 0; i < 575; i++) {
-        control.alt = 0.045 * .05f;
-        fc_control(&control, VCM_AXIS_ALT);
-        usleep(10000);
-    }
-    printf("done ramping (rel) -- switching to pid autopilot thread\n");
-#else
+#ifdef DBG_DO_TAKEOFF
+    int i;
     control.alt = 0.0f;
     for (i = 0; i < 575; i++) {
         control.alt += 0.0014;
@@ -343,9 +329,12 @@ static void *takeoff_thread(void *arg)
         usleep(10000);
     }
     printf("done ramping (abs) -- switching to pid autopilot thread\n");
+#else
+    // sleep to give the autonomous thread a chance to wait on takeoff_cond
+    sleep(1);
 #endif
 
-#ifndef DBG_DISABLE_PID
+#ifdef DBG_DO_AUTONOMOUS
     pthread_mutex_lock(&globals.takeoff_cond_lock);
     pthread_cond_broadcast(&globals.takeoff_cond);
     pthread_mutex_unlock(&globals.takeoff_cond_lock);
@@ -455,24 +444,21 @@ static int init_channel(int index, int freq, float lo, float hi, float idle)
 // -----------------------------------------------------------------------------
 int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
 {
-    globals.vcm_type = VCM_TYPE_AUTO;
-    globals.vcm_axes = VCM_AXIS_ALL;
+    // at initialization, start in autonomous control with all axes enabled
+    memset(&globals, 0, sizeof(fc_globals_t));
+    fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
 
-    // direct flight control to ultrasonic sensor
+    // save gpio event handles so we can fetch altitude and orgientation
     globals.usrf = pwm_usrf;
+    globals.imu  = ypr_imu;
 
-    // direct flight control to IMU data array
-    globals.imu = ypr_imu;
-
+    // initialize all of our thread synchronization primitives
     pthread_mutex_init(&globals.alive_lock, NULL);
     pthread_mutex_init(&globals.vcm_lock, NULL);
     pthread_cond_init(&globals.takeoff_cond, NULL);
     pthread_mutex_init(&globals.pid_lock, NULL);
     
-    globals.pid_alt.Kp = 0.0f;
-    globals.pid_alt.Ki = 0.0f;
-    globals.pid_alt.Kd = 0.0f;
-
+    // initialize the pwm channels for throttle, yaw, pitch, and roll
     if (!init_channel(PWM_ALT, 4582, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
     syslog(LOG_INFO, "flight control: altitude channel opened\n");
