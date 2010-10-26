@@ -44,6 +44,7 @@ OBJ_FILES = colordetect.o \
             pid.o \
             razor_imu.o \
             readwritejpeg.o \
+			tracking.o \
             uav_control.o \
             utility.o \
             v4l2uvc.o \

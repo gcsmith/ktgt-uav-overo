@@ -23,13 +23,13 @@
 #include <assert.h>
 
 #include "flight_control.h"
+#include "gpio_event.h"
 #include "pwm_interface.h"
 #include "razor_imu.h"
-#include "gpio_event.h"
+#include "tracking.h"
 #include "uav_protocol.h"
-#include "video_uvc.h"
-#include "colordetect.h"
 #include "user-gpio.h"
+#include "video_uvc.h"
 #include "utility.h"
 
 #define DEV_LEN 64
@@ -168,7 +168,7 @@ void uav_shutdown(int rc)
     imu_shutdown(&g_imu);
 
     syslog(LOG_INFO, "shutting color tracking subsystem...\n");
-    color_detect_shutdown();
+    tracking_shutdown();
 
     syslog(LOG_INFO, "shutting down video subsystem...\n");
     video_shutdown();
@@ -417,7 +417,7 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_CAM_TC:
                 // determine whether color tracking is enabled or disabled
-                color_detect_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
+                tracking_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
 
                 // update our color tracking parameters
                 tc.r = cmd_buffer[PKT_CAM_TC_CH0];
@@ -428,15 +428,13 @@ void run_server(imu_data_t *imu, const char *port)
                 tc.lt = cmd_buffer[PKT_CAM_TC_TH2];
                 tc.filter = cmd_buffer[PKT_CAM_TC_FILTER];
                 track_fps = cmd_buffer[PKT_CAM_TC_FPS];
-                // printf("setting tracking fps: %d\n",track_fps);
-                color_detect_set_track_color(&tc);
-                color_detect_set_tracking_rate(track_fps);
+                tracking_set_color(&tc);
+                tracking_set_fps(track_fps);
                 break;
              case CLIENT_REQ_CAM_COLORS:
                 // determine whether color tracking is enabled or disabled
-                //color_detect_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
-                 printf("******************Requested cam colors*************************************************\n");
-                tc = color_detect_get_track_color();
+                // tracking_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
+                tc = tracking_get_color();
                 cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_COLOR;
                 cmd_buffer[PKT_LENGTH]   = PKT_CAM_TC_LENGTH;
                 // update our color tracking parameters
@@ -446,10 +444,8 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_CAM_TC_TH0] = tc.ht;
                 cmd_buffer[PKT_CAM_TC_TH1] = tc.st;
                 cmd_buffer[PKT_CAM_TC_FILTER] = tc.filter;
-                cmd_buffer[PKT_CAM_TC_FPS] = color_detect_get_tracking_rate();
+                cmd_buffer[PKT_CAM_TC_FPS] = tracking_get_fps();
                 send_packet(&g_client, cmd_buffer, PKT_CAM_TC_LENGTH);
-                printf("******************Sent cam colors*************************************************\n");
-                
                 break;
             case CLIENT_REQ_CAM_DCI:
                 // actual packet sending handled in callback routines
@@ -824,13 +820,13 @@ int main(int argc, char *argv[])
         if (!flag_no_video) {
             // make a note that tracking isn't possible with video
             syslog(LOG_INFO, "initializing color tracking subsystem\n");
-            if (!color_detect_init(&g_client)) {
+            if (!tracking_init(&g_client)) {
                 syslog(LOG_ERR, "failed to initialize tracking subsystem\n");
                 uav_shutdown(EXIT_FAILURE);
             }
 
             // set the initial tracking framerate (not tied to webcam framerate)
-            color_detect_set_tracking_rate(arg_track_fps);
+            tracking_set_fps(arg_track_fps);
         }
         else {
             syslog(LOG_INFO, "color tracking not possible without video");

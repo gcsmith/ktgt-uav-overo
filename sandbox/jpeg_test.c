@@ -63,7 +63,7 @@ float test_hsl_stream(int iterations, const uint8_t *stream_in,
         memcpy(&temp, color, sizeof(track_color_t));
         memcpy(img_in, stream_in, length);
         jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
-        color_detect_hsl(rgb_buff, &temp, &box);
+        colordetect_hsl(rgb_buff, &temp, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -87,7 +87,7 @@ float test_hsl_fp32_stream(int iterations, const uint8_t *stream_in,
         memcpy(&temp, color, sizeof(track_color_t));
         memcpy(img_in, stream_in, length);
         jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
-        color_detect_hsl_fp32(rgb_buff, &temp, &box);
+        colordetect_hsl_fp32(rgb_buff, &temp, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -113,7 +113,7 @@ float test_rgb1_stream(int iterations, const uint8_t *stream_in,
     for (j = 0; j < iterations; j++) {
         memcpy(img_in, stream_in, length);
         jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
-        color_detect_rgb(rgb_buff, color, &box);
+        colordetect_rgb(rgb_buff, color, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -135,7 +135,7 @@ float test_rgb2_stream(int iterations, const uint8_t *stream_in,
     for (j = 0; j < iterations; j++) {
         memcpy(img_in, stream_in, length);
         jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
-        color_detect_rgb_dist(rgb_buff, (real_t)15, color, &box);
+        colordetect_rgb_dist(rgb_buff, (real_t)15, color, &box);
         printf(box.detected ? "." : "?"); fflush(stdout);
     }
     clock_gettime(CLOCK_REALTIME, &t1);

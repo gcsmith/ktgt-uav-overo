@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
             glBindBuffer(GL_ARRAY_BUFFER, 0);
             glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
-            color_detect_hsl_fp32(rgb_buff, &color, &box);
+            colordetect_hsl_fp32(rgb_buff, &color, &box);
             if (box.detected) {
                 float line_coords[] = {
                     (float)box.x1, 240.0f - box.y1, 0.0f,

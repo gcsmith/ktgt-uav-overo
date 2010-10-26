@@ -11,7 +11,7 @@ CC            = @${CROSS_COMPILE}gcc
 PROFILE       ?= "release"
 
 DEP_OUTPUT_OPTION = -MMD -MF $(@:.o=.d)
-OUTPUT_OPTION = -DSTANDALONE_DEMO -c -o $@
+OUTPUT_OPTION = -c -o $@
 CFLAGS += -Wall -Werror \
           -I../pwm-module \
           -I../pwm-lib \

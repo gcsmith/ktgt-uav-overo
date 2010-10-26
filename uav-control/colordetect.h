@@ -28,25 +28,19 @@ typedef struct {
     int detected;   // 0 if color not detected, 1 if detected
 } track_coords_t;
 
-int color_detect_init(client_info_t *client);
-void color_detect_shutdown(void);
-void color_detect_set_track_color(track_color_t *color);
-track_color_t color_detect_get_track_color();
-void color_detect_enable(int enabled);
-
 // determine color bounding box using simple red/green/blue thresholding
-void color_detect_rgb(const uint8_t *rgb_in,
+void colordetect_rgb(const uint8_t *rgb_in,
         const track_color_t *color, track_coords_t *box);
 
 // determine color bounding box using more complex red/green/blue thresholding
-void color_detect_rgb_dist(const uint8_t *rgb_in, real_t threshold,
+void colordetect_rgb_dist(const uint8_t *rgb_in, real_t threshold,
         const track_color_t *color, track_coords_t *box);
 
 // determine color bounding box using hue/saturation/lightness thresholding
-void color_detect_hsl(uint8_t *rgb_in, 
+void colordetect_hsl(uint8_t *rgb_in, 
         const track_color_t *color, track_coords_t *box);
         
-void color_detect_hsl_fp32(uint8_t *rgb_in, 
+void colordetect_hsl_fp32(uint8_t *rgb_in, 
         const track_color_t *color, track_coords_t *box);
 
 void run_color_detection_file(const char *infile, const char *outfile,
@@ -69,9 +63,6 @@ void color_image_rgb_to_hsl_fixed( uint8_t *rgb_in, int width, int height);
 
 void rgb_to_hsl(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
 void rgb_to_hsl_fp32(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
-
-void color_detect_set_tracking_rate(unsigned int fps);
-int color_detect_get_tracking_rate();
 
 #endif // _UAV_COLORDETECT__H_
 
