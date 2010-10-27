@@ -10,7 +10,7 @@
 #define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x0000000A  // uav_control protocal version
+#define IDENT_VERSION   0x00000010  // uav_control protocal version
 #define PKT_BUFF_LEN    2048        // max possible packet length
 
 // Packet commands from server to client
