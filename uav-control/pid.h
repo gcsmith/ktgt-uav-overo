@@ -31,6 +31,9 @@ void pid_reset_error(pid_ctrl_t *pid);
 // compute the pid for the specified position
 float pid_update(pid_ctrl_t *pid, float position);
 
+// compute the pid for the specified position with integral reset
+float pid_update_with_reset(pid_ctrl_t *pid, float position);
+
 // -----------------------------------------------------------------------------
 // Function: pid_compute
 // Inputs:

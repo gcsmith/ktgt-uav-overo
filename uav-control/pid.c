@@ -42,35 +42,31 @@ float pid_update(pid_ctrl_t *pid, float position)
     pid->e_curr = error;
     pid->e_sum += error;
 
-    // clamp the integral component within a specified range
+    // clamp the integral component within a specified error range
     pid->e_sum = CLAMP(pid->e_sum, pid->e_min, pid->e_max);
 
-    return p_term + d_term + (pid->e_sum * pid->ki);
+    // return the sum of the proportional, integral, and derivative terms
+    return p_term + (pid->e_sum * pid->ki) + d_term;
 }
 
 // -----------------------------------------------------------------------------
-void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u)
+float pid_update_with_reset(pid_ctrl_t *pid, float position)
 {
-    float curr_diff_error = 0.0f;
-    float reset = 1.0f;
+    float error  = pid->setpoint - position;
+    float p_term = pid->kp * error;
+    float d_term = pid->kd * (error - pid->e_prev);
 
-    *curr_error = controller->setpoint - input;
+    // shift error to e_curr, shift previous e_curr to e_prev
+    pid->e_prev = pid->e_curr;
+    pid->e_curr = error;
+    pid->e_sum += error;
 
-    controller->e_sum += *curr_error;
-    controller->e_prev = controller->e_curr;
-    controller->e_curr = *curr_error;
+    // clamp the integral component within a specified error range
+    pid->e_sum = CLAMP(pid->e_sum, pid->e_min, pid->e_max);
+    if ((error > PID_RESET) || (error < -PID_RESET))
+        pid->e_sum = 0;
 
-    curr_diff_error = controller->e_curr - controller->e_prev;
-
-    controller->e_sum = CLAMP(controller->e_sum, -(PID_MAX_ERROR), PID_MAX_ERROR);
-
-    if ((*curr_error > PID_RESET) || (*curr_error < -(PID_RESET)))
-        reset = 0.0f;
-
-    *u = (float)((controller->kp * *curr_error) + 
-            (controller->ki * controller->e_sum * reset) + 
-            (controller->kd * curr_diff_error));
-
-    *u = CLAMP(*u, -1.0f, 1.0f);
+    // return the sum of the proportional, integral, and derivative terms
+    return p_term + (pid->e_sum * pid->ki) + d_term;
 }
 
