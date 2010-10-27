@@ -136,6 +136,32 @@ int imu_init(const char *device, int baud, imu_data_t *data)
 }
 
 // -----------------------------------------------------------------------------
+int imu_read_angles(imu_data_t *imu, access_mode_t mode, float *angles)
+{
+    pthread_mutex_lock(&imu->lock);
+
+    switch (mode) {
+    case ACCESS_ASYNC:
+        // access in an asynchronous (non-blocking) fashion
+        angles[IMU_DATA_YAW]   = imu->angles[IMU_DATA_YAW];
+        angles[IMU_DATA_PITCH] = imu->angles[IMU_DATA_PITCH];
+        angles[IMU_DATA_ROLL]  = imu->angles[IMU_DATA_ROLL];
+        break;
+    case ACCESS_SYNC:
+        // access in a synchronous (blocking) fashion
+        pthread_cond_wait(&imu->cond, &imu->lock);
+        angles[IMU_DATA_YAW]   = imu->angles[IMU_DATA_YAW];
+        angles[IMU_DATA_PITCH] = imu->angles[IMU_DATA_PITCH];
+        angles[IMU_DATA_ROLL]  = imu->angles[IMU_DATA_ROLL];
+    default:
+        return -1;
+    }
+
+    pthread_mutex_unlock(&imu->lock);
+    return 0;
+}
+
+// -----------------------------------------------------------------------------
 int imu_set_avg_filter(imu_data_t *data, unsigned int avg_len)
 {
     pthread_mutex_lock(&data->lock);

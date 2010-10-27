@@ -204,7 +204,7 @@ static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 static void *auto_altitude_thread(void *arg)
 {
     int vcm_axes, vcm_type;
-    float fd_alt, fd_yaw, fd_pitch, fd_roll;
+    float fd_alt;
 
     // flight control's signal structure
     ctl_sigs_t fc_sigs;
@@ -220,13 +220,6 @@ static void *auto_altitude_thread(void *arg)
 
     while (fc_get_alive()) {
         int axes = VCM_AXIS_ALL;
-
-        // capture yaw, pitch and roll
-        pthread_mutex_lock(&globals.imu->lock);
-        fd_yaw   = globals.imu->angles[IMU_DATA_YAW];
-        fd_pitch = globals.imu->angles[IMU_DATA_PITCH];
-        fd_roll  = globals.imu->angles[IMU_DATA_ROLL];
-        pthread_mutex_unlock(&globals.imu->lock);
 
         // capture altitude
         fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
@@ -252,15 +245,6 @@ static void *auto_altitude_thread(void *arg)
             break;
         }
             
-#if 0
-        // check pitch bit is 0 for autonomous control
-        if (!(axes & VCM_AXIS_PITCH)) {
-            pid_compute(&pid_pitch_ctlr, fd_pitch, &curr_error, &pid_result);
-            fc_sigs.pitch = pid_result;
-            fc_control(&fc_sigs, VCM_AXIS_PITCH);
-        }
-#endif
-
         // check altitude bit is 0 for autonomous control
         if (!(axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
@@ -277,8 +261,20 @@ static void *auto_altitude_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-static void *auto_orientation_thread(void *arg)
+void *auto_orientation_thread(void *arg)
 {
+    int vcm_axes, vcm_type;
+    float attitude[3] = { 0 };
+
+    // flight control's signal structure
+    ctl_sigs_t fc_sigs;
+    memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
+
+    // reset controllers' error collections
+    pid_reset_error(&globals.pid_pitch);
+    pid_reset_error(&globals.pid_roll);
+    pid_reset_error(&globals.pid_yaw);
+    
     // wait for the takeoff process to complete
     fprintf(stderr, "auto_orientation_thread waiting...\n");
     pthread_mutex_lock(&globals.takeoff_cond_lock);
@@ -286,7 +282,65 @@ static void *auto_orientation_thread(void *arg)
     pthread_mutex_unlock(&globals.takeoff_cond_lock);
     fprintf(stderr, "auto_orientation_thread starting...\n");
 
-    // BLOCK_ON_RAZOR_IMU_HERE()
+    while (fc_get_alive())
+    {
+        int axes = VCM_AXIS_ALL; // for testing purposes
+
+        // blocks on IMU data to capture current attitude
+        if (0 > imu_read_angles(globals.imu, ACCESS_SYNC, attitude)) {
+            // error occurred while trying to read IMU data
+            continue;
+        }
+        
+        // capture axes and type
+        pthread_mutex_lock(&globals.vcm_lock);
+        vcm_axes = globals.vcm_axes;
+        vcm_type = globals.vcm_type;
+        pthread_mutex_unlock(&globals.vcm_lock);
+
+        switch (vcm_type) {
+        case VCM_TYPE_KILL:
+            fprintf(stderr, "vcm_type = kill\n");
+            // reset all signals if flight control is of type kill
+            break;
+        case VCM_TYPE_AUTO:
+            fprintf(stderr, "vcm_type = auto\n");
+            axes = 0;
+            break;
+        case VCM_TYPE_MIXED:
+            fprintf(stderr, "vcm_type = mixed\n");
+            axes = vcm_axes;
+            break;
+        }
+            
+        // check for pitch
+        if (!(axes & VCM_AXIS_PITCH)) {
+            pthread_mutex_lock(&globals.pid_lock);
+            float pid_result = pid_update(&globals.pid_pitch, 
+                    attitude[IMU_DATA_PITCH]);
+            pthread_mutex_unlock(&globals.pid_lock);
+            fc_sigs.pitch = pid_result;
+            fc_control(&fc_sigs, VCM_AXIS_PITCH);
+        }
+        
+        // check for roll
+        if (!(axes & VCM_AXIS_ROLL)) {
+            pthread_mutex_lock(&globals.pid_lock);
+            float pid_result = pid_update(&globals.pid_roll, attitude[IMU_DATA_ROLL]);
+            pthread_mutex_unlock(&globals.pid_lock);
+            fc_sigs.roll = pid_result;
+            fc_control(&fc_sigs, VCM_AXIS_ROLL);
+        }
+        
+        // check for yaw
+        if (!(axes & VCM_AXIS_YAW)) {
+            pthread_mutex_lock(&globals.pid_lock);
+            float pid_result = pid_update(&globals.pid_yaw, attitude[IMU_DATA_YAW]);
+            pthread_mutex_unlock(&globals.pid_lock);
+            fc_sigs.yaw = pid_result;
+            fc_control(&fc_sigs, VCM_AXIS_YAW);
+        }
+    }
 
     fprintf(stderr, "auto_orientation_thread exiting\n");
     pthread_exit(NULL);
@@ -321,7 +375,7 @@ static void *dr_takeoff_thread(void *arg)
 
     // spawn autopilot thread for altitude
     pthread_create(&globals.auto_alt_thrd, NULL, auto_altitude_thread, NULL);
-    pthread_create(&globals.auto_imu_thrd, NULL, auto_orientation_thread, NULL);
+    //pthread_create(&globals.auto_imu_thrd, NULL, auto_orientation_thread, NULL);
 
     pthread_mutex_unlock(&globals.vcm_lock);
 

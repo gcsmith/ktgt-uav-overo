@@ -23,6 +23,7 @@ typedef struct imu_data
     int fd;                 // file descriptor for serial device
     pthread_t thread;       // serial thread object
     pthread_mutex_t lock;   // critical section for serial data
+    pthread_cond_t cond;    // condition variable for update notification
     real_t angles[3];       // orientation angles from IMU
     real_t moving_sum[3];
     real_t *samples;
@@ -33,6 +34,7 @@ typedef struct imu_data
 } imu_data_t;
 
 int imu_init(const char *device, int baud, imu_data_t *data);
+int imu_read_angles(imu_data_t *imu, access_mode_t mode, float *angles);
 int imu_set_avg_filter(imu_data_t *data, unsigned int avg_len);
 int imu_get_avg_filter(imu_data_t *data);
 void imu_shutdown(imu_data_t *data);
