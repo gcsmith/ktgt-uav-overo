@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------------
 // File:    utility.h
-// Authors: Garrett Smith, Kevin Macksamie
+// Authors: Garrett Smith, Kevin Macksamie, Timothy Miller
 // Created: 10-02-2010
 //
 // General purpose helper functions and macros used throughout uav_control.
@@ -93,7 +93,7 @@ size_t send_simple_packet(client_info_t *client, uint32_t command);
 void close_client(client_info_t *client);
 
 // Get cpu utilization
-int get_cpu_utilization();
+int get_cpu_utilization(void);
 
 #endif // _UAV_UTILITY_IMU__H_
 

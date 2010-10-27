@@ -1,6 +1,9 @@
 // -----------------------------------------------------------------------------
-// Misc utility routines.
-// Garrett Smith 2010
+// File:    utility.c
+// Authors: Garrett Smith, Kevin Macksamie, Timothy Miller
+// Created: 10-05-2010
+//
+// General purpose helper functions and macros used throughout uav_control.
 // -----------------------------------------------------------------------------
 
 #include <sys/types.h>
@@ -252,6 +255,7 @@ void close_client(client_info_t *client)
     }
     pthread_mutex_unlock(&client->lock);
 }
+
 //-----------------------------------------------------------------------------
 int get_cpu_utilization(void)
 {        

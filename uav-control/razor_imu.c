@@ -1,6 +1,9 @@
 // -----------------------------------------------------------------------------
-// Implementation of razor imu (serial) communication.
-// Garrett Smith 2010
+// File:    razor_imu.c
+// Authors: Garrett Smith, Kevin Macksamie
+// Created: 09-18-2010
+// 
+// Definitions for communication between gumstix and 9DOF IMU.
 // -----------------------------------------------------------------------------
 
 #include <fcntl.h>

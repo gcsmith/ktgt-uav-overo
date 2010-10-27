@@ -1,3 +1,11 @@
+// -----------------------------------------------------------------------------
+// File:    video_uvc.c
+// Authors: Garrett Smith, Kevin Macksamie, Tyler Thierolf, Timothy Miller
+// Created: 09-18-2010
+//
+// Definitions for communication between gumstix and uvc webcam.
+// -----------------------------------------------------------------------------
+
 #include <pthread.h>
 #include <syslog.h>
 #include <stdlib.h>

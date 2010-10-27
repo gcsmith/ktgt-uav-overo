@@ -1,6 +1,9 @@
 // -----------------------------------------------------------------------------
-// User space interface to gpio event driver.
-// Garrett Smith 2010
+// File:    gpio_event.c
+// Authors: Garrett Smith
+// Created: 09-18-2010
+//
+// Definitions for communication between uav_control and gpio input devices.
 // -----------------------------------------------------------------------------
 
 #include <sys/ioctl.h>

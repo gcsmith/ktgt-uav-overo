@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------------
 // File:    flight_control.h
-// Authors: Kevin Macksamie, Garrett Smith
+// Authors: Kevin Macksamie, Garrett Smith, Tyler Thierolf, Timothy Miller
 // Created: 09-23-2010
 //
 // Algorithms and state management for computer controlled flight.
