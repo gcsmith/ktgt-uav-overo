@@ -202,10 +202,8 @@ static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 // -----------------------------------------------------------------------------
 static void *autopilot_thread(void *arg)
 {
-    int vcm_axes, vcm_type;
-    float pid_result, curr_error;
-
     // flight dynamics
+    int vcm_axes, vcm_type;
     float fd_alt, fd_yaw, fd_pitch, fd_roll;
 
     // flight control's signal structure
@@ -268,7 +266,7 @@ static void *autopilot_thread(void *arg)
         // check altitude bit is 0 for autonomous control
         if (!(axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
-            pid_compute(&globals.pid_alt, fd_alt, &curr_error, &pid_result);
+            float pid_result = pid_update(&globals.pid_alt, fd_alt);
             pthread_mutex_unlock(&globals.pid_lock);
             fc_sigs.alt = .585f + pid_result;
             fprintf(stderr, "abs pid (%f) set alt to %f\n", pid_result, fc_sigs.alt);
@@ -443,9 +441,9 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
 
     pid_init(&globals.pid_yaw,    0.0f, -12.0f, 12.0f);
-    pid_init(&globals.pid_pitch, 42.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_pitch,  0.0f, -12.0f, 12.0f);
     pid_init(&globals.pid_roll,   0.0f, -12.0f, 12.0f);
-    pid_init(&globals.pid_alt,    0.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_alt,   42.0f, -12.0f, 12.0f);
     // pid_init(&globals.pid_pitch, 5.0f, 0.01f, 0.01f, 0.001f);
 
     // save gpio event handles so we can fetch altitude and orgientation

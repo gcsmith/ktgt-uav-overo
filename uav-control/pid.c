@@ -31,8 +31,9 @@ void pid_reset_error(pid_ctrl_t *pid)
 }
 
 // -----------------------------------------------------------------------------
-float pid_update(pid_ctrl_t *pid, float error)
+float pid_update(pid_ctrl_t *pid, float position)
 {
+    float error  = pid->setpoint - position;
     float p_term = pid->kp * error;
     float d_term = pid->kd * (error - pid->e_prev);
 

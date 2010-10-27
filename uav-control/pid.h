@@ -28,7 +28,8 @@ void pid_init(pid_ctrl_t *pid, float sp, float e_min, float e_max);
 // reset the error state within the pid controller
 void pid_reset_error(pid_ctrl_t *pid);
 
-float pid_update(pid_ctrl_t *pid, float error);
+// compute the pid for the specified position
+float pid_update(pid_ctrl_t *pid, float position);
 
 // -----------------------------------------------------------------------------
 // Function: pid_compute
