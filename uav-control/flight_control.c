@@ -29,7 +29,8 @@ typedef struct fc_globals {
     pthread_t replay_thrd;
     pthread_t takeoff_thrd;
     pthread_t land_thrd;
-    pthread_t auto_thrd;
+    pthread_t auto_alt_thrd;
+    pthread_t auto_imu_thrd;
 
     pthread_cond_t  takeoff_cond;
     pthread_mutex_t alive_lock;
@@ -200,26 +201,23 @@ static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 }
 
 // -----------------------------------------------------------------------------
-static void *autopilot_thread(void *arg)
+static void *auto_altitude_thread(void *arg)
 {
-    // flight dynamics
     int vcm_axes, vcm_type;
     float fd_alt, fd_yaw, fd_pitch, fd_roll;
 
     // flight control's signal structure
     ctl_sigs_t fc_sigs;
     memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
-
-    // initialize the pid controllers
     pid_reset_error(&globals.pid_alt);
     
-    fprintf(stderr, "autopilot waiting...\n");
+    // wait for the takeoff process to complete
+    fprintf(stderr, "auto_altitude_thread waiting...\n");
     pthread_mutex_lock(&globals.takeoff_cond_lock);
     pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_cond_lock);
     pthread_mutex_unlock(&globals.takeoff_cond_lock);
-    fprintf(stderr, "autopilot starting...\n");
+    fprintf(stderr, "auto_altitude_thread starting...\n");
 
-    //pthread_mutex_lock(&globals.alive_lock);
     while (fc_get_alive()) {
         int axes = VCM_AXIS_ALL;
 
@@ -274,12 +272,28 @@ static void *autopilot_thread(void *arg)
         }
     }
 
-    fprintf(stderr, "autopilot thread exiting\n");
+    fprintf(stderr, "auto_altitude_thread thread exiting\n");
     pthread_exit(NULL);
 }
 
 // -----------------------------------------------------------------------------
-static void *takeoff_thread(void *arg)
+static void *auto_orientation_thread(void *arg)
+{
+    // wait for the takeoff process to complete
+    fprintf(stderr, "auto_orientation_thread waiting...\n");
+    pthread_mutex_lock(&globals.takeoff_cond_lock);
+    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_cond_lock);
+    pthread_mutex_unlock(&globals.takeoff_cond_lock);
+    fprintf(stderr, "auto_orientation_thread starting...\n");
+
+    // BLOCK_ON_RAZOR_IMU_HERE()
+
+    fprintf(stderr, "auto_orientation_thread exiting\n");
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+static void *dr_takeoff_thread(void *arg)
 {
 #if 0
     int error, input, last_input = 0, dx_dt, setpoint;
@@ -305,8 +319,10 @@ static void *takeoff_thread(void *arg)
     pthread_mutex_lock(&globals.vcm_lock);
     globals.vcm_axes |= VCM_AXIS_ALT;
 
-    // spawn autopilot thread
-    pthread_create(&globals.auto_thrd, NULL, autopilot_thread, NULL);
+    // spawn autopilot thread for altitude
+    pthread_create(&globals.auto_alt_thrd, NULL, auto_altitude_thread, NULL);
+    pthread_create(&globals.auto_imu_thrd, NULL, auto_orientation_thread, NULL);
+
     pthread_mutex_unlock(&globals.vcm_lock);
 
     memset(&control, 0, sizeof(control));
@@ -340,13 +356,13 @@ static void *takeoff_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-static void *replay_thread(void *arg)
+static void *dr_replay_thread(void *arg)
 {
     record_bucket_t *bucket;
     input_record_t *record;
     int i;
 
-    fprintf(stderr, "FLIGHT CONTROL: executing replay_thread\n");
+    fprintf(stderr, "FLIGHT CONTROL: executing dr_replay_thread\n");
 
     bucket = globals.record_head;
     while (NULL != bucket) {
@@ -360,7 +376,7 @@ static void *replay_thread(void *arg)
         bucket = bucket->next;
     }
 
-    fprintf(stderr, "completed replay_thread\n");
+    fprintf(stderr, "completed dr_replay_thread\n");
     pthread_exit(NULL);
 }
 
@@ -595,10 +611,10 @@ int fc_takeoff()
     }
 
     if (globals.replay_path) {
-        pthread_create(&globals.replay_thrd, NULL, replay_thread, NULL);
+        pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, NULL);
     }
     else {
-        pthread_create(&globals.takeoff_thrd, NULL, takeoff_thread, NULL);
+        pthread_create(&globals.takeoff_thrd, NULL, dr_takeoff_thread, NULL);
     }
     return 1;
 }
