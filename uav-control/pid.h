@@ -34,19 +34,5 @@ float pid_update(pid_ctrl_t *pid, float position);
 // compute the pid for the specified position with integral reset
 float pid_update_with_reset(pid_ctrl_t *pid, float position);
 
-// -----------------------------------------------------------------------------
-// Function: pid_compute
-// Inputs:
-//   + controller - the PID controller being used
-//   + input - the sensor output the controller is monitoring
-//   + curr_error - the error between the controller setpoint and the sensor
-//     output
-//   + u - the output of the controller
-// Outputs:
-//   + curr_error
-//   + u
-// -----------------------------------------------------------------------------
-void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
-
 #endif // _UAV_PID__H_
 
