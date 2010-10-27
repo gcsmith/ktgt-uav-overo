@@ -13,8 +13,8 @@
 #include "utility.h"
 
 #define GPIO_COUNT 256
-#define GPIO_SHIFT 4
-#define GPIO_MEM (1 << GPIO_SHIFT)
+#define GPIO_SHIFT 2
+#define GPIO_SAMPLES (1 << GPIO_SHIFT)
 
 typedef struct gpio_event
 {
@@ -27,7 +27,7 @@ typedef struct gpio_event
     int last_sec;           // last second counter for this event
     int last_usec;          // last microsecond counter for this event
     int avg_len;            // number of samples to average
-    int samples[GPIO_MEM];
+    int samples[GPIO_SAMPLES];
     int samp_idx;
 } gpio_event_t;
 

@@ -35,7 +35,7 @@ static void *gpio_thread(void *pargs)
     struct timeval tv;
     GPIO_Event_t event;
     fd_set rdset;
-    int rc = 0;
+    int rc, i, j, sorted_samples[GPIO_SAMPLES];
 
     while (globals.running) {
         // wait for IO to become ready using select
@@ -71,8 +71,7 @@ static void *gpio_thread(void *pargs)
             continue;
         }
 
-        switch (event.edgeType)
-        {
+        switch (event.edgeType) {
         case GPIO_EventRisingEdge:
             // start timing on the rising edge of the pwm
             pevent->last_sec = event.time.tv_sec;
@@ -81,7 +80,7 @@ static void *gpio_thread(void *pargs)
         case GPIO_EventFallingEdge:
             // stop timing on the falling edge of the pwm
             if (pevent->last_usec != 0) {
-                int mean = 0, i = 0, sq = 0, delta = event.time.tv_usec - pevent->last_usec;
+                int delta = event.time.tv_usec - pevent->last_usec;
 
                 if (pevent->last_sec < event.time.tv_sec) {
                     // account for microsecond overflow
@@ -91,11 +90,13 @@ static void *gpio_thread(void *pargs)
                 // update data for this event
                 pthread_mutex_lock(&pevent->lock);
 
+                // insert the new sample at the current location, update ptr
                 pevent->samples[pevent->samp_idx] = delta;
-                if (++pevent->samp_idx >= GPIO_MEM)
+                if (++pevent->samp_idx >= GPIO_SAMPLES)
                     pevent->samp_idx = 0;
 
-                for (i = 0; i < GPIO_MEM; i++)
+#if 0
+                for (i = 0; i < GPIO_SAMPLES; i++)
                     mean += pevent->samples[i];
                 mean >>= GPIO_SHIFT;
                 sq = (mean - delta) * (mean - delta);
@@ -105,9 +106,21 @@ static void *gpio_thread(void *pargs)
                 }
                 else
                     pevent->pulsewidth = delta;
+#else
+                sorted_samples[0] = pevent->samples[0];
+                for (i = 1; i < GPIO_SAMPLES; i++) {
+                    int value = pevent->samples[i];
+                    j = i - 1;
+                    while (j >= 0 && sorted_samples[j] > value) {
+                        sorted_samples[j + 1] = sorted_samples[j];
+                        --j;
+                    }
+                    sorted_samples[j] = value;
+                }
+                pevent->pulsewidth = sorted_samples[GPIO_SAMPLES >> 1];
+#endif
 
                 pevent->num_samples++;
-
                 pthread_cond_broadcast(&pevent->cond);
                 pthread_mutex_unlock(&pevent->lock);
             }
