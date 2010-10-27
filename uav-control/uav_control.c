@@ -214,6 +214,7 @@ void run_server(imu_data_t *imu, const char *port)
     video_data_t vid_data;
     track_color_t tc;
     float curr_alt, pid_val, pid_params[PID_PARAM_COUNT] = { 0 };
+    float angles[3] = { 0 };
 
     memset(&info, 0, sizeof(info));
     info.ai_family   = AF_UNSPEC;
@@ -307,12 +308,13 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TELEMETRY;
                 cmd_buffer[PKT_LENGTH]  = PKT_VTI_LENGTH;
 
-                pthread_mutex_lock(&imu->lock);
-                memcpy(&cmd_buffer[PKT_VTI_YAW],   &imu->angles[0], 4);
-                memcpy(&cmd_buffer[PKT_VTI_PITCH], &imu->angles[1], 4);
-                memcpy(&cmd_buffer[PKT_VTI_ROLL],  &imu->angles[2], 4);
-                pthread_mutex_unlock(&imu->lock);
-
+                imu_read_angles(imu, ACCESS_ASYNC, angles);
+                //pthread_mutex_lock(&imu->lock);
+                memcpy(&cmd_buffer[PKT_VTI_YAW],   &angles[0], 4);
+                memcpy(&cmd_buffer[PKT_VTI_PITCH], &angles[1], 4);
+                memcpy(&cmd_buffer[PKT_VTI_ROLL],  &angles[2], 4);
+                //pthread_mutex_unlock(&imu->lock);
+                
                 cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
                 cmd_buffer[PKT_VTI_BATT] = read_vbatt();
 

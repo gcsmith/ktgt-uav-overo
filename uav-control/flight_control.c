@@ -297,6 +297,7 @@ void *auto_orientation_thread(void *arg)
         // blocks on IMU data to capture current attitude
         if (0 > imu_read_angles(globals.imu, ACCESS_SYNC, attitude)) {
             // error occurred while trying to read IMU data
+            // is this an appropriate way of handling an error?
             continue;
         }
         
@@ -357,11 +358,6 @@ void *auto_orientation_thread(void *arg)
 // -----------------------------------------------------------------------------
 static void *dr_takeoff_thread(void *arg)
 {
-#if 0
-    int error, input, last_input = 0, dx_dt, setpoint;
-    float last_control = 0.0f;
-#endif
-    int setpoint;
     ctl_sigs_t control;
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
@@ -388,7 +384,6 @@ static void *dr_takeoff_thread(void *arg)
     pthread_mutex_unlock(&globals.vcm_lock);
 
     memset(&control, 0, sizeof(control));
-    setpoint = 42; // 42 inches ~= 1 meter
 
 #ifdef DBG_DO_TAKEOFF
     int i;
@@ -446,46 +441,40 @@ static void *dr_replay_thread(void *arg)
 static void *landing_thread(void *arg)
 {
     int i;
-    int alt, prev_alt = 0, dx_dt;
-    ctl_sigs_t landing_sigs;
+    ctl_sigs_t control;
 
-    landing_sigs.alt = 0.0f;
+    control.alt = 0.0f;
 
     // procedure:
     // turn autonomous pitch on
+    // turn autonomous roll on
     // turn autonomous altitude off
     // slowly kill throttle
     // once throttle is at minimum exit function
 
     pthread_mutex_lock(&globals.vcm_lock);
     globals.vcm_axes &= ~(VCM_AXIS_PITCH);
+    globals.vcm_axes &= ~(VCM_AXIS_ROLL);
     globals.vcm_axes |= VCM_AXIS_ALT;
     pthread_mutex_unlock(&globals.vcm_lock);
 
-    // monitor altitude
-    while ((alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / 147) > 6) {
-        if (prev_alt == 0)
-            prev_alt = alt;
-        dx_dt = alt - prev_alt;
-        prev_alt = alt;
+    // drop to trimmed throttle
+    control.alt = 0.585f;
 
-        if (dx_dt == 0) {
-            landing_sigs.alt = -0.1f;
-            fc_control(&landing_sigs, VCM_AXIS_ALT);
-        }
-        else if (dx_dt <= -3) {
-            landing_sigs.alt = 0.05f;
-            fc_control(&landing_sigs, VCM_AXIS_ALT);
-        }
+    // slowly back off of throttle
+    for (i = 0; i < 1000; i++) {
+        control.alt -= 0.0004;
+        fc_control(&control, VCM_AXIS_ALT);
+        usleep(10000);
+    }
+    fprintf(stderr, "done dropping throttle\n");
 
-        usleep(50000);
-    }
-    
-    landing_sigs.alt = -0.05;
-    for (i = 0; i < 5; i++) {
-        fc_control(&landing_sigs, VCM_AXIS_ALT);
-        usleep(100000);
-    }
+    // by this point the helicopter will hopefully be on the ground with 
+    // minimal throttle so we can shut off motors completely
+    control.alt = 0.0f;
+    fc_control(&control, VCM_AXIS_ALT);
+
+    fprintf(stderr, "helicopter landed\n");
 
     pthread_exit(NULL);
 }
