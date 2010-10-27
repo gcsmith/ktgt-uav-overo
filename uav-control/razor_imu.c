@@ -71,6 +71,7 @@ static void *imu_rd_thread(void *thread_args)
                         }
 
                         data->sample++;
+                        pthread_cond_broadcast(&data->cond);
                         pthread_mutex_unlock(&data->lock);
                         data_idx = 0;
                     }
@@ -132,6 +133,11 @@ int imu_init(const char *device, int baud, imu_data_t *data)
     arg = (void *)data;
     if (0 != (rc = pthread_create(&data->thread, NULL, imu_rd_thread, arg))) {
         syslog(LOG_ERR, "error creating serial thread (%d)", rc);
+        return 0;
+    }
+
+    if (0 != (rc = pthread_cond_init(&data->cond, NULL))) {
+        syslog(LOG_ERR, "error creating imu condition (%d)", rc);
         return 0;
     }
 
@@ -218,6 +224,7 @@ void imu_shutdown(imu_data_t *data)
 {
     pthread_cancel(data->thread);
     pthread_mutex_destroy(&data->lock);
+    pthread_cond_destroy(&data->cond);
     close(data->fd);
 }
 
