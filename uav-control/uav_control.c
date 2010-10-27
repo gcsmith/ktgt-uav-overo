@@ -518,11 +518,12 @@ void run_server(imu_data_t *imu, const char *port)
             case CLIENT_REQ_SPIDS:
                 // update specific PID parameter in flight control
                 memcpy(&pid_val, &cmd_buffer[PKT_SPIDS_VALUE], 4);
-                fc_set_pid_param(cmd_buffer[PKT_SPIDS_PARAM], pid_val);
+                fc_set_pid_param(cmd_buffer[PKT_SPIDS_AXIS],
+                                 cmd_buffer[PKT_SPIDS_PARAM], pid_val);
                 break;
             case CLIENT_REQ_GPIDS:
                 // respond to client's request for current PID parameters
-                fc_get_pid_params(pid_params);
+                fc_get_pid_params(cmd_buffer[PKT_GPIDS_AXIS], pid_params);
                 cmd_buffer[PKT_COMMAND]  = SERVER_ACK_GPIDS;
                 cmd_buffer[PKT_LENGTH]   = PKT_GPIDS_LENGTH;
 
@@ -598,12 +599,33 @@ int main(int argc, char *argv[])
     int arg_port = 8090, arg_width = 320, arg_height = 240;
     int arg_fps = 15, arg_track_fps = 5;
     int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
-    int arg_yaw = 0, arg_pitch = 0, arg_roll = 0, arg_alt = 0;
+    int    arg_yaw_trim = 0, arg_pitch_trim = 0, arg_roll_trim = 0, arg_alt_trim = 0;
+    double arg_yaw_kp   = 0, arg_pitch_kp   = 0, arg_roll_kp   = 0, arg_alt_kp   = 0;
+    double arg_yaw_ki   = 0, arg_pitch_ki   = 0, arg_roll_ki   = 0, arg_alt_ki   = 0;
+    double arg_yaw_kd   = 0, arg_pitch_kd   = 0, arg_roll_kd   = 0, arg_alt_kd   = 0;
     char port_str[DEV_LEN];
     char stty_dev[DEV_LEN] = "/dev/ttyS0";
     char v4l_dev[DEV_LEN] = "/dev/video0";
     char *capture_path = NULL, *replay_path = NULL;
 
+    #define OPTION_START    2000
+    #define YAW_TRIM        OPTION_START + 0
+    #define YAW_KP          OPTION_START + 1
+    #define YAW_KI          OPTION_START + 2
+    #define YAW_KD          OPTION_START + 3
+    #define PITCH_TRIM      OPTION_START + 4
+    #define PITCH_KP        OPTION_START + 5
+    #define PITCH_KI        OPTION_START + 6
+    #define PITCH_KD        OPTION_START + 7
+    #define ROLL_TRIM       OPTION_START + 8
+    #define ROLL_KP         OPTION_START + 9
+    #define ROLL_KI         OPTION_START + 10
+    #define ROLL_KD         OPTION_START + 11
+    #define ALT_TRIM        OPTION_START + 12
+    #define ALT_KP          OPTION_START + 13
+    #define ALT_KI          OPTION_START + 14
+    #define ALT_KD          OPTION_START + 15
+    
     struct option long_options[] = {
         { "capture",    required_argument, NULL, 'c' },
         { "replay",     required_argument, NULL, 'r' },
@@ -617,10 +639,24 @@ int main(int argc, char *argv[])
         { "height",     required_argument, NULL, 'y' },
         { "fps",        required_argument, NULL, 'f' },
         { "track-fps",  required_argument, NULL, 'F' },
-        { "trim-yaw",   required_argument, NULL, 'Y' },
-        { "trim-pitch", required_argument, NULL, 'P' },
-        { "trim-roll",  required_argument, NULL, 'R' },
-        { "trim-alt",   required_argument, NULL, 'A' },
+
+        { "yaw-trim",   required_argument, NULL, YAW_TRIM },
+        { "yaw-kp",     required_argument, NULL, YAW_KP },
+        { "yaw-ki",     required_argument, NULL, YAW_KI },
+        { "yaw-kd",     required_argument, NULL, YAW_KD },
+        { "pitch-trim", required_argument, NULL, PITCH_TRIM },
+        { "pitch-kp",   required_argument, NULL, PITCH_KP },
+        { "pitch-ki",   required_argument, NULL, PITCH_KI },
+        { "pitch-kd",   required_argument, NULL, PITCH_KD },
+        { "roll-trim",  required_argument, NULL, ROLL_TRIM },
+        { "roll-kp",    required_argument, NULL, ROLL_KP },
+        { "roll-ki",    required_argument, NULL, ROLL_KI },
+        { "roll-kd",    required_argument, NULL, ROLL_KD },
+        { "alt-trim",   required_argument, NULL, ALT_TRIM },
+        { "alt-kp",     required_argument, NULL, ALT_KP },
+        { "alt-ki",     required_argument, NULL, ALT_KI },
+        { "alt-kd",     required_argument, NULL, ALT_KD },
+
         { "daemonize",  no_argument,       NULL, 'D' },
         { "verbose",    no_argument,       NULL, 'V' },
         { "help",       no_argument,       NULL, 'h' },
@@ -636,18 +672,58 @@ int main(int argc, char *argv[])
 
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
-        case 'Y':
-            arg_yaw = atoi(optarg);
+        case YAW_TRIM:
+            arg_yaw_trim = atof(optarg);
             break;
-        case 'P':
-            arg_pitch = atoi(optarg);
+        case YAW_KP:
+            arg_yaw_kp = atof(optarg);
             break;
-        case 'R':
-            arg_roll = atoi(optarg);
+        case YAW_KI:
+            arg_yaw_ki = atof(optarg);
             break;
-        case 'A':
-            arg_alt = atoi(optarg);
+        case YAW_KD:
+            arg_yaw_kd = atof(optarg);
+            break;
+
+        case PITCH_TRIM:
+            arg_pitch_trim = atof(optarg);
+            break;
+        case PITCH_KP:
+            arg_pitch_kp = atof(optarg);
+            break;
+        case PITCH_KI:
+            arg_pitch_ki = atof(optarg);
+            break;
+        case PITCH_KD:
+            arg_pitch_kd = atof(optarg);
+            break;
+
+        case ROLL_TRIM:
+            arg_roll_trim = atof(optarg);
+            break;
+        case ROLL_KP:
+            arg_roll_kp = atof(optarg);
+            break;
+        case ROLL_KI:
+            arg_roll_ki = atof(optarg);
+            break;
+        case ROLL_KD:
+            arg_roll_kd = atof(optarg);
+            break;
+
+        case ALT_TRIM:
+            arg_alt_trim = atof(optarg);
             break;  
+        case ALT_KP:
+            arg_alt_kp = atof(optarg);
+            break;
+        case ALT_KI:
+            arg_alt_ki = atof(optarg);
+            break;
+        case ALT_KD:
+            arg_alt_kd = atof(optarg);
+            break;
+
         case 'c':
             capture_path = strdup(optarg);
             break;
@@ -738,10 +814,26 @@ int main(int argc, char *argv[])
         }
 
         // initialize flight control trims (default zero)
-        fc_set_trims(VCM_AXIS_YAW,   arg_yaw);
-        fc_set_trims(VCM_AXIS_PITCH, arg_pitch);
-        fc_set_trims(VCM_AXIS_ROLL,  arg_roll);
-        fc_set_trims(VCM_AXIS_ALT,   arg_alt);
+        fc_set_trims(VCM_AXIS_YAW,   arg_yaw_trim);
+        fc_set_trims(VCM_AXIS_PITCH, arg_pitch_trim);
+        fc_set_trims(VCM_AXIS_ROLL,  arg_roll_trim);
+        fc_set_trims(VCM_AXIS_ALT,   arg_alt_trim);
+
+        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KP, arg_yaw_kp); 
+        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KI, arg_yaw_ki); 
+        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KD, arg_yaw_kd); 
+
+        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KP, arg_pitch_kp); 
+        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KI, arg_pitch_ki); 
+        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KD, arg_pitch_kd); 
+
+        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KP, arg_roll_kp); 
+        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KI, arg_roll_ki); 
+        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KD, arg_roll_kd); 
+        
+        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KP, arg_alt_kp); 
+        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KI, arg_alt_ki); 
+        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KD, arg_alt_kd); 
 
         // check if we're capturing or replaying a trace
         if (capture_path && replay_path) {

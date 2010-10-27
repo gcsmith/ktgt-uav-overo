@@ -85,23 +85,23 @@ int fc_takeoff();
 int fc_land();
 
 // update vehicle control mode info (control type and enabled axes)
-void fc_set_vcm(int axes, int type);
+void fc_set_vcm(int axis, int type);
 
 // get the current control mode type and enabled axes
-void fc_get_vcm(int *axes, int *type);
+void fc_get_vcm(int *axis, int *type);
 
 // inject manual input control signals
 void fc_set_ctl(ctl_sigs_t *sigs);
 
-void fc_set_trims(int axes, int value);
+void fc_set_trims(int axis, int value);
 
 int fc_get_trim(int axis);
 
 // tune a PID parameter
-int fc_set_pid_param(int param, float value);
+int fc_set_pid_param(int axis, int param, float value);
 
 // get PID parameters
-void fc_get_pid_params(float params[PID_PARAM_COUNT]);
+void fc_get_pid_params(int axis, float params[PID_PARAM_COUNT]);
 
 #endif // FLIGHT_CONTROL__H_
 
