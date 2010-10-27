@@ -11,16 +11,24 @@
 
 typedef struct pid_ctrl
 {
-    float setpoint;     /* Desired value of controller */
-    float Kp;           /* Proportion constant */
-    float Ki;           /* Integral constant */
-    float Kd;           /* Derivative constant */
-    float prev_error;   /* Error from previous sample */
-    float last_error;   /* Latest error collected */
-    float total_error;  /* Error sum */
+    float setpoint;     // desired value of controller
+    float kp;           // proportion constant
+    float ki;           // integral constant
+    float kd;           // derivative constant
+    float e_min;        // minimum range of error
+    float e_max;        // maximum range of error
+    float e_prev;       // error from previous sample
+    float e_curr;       // latest error collected
+    float e_sum;        // error sum
 } pid_ctrl_t;
 
-void pid_reset(pid_ctrl_t *controller, float sp);
+// initialize the pid controller with specified setpoint/min/max
+void pid_init(pid_ctrl_t *pid, float sp, float e_min, float e_max);
+
+// reset the error state within the pid controller
+void pid_reset_error(pid_ctrl_t *pid);
+
+float pid_update(pid_ctrl_t *pid, float error);
 
 // -----------------------------------------------------------------------------
 // Function: pid_compute
@@ -35,12 +43,6 @@ void pid_reset(pid_ctrl_t *controller, float sp);
 //   + u
 // -----------------------------------------------------------------------------
 void pid_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
-
-void p_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
-
-void pd_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
-
-void pi_compute(pid_ctrl_t *controller, float input, float *curr_error, float *u);
 
 #endif // _UAV_PID__H_
 

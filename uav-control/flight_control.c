@@ -213,8 +213,7 @@ static void *autopilot_thread(void *arg)
     memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
 
     // initialize the pid controllers
-    pid_reset(&globals.pid_alt, 42.0f);
-    // pid_init(&globals.pid_pitch, 5.0f, 0.01f, 0.01f, 0.001f);
+    pid_reset_error(&globals.pid_alt);
     
     fprintf(stderr, "autopilot waiting...\n");
     pthread_mutex_lock(&globals.takeoff_cond_lock);
@@ -442,6 +441,12 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     // at initialization, start in autonomous control with all axes enabled
     memset(&globals, 0, sizeof(fc_globals_t));
     fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
+
+    pid_init(&globals.pid_yaw,    0.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_pitch, 42.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_roll,   0.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_alt,    0.0f, -12.0f, 12.0f);
+    // pid_init(&globals.pid_pitch, 5.0f, 0.01f, 0.01f, 0.001f);
 
     // save gpio event handles so we can fetch altitude and orgientation
     globals.usrf = pwm_usrf;
@@ -728,125 +733,81 @@ int fc_get_trim(int axes)
 }
 
 // -----------------------------------------------------------------------------
-int fc_set_pid_param(int axes, int param, float value)
+int fc_set_pid_param(int axis, int param, float value)
 {
     pthread_mutex_lock(&globals.pid_lock);
-    switch (axes) {
-        case VCM_AXIS_YAW:
-            switch (param) {
-                case PID_PARAM_KP:
-                    globals.pid_yaw.Kp = value;
-                    fprintf(stderr, "yaw kp = %f\n", globals.pid_yaw.Kp);
-                    break;
-                case PID_PARAM_KI:
-                    globals.pid_yaw.Ki = value;
-                    fprintf(stderr, "yaw ki = %f\n", globals.pid_yaw.Ki);
-                    break;
-                case PID_PARAM_KD:
-                    globals.pid_yaw.Kd = value;
-                    fprintf(stderr, "yaw kd = %f\n", globals.pid_yaw.Kd);
-                    break;
-                default:
-                    return -1;
-            }
-            pid_reset(&globals.pid_yaw, 0.0f);
-            break;
-        case VCM_AXIS_PITCH:
-            switch (param) {
-                case PID_PARAM_KP:
-                    globals.pid_pitch.Kp = value;
-                    fprintf(stderr, "pitch kp = %f\n", globals.pid_pitch.Kp);
-                    break;
-                case PID_PARAM_KI:
-                    globals.pid_pitch.Ki = value;
-                    fprintf(stderr, "pitch ki = %f\n", globals.pid_pitch.Ki);
-                    break;
-                case PID_PARAM_KD:
-                    globals.pid_pitch.Kd = value;
-                    fprintf(stderr, "pitch kd = %f\n", globals.pid_pitch.Kd);
-                    break;
-                default:
-                    return -1;                   
-            }
-            pid_reset(&globals.pid_pitch, 0.0f);
-            break;
-        case VCM_AXIS_ROLL:
-            switch (param) {
-                case PID_PARAM_KP:
-                    globals.pid_roll.Kp = value;
-                    fprintf(stderr, "roll kp = %f\n", globals.pid_roll.Kp);
-                    break;
-                case PID_PARAM_KI:
-                    globals.pid_roll.Ki = value;
-                    fprintf(stderr, "roll ki = %f\n", globals.pid_roll.Ki);
-                    break;
-                case PID_PARAM_KD:
-                    globals.pid_roll.Kd = value;
-                    fprintf(stderr, "roll kd = %f\n", globals.pid_roll.Kd);
-                    break;
-                default:
-                    return -1;
-            }
-            pid_reset(&globals.pid_roll, 0.0f);
-            break;
-        case VCM_AXIS_ALT:
-            switch (param) {
-                case PID_PARAM_KP:
-                    globals.pid_alt.Kp = value;
-                    fprintf(stderr, "alt kp = %f\n", globals.pid_alt.Kp);
-                    break;
-                case PID_PARAM_KI:
-                    globals.pid_alt.Ki = value;
-                    fprintf(stderr, "alt ki = %f\n", globals.pid_alt.Ki);
-                    break;
-                case PID_PARAM_KD:
-                    globals.pid_alt.Kd = value;
-                    fprintf(stderr, "alt kd = %f\n", globals.pid_alt.Kd);
-                    break;
-                default:
-                    return -1;
-            }
-            pid_reset(&globals.pid_alt, 42.0f);
-            break;
-        default:
-            return -1;
-    }    
+    pid_ctrl_t *pid = NULL;
+
+    switch (axis) {
+    case VCM_AXIS_YAW:
+        fprintf(stderr, "setting yaw pid, ");
+        pid = &globals.pid_yaw; break;
+    case VCM_AXIS_PITCH:
+        fprintf(stderr, "setting pitch pid, ");
+        pid = &globals.pid_pitch; break;
+    case VCM_AXIS_ROLL:
+        fprintf(stderr, "setting roll pid, ");
+        pid = &globals.pid_roll; break;
+    case VCM_AXIS_ALT:
+        fprintf(stderr, "setting alt pid, ");
+        pid = &globals.pid_alt; break;
+    default:
+        pthread_mutex_unlock(&globals.pid_lock);
+        syslog(LOG_ERR, "invalid axis specified for fc_set_pid_param\n");
+        return 0;
+    }
+
+    switch (param) {
+    case PID_PARAM_KP:
+        fprintf(stderr, "kp = %f\n", value);
+        pid->kp = value; break;
+    case PID_PARAM_KI:
+        fprintf(stderr, "ki = %f\n", value);
+        pid->ki = value; break;
+    case PID_PARAM_KD:
+        fprintf(stderr, "kd = %f\n", value);
+        pid->kd = value; break;
+    default:
+        pthread_mutex_unlock(&globals.pid_lock);
+        syslog(LOG_ERR, "invalid parameter specified for fc_set_pid_param\n");
+        return 0;
+    }
+
+    pid_reset_error(pid);
     pthread_mutex_unlock(&globals.pid_lock);
-    return 0;
+    return 1;
 }
 
 // -----------------------------------------------------------------------------
-void fc_get_pid_params(int axis, float params[PID_PARAM_COUNT])
+void fc_get_pid_params(int axis, float *params)
 {
     pthread_mutex_lock(&globals.pid_lock);
-   switch (axis) { 
-       case VCM_AXIS_YAW:
-           params[PID_PARAM_KP] = globals.pid_yaw.Kp;
-           params[PID_PARAM_KI] = globals.pid_yaw.Ki;
-           params[PID_PARAM_KD] = globals.pid_yaw.Kd;
-           break;
-       case VCM_AXIS_PITCH:
-           params[PID_PARAM_KP] = globals.pid_pitch.Kp;
-           params[PID_PARAM_KI] = globals.pid_pitch.Ki;
-           params[PID_PARAM_KD] = globals.pid_pitch.Kd;
-           break;
-       case VCM_AXIS_ROLL:
-           params[PID_PARAM_KP] = globals.pid_roll.Kp;
-           params[PID_PARAM_KI] = globals.pid_roll.Ki;
-           params[PID_PARAM_KD] = globals.pid_roll.Kd;
-           break;
-       case VCM_AXIS_ALT:
-           params[PID_PARAM_KP] = globals.pid_alt.Kp;
-           params[PID_PARAM_KI] = globals.pid_alt.Ki;
-           params[PID_PARAM_KD] = globals.pid_alt.Kd;
-           break;
-      default:
-           params[PID_PARAM_KP] = 0;
-           params[PID_PARAM_KI] = 0;
-           params[PID_PARAM_KD] = 0;
-           fprintf(stderr,"FAILED: unknown axis in fc_get_pid_params");
-           break;
-   }
+    switch (axis) { 
+    case VCM_AXIS_YAW:
+        params[PID_PARAM_KP] = globals.pid_yaw.kp;
+        params[PID_PARAM_KI] = globals.pid_yaw.ki;
+        params[PID_PARAM_KD] = globals.pid_yaw.kd;
+        break;
+    case VCM_AXIS_PITCH:
+        params[PID_PARAM_KP] = globals.pid_pitch.kp;
+        params[PID_PARAM_KI] = globals.pid_pitch.ki;
+        params[PID_PARAM_KD] = globals.pid_pitch.kd;
+        break;
+    case VCM_AXIS_ROLL:
+        params[PID_PARAM_KP] = globals.pid_roll.kp;
+        params[PID_PARAM_KI] = globals.pid_roll.ki;
+        params[PID_PARAM_KD] = globals.pid_roll.kd;
+        break;
+    case VCM_AXIS_ALT:
+        params[PID_PARAM_KP] = globals.pid_alt.kp;
+        params[PID_PARAM_KI] = globals.pid_alt.ki;
+        params[PID_PARAM_KD] = globals.pid_alt.kd;
+        break;
+    default:
+        memset(params, 0, sizeof(float) * 3);
+        syslog(LOG_ERR, "unknown axis specified in fc_get_pid_params");
+        break;
+    }
     pthread_mutex_unlock(&globals.pid_lock);
 }
 
