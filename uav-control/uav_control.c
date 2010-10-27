@@ -533,9 +533,9 @@ void run_server(imu_data_t *imu, const char *port)
                 memcpy(&cmd_buffer[PKT_GPIDS_KD], &pid_params[PID_PARAM_KD], 4);
                 send_packet(&g_client, cmd_buffer, PKT_GPIDS_LENGTH);
 
-                fprintf(stderr, "sent: p = %f, i = %f, d = %f\n", 
+                fprintf(stderr, "sent: p = %f, i = %f, d = %f for axis: %d\n", 
                         pid_params[PID_PARAM_KP], pid_params[PID_PARAM_KI],
-                        pid_params[PID_PARAM_KD]);
+                        pid_params[PID_PARAM_KD], cmd_buffer[PKT_GPIDS_AXIS]);
                 break;
             default:
                 // dump a reasonable number of entries for debugging purposes
