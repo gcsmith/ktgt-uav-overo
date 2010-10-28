@@ -38,13 +38,14 @@ else
 endif
 endif
 
-OBJ_FILES = colordetect.o \
+OBJ_FILES = cmdline.o \
+            colordetect.o \
             flight_control.o \
             gpio_event.o \
             pid.o \
             razor_imu.o \
             readwritejpeg.o \
-			tracking.o \
+            tracking.o \
             uav_control.o \
             utility.o \
             v4l2uvc.o \

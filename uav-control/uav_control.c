@@ -14,7 +14,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <syslog.h>
-#include <getopt.h>
 #include <signal.h>
 #include <errno.h>
 #include <stdio.h>
@@ -22,6 +21,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include "cmdline.h"
 #include "flight_control.h"
 #include "gpio_event.h"
 #include "pwm_interface.h"
@@ -32,7 +32,6 @@
 #include "video_uvc.h"
 #include "utility.h"
 
-#define DEV_LEN 64
 #define MUX_SEL_UPROC 0
 #define MUX_SEL_RADIO 1
 #define FC_TRGT_SIG_ALL  0
@@ -555,284 +554,28 @@ client_disconnect:
 }
 
 // -----------------------------------------------------------------------------
-// Display program usage message.
-void print_usage()
-{
-    printf("usage: uav_control [options]\n\n"
-           "Program options:\n"
-           "  -c, --capture=PATH        capture and store control inputs\n"
-           "  -r, --replay=PATH         set autonomous replay from path\n"
-           "  -s, --stty_dev=DEV        specify serial device for IMU\n"
-           "  -v, --v4l_dev=DEV         specify video device for webcam\n"
-           "  -p, --port=NUM            specify port for network socket\n"
-           "  -m, --mux=NUM             specify gpio for mux select line\n"
-           "  -u, --ultrasonic=NUM      specify gpio for ultrasonic pwm\n"
-           "  -o, --override=NUM        specify gpio for override pwm\n"
-           "  -x, --width=NUM           specify resolution width for webcam\n"
-           "  -y, --height=NUM          specify resolution height for webcam\n"
-           "  -f, --fps=NUM             specify capture framerate for webcam\n"
-           "  -F, --track-fps=NUM       specify color tracking framerate\n"
-           "      --(axis)-(value)=NUM  specify value to set for an axis\n"
-           "                            (axis)   = yaw, pitch, roll, alt\n"
-           "                            (values) = trim, kp, ki, kd, sp\n"
-           /*
-           "      --yaw-trim=NUM        specify yaw axis TRIM value\n"
-           "      --yaw-kp=NUM          specify yaw axis KP value\n"
-           "      --yaw-ki=NUM          specify yaw axis KI value\n"
-           "      --yaw-kd=NUM          specify yaw axis KD value\n"
-           "      --yaw-sp=NUM          specify yaw axis setpoint value\n"
-           "      --pitch-trim=NUM      specify pitch axis TRIM value\n"
-           "      --pitch-kp=NUM        specify pitch axis KP value\n"
-           "      --pitch-ki=NUM        specify pitch axis KI value\n"
-           "      --pitch-kd=NUM        specify pitch axis KD value\n"
-           "      --pitch-sp=NUM        specify pitch axis setpoint value\n"
-           "      --roll-trim=NUM       specify roll axis TRIM value\n"
-           "      --roll-kp=NUM         specify roll axis KP value\n"
-           "      --roll-ki=NUM         specify roll axis KI value\n"
-           "      --roll-kd=NUM         specify roll axis KD value\n"
-           "      --roll-sp=NUM         specify roll axis setpoint value\n"
-           "      --alt-trim=NUM        specify alt axis TRIM value\n"
-           "      --alt-kp=NUM          specify alt axis KP value\n"
-           "      --alt-ki=NUM          specify alt axis KI value\n"
-           "      --alt-kd=NUM          specify alt axis KD value\n"  
-           "      --alt-sp=NUM          specify alt axis setpoint value\n"
-           */              
-           "  -D, --daemonize           run as a background process\n"
-           "  -V, --verbose             enable verbose logging\n"
-           "  -h, --help                display this usage message\n"
-           "      --no-adc              do not capture data from adc\n"
-           "      --no-fc               do not enable autonomous flight\n"
-           "      --no-gpio             do not perform any gpio processing\n"
-           "      --no-track            do not perform color tracking\n"
-           "      --no-video            do not capture video from webcam\n");
-}
-
-// -----------------------------------------------------------------------------
 // Program entry point -- process command line arguments and initialize daemon.
 int main(int argc, char *argv[])
 {
-    int index, opt, log_opt, baud = B57600;
-    int flag_verbose = 0, flag_daemonize = 0;
-    int flag_no_adc = 0, flag_no_video = 0, flag_no_gpio = 0, flag_no_track = 0;
-    int flag_no_fc = 0;
-    int arg_port = 8090, arg_width = 320, arg_height = 240;
-    int arg_fps = 15, arg_track_fps = 5;
-    int arg_mux = 170, arg_ultrasonic = 171, arg_override = 172;
-    int    arg_yaw_trim = 0, arg_pitch_trim = 0, arg_roll_trim = 0, arg_alt_trim = 0;
-    double arg_yaw_kp   = 0, arg_pitch_kp   = 0, arg_roll_kp   = 0, arg_alt_kp   = 0;
-    double arg_yaw_ki   = 0, arg_pitch_ki   = 0, arg_roll_ki   = 0, arg_alt_ki   = 0;
-    double arg_yaw_kd   = 0, arg_pitch_kd   = 0, arg_roll_kd   = 0, arg_alt_kd   = 0;
-    double arg_yaw_sp   = PID_YAW_DEF_SP;
-    double arg_pitch_sp = PID_PITCH_DEF_SP;
-    double arg_roll_sp  = PID_ROLL_DEF_SP;
-    double arg_alt_sp   = PID_ALT_DEF_SP;
+    cmdline_opts_t opts;
+    int log_opt, baud = B57600;
     char port_str[DEV_LEN];
-    char stty_dev[DEV_LEN] = "/dev/ttyS0";
-    char v4l_dev[DEV_LEN] = "/dev/video0";
-    char *capture_path = NULL, *replay_path = NULL;
 
-    #define OPTION_START    2000
-    #define YAW_TRIM        OPTION_START + 0
-    #define YAW_KP          OPTION_START + 1
-    #define YAW_KI          OPTION_START + 2
-    #define YAW_KD          OPTION_START + 3
-    #define YAW_SP          OPTION_START + 4
-    #define PITCH_TRIM      OPTION_START + 5
-    #define PITCH_KP        OPTION_START + 6
-    #define PITCH_KI        OPTION_START + 7
-    #define PITCH_KD        OPTION_START + 8
-    #define PITCH_SP        OPTION_START + 9
-    #define ROLL_TRIM       OPTION_START + 10
-    #define ROLL_KP         OPTION_START + 11
-    #define ROLL_KI         OPTION_START + 12
-    #define ROLL_KD         OPTION_START + 13
-    #define ROLL_SP         OPTION_START + 14
-    #define ALT_TRIM        OPTION_START + 15
-    #define ALT_KP          OPTION_START + 16
-    #define ALT_KI          OPTION_START + 17
-    #define ALT_KD          OPTION_START + 18
-    #define ALT_SP          OPTION_START + 19
-    
-    struct option long_options[] = {
-        { "capture",    required_argument, NULL, 'c' },
-        { "replay",     required_argument, NULL, 'r' },
-        { "stty_dev",   required_argument, NULL, 's' },
-        { "v4l_dev",    required_argument, NULL, 'v' },
-        { "port",       required_argument, NULL, 'p' },
-        { "mux",        required_argument, NULL, 'm' },
-        { "ultrasonic", required_argument, NULL, 'u' },
-        { "override",   required_argument, NULL, 'o' },
-        { "width",      required_argument, NULL, 'x' },
-        { "height",     required_argument, NULL, 'y' },
-        { "fps",        required_argument, NULL, 'f' },
-        { "track-fps",  required_argument, NULL, 'F' },
-
-        { "yaw-trim",   required_argument, NULL, YAW_TRIM },
-        { "yaw-kp",     required_argument, NULL, YAW_KP },
-        { "yaw-ki",     required_argument, NULL, YAW_KI },
-        { "yaw-kd",     required_argument, NULL, YAW_KD },
-        { "yaw-sp",     required_argument, NULL, YAW_SP },
-        { "pitch-trim", required_argument, NULL, PITCH_TRIM },
-        { "pitch-kp",   required_argument, NULL, PITCH_KP },
-        { "pitch-ki",   required_argument, NULL, PITCH_KI },
-        { "pitch-kd",   required_argument, NULL, PITCH_KD },
-        { "pitch-sp",   required_argument, NULL, PITCH_SP },
-        { "roll-trim",  required_argument, NULL, ROLL_TRIM },
-        { "roll-kp",    required_argument, NULL, ROLL_KP },
-        { "roll-ki",    required_argument, NULL, ROLL_KI },
-        { "roll-kd",    required_argument, NULL, ROLL_KD },
-        { "roll-sp",    required_argument, NULL, ROLL_SP },
-        { "alt-trim",   required_argument, NULL, ALT_TRIM },
-        { "alt-kp",     required_argument, NULL, ALT_KP },
-        { "alt-ki",     required_argument, NULL, ALT_KI },
-        { "alt-kd",     required_argument, NULL, ALT_KD },
-        { "alt-sp",     required_argument, NULL, ALT_SP },
-
-        { "daemonize",  no_argument,       NULL, 'D' },
-        { "verbose",    no_argument,       NULL, 'V' },
-        { "help",       no_argument,       NULL, 'h' },
-        { "no-adc",     no_argument,       &flag_no_adc,   1 },
-        { "no-fc",      no_argument,       &flag_no_fc,    1 },
-        { "no-gpio",    no_argument,       &flag_no_gpio,  1 },
-        { "no-track",   no_argument,       &flag_no_track, 1 },
-        { "no-video",   no_argument,       &flag_no_video, 1 },
-        { 0, 0, 0, 0 }
-    };
-
-    static const char *str = "c:r:s:v:p:m:u:o:x:y:f:F:Y:P:R:A:DVh?";
-
-    while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
-        switch (opt) {
-        case YAW_TRIM:
-            arg_yaw_trim = atof(optarg);
-            break;
-        case YAW_KP:
-            arg_yaw_kp = atof(optarg);
-            break;
-        case YAW_KI:
-            arg_yaw_ki = atof(optarg);
-            break;
-        case YAW_KD:
-            arg_yaw_kd = atof(optarg);
-            break;
-        case YAW_SP:
-            arg_yaw_sp = atof(optarg);
-            break;
-
-        case PITCH_TRIM:
-            arg_pitch_trim = atof(optarg);
-            break;
-        case PITCH_KP:
-            arg_pitch_kp = atof(optarg);
-            break;
-        case PITCH_KI:
-            arg_pitch_ki = atof(optarg);
-            break;
-        case PITCH_KD:
-            arg_pitch_kd = atof(optarg);
-            break;
-        case PITCH_SP:
-            arg_pitch_sp = atof(optarg);
-            break;
-
-        case ROLL_TRIM:
-            arg_roll_trim = atof(optarg);
-            break;
-        case ROLL_KP:
-            arg_roll_kp = atof(optarg);
-            break;
-        case ROLL_KI:
-            arg_roll_ki = atof(optarg);
-            break;
-        case ROLL_KD:
-            arg_roll_kd = atof(optarg);
-            break;
-        case ROLL_SP:
-            arg_roll_sp = atof(optarg);
-            break;
-
-        case ALT_TRIM:
-            arg_alt_trim = atof(optarg);
-            break;  
-        case ALT_KP:
-            arg_alt_kp = atof(optarg);
-            break;
-        case ALT_KI:
-            arg_alt_ki = atof(optarg);
-            break;
-        case ALT_KD:
-            arg_alt_kd = atof(optarg);
-            break;
-        case ALT_SP:
-            arg_alt_sp = atof(optarg);
-            break;
-
-        case 'c':
-            capture_path = strdup(optarg);
-            break;
-        case 'r':
-            replay_path = strdup(optarg);
-            break;
-        case 's':
-            strncpy(stty_dev, optarg, DEV_LEN);
-            break;
-        case 'v':
-            strncpy(v4l_dev, optarg, DEV_LEN);
-            break;
-        case 'p':
-            arg_port = atoi(optarg);
-            break;
-        case 'm':
-            arg_mux = atoi(optarg);
-            break;
-        case 'u':
-            arg_ultrasonic = atoi(optarg);
-            break;
-        case 'o':
-            arg_override = atoi(optarg);
-            break;
-        case 'x':
-            arg_width = atoi(optarg);
-            break;
-        case 'y':
-            arg_height = atoi(optarg);
-            break;
-        case 'f':
-            arg_fps = atoi(optarg);
-            break;
-        case 'F':
-            arg_track_fps = atoi(optarg);
-            break;
-        case 'D':
-            flag_daemonize = 1;
-            break;
-        case 'V':
-            flag_verbose = 1;
-            break;
-        case 'h': // fall through
-        case '?':
-            print_usage();
-            exit(EXIT_SUCCESS);
-        case 0:
-            break;
-        default:
-            syslog(LOG_ERR, "unexpected argument '%c'\n", opt);
-            assert(!"unhandled case in option handling -- this is an error");
-            break;
-        }
+    if (!cmdline_parse(argc, argv, &opts)) {
+        return EXIT_FAILURE;
     }
-
-    if (flag_daemonize) {
+    
+    if (opts.daemonize) {
         // run as a background process
         daemonize();
     }
 
     // attach to the system log server
-    log_opt = flag_verbose ? (LOG_PID | LOG_PERROR) : LOG_PID;
+    log_opt = opts.verbose ? (LOG_PID | LOG_PERROR) : LOG_PID;
     openlog("uav", log_opt, LOG_DAEMON);
     syslog(LOG_INFO, "uav-control initialized");
 
-    snprintf(port_str, DEV_LEN, "%d", arg_port);
+    snprintf(port_str, DEV_LEN, "%d", opts.port);
     syslog(LOG_INFO, "opening network socket on port %s\n", port_str);
 
     // install signal handler for clean shutdown
@@ -842,14 +585,14 @@ int main(int argc, char *argv[])
     }
 
     // attempt to initialize imu communication
-    syslog(LOG_INFO, "opening and configuring stty device '%s'\n", stty_dev);
-    if (!imu_init(stty_dev, baud, &g_imu)) {
+    syslog(LOG_INFO, "opening and configuring stty device '%s'\n", opts.stty_dev);
+    if (!imu_init(opts.stty_dev, baud, &g_imu)) {
         syslog(LOG_ERR, "failed to initialize IMU");
         uav_shutdown(EXIT_FAILURE);
     }
 
     // attempt to initialize the flight control subsystem
-    if (!flag_no_fc) {
+    if (!opts.no_fc) {
         syslog(LOG_INFO, "opening flight control\n");
         if (!fc_init(&g_gpio_alt, &g_imu)) {
             syslog(LOG_ERR, "failed to open flight control\n");
@@ -857,69 +600,69 @@ int main(int argc, char *argv[])
         }
 
         // initialize flight control trims (default zero)
-        fc_set_trims(VCM_AXIS_YAW,   arg_yaw_trim);
-        fc_set_trims(VCM_AXIS_PITCH, arg_pitch_trim);
-        fc_set_trims(VCM_AXIS_ROLL,  arg_roll_trim);
-        fc_set_trims(VCM_AXIS_ALT,   arg_alt_trim);
+        fc_set_trims(VCM_AXIS_YAW,   opts.yaw[0]);
+        fc_set_trims(VCM_AXIS_PITCH, opts.pitch[0]);
+        fc_set_trims(VCM_AXIS_ROLL,  opts.roll[0]);
+        fc_set_trims(VCM_AXIS_ALT,   opts.alt[0]);
 
-        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KP, arg_yaw_kp); 
-        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KI, arg_yaw_ki); 
-        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KD, arg_yaw_kd); 
-        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_SP, arg_yaw_sp);
+        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KP, opts.yaw[1]); 
+        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KI, opts.yaw[2]); 
+        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KD, opts.yaw[3]); 
+        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_SP, opts.yaw[4]);
 
-        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KP, arg_pitch_kp); 
-        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KI, arg_pitch_ki); 
-        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KD, arg_pitch_kd); 
-        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_SP, arg_pitch_sp);
+        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KP, opts.pitch[1]); 
+        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KI, opts.pitch[2]); 
+        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KD, opts.pitch[3]); 
+        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_SP, opts.pitch[4]);
 
-        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KP, arg_roll_kp); 
-        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KI, arg_roll_ki); 
-        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KD, arg_roll_kd); 
-        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_SP, arg_roll_sp);
+        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KP, opts.roll[1]); 
+        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KI, opts.roll[2]); 
+        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KD, opts.roll[3]); 
+        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_SP, opts.roll[4]);
         
-        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KP, arg_alt_kp); 
-        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KI, arg_alt_ki); 
-        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KD, arg_alt_kd); 
-        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_SP, arg_alt_sp);
+        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KP, opts.alt[1]); 
+        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KI, opts.alt[2]); 
+        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KD, opts.alt[3]); 
+        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_SP, opts.alt[4]);
 
         // check if we're capturing or replaying a trace
-        if (capture_path && replay_path) {
+        if (opts.capture_path && opts.replay_path) {
             // does not make sense to specify both at once
             syslog(LOG_ERR, "cannot specify both --capture and --replay\n");
             uav_shutdown(EXIT_FAILURE);
         }
-        else if (capture_path) {
+        else if (opts.capture_path) {
             // tell flight_control to capture input for mixed mode control
             syslog(LOG_INFO, "enabling capture mode for flight control\n");
-            fc_set_capture(capture_path);
+            fc_set_capture(opts.capture_path);
         }
-        else if (replay_path) {
+        else if (opts.replay_path) {
             // tell flight_control to replay stored input signals
             syslog(LOG_INFO, "enabling replay mode for flight control\n");
-            fc_set_replay(replay_path);
+            fc_set_replay(opts.replay_path);
         }
     } 
     else {
-        if (capture_path || replay_path) {
+        if (opts.capture_path || opts.replay_path) {
             // warn the user but don't bother failing
             syslog(LOG_ERR, "cannot capture or replay --no-fc (ignoring)\n");
         }
     }
 
     // initialize the gpio subsystem(s) unless specified not to (no-gpio)
-    if (!flag_no_gpio) {
+    if (!opts.no_gpio) {
         // initialize gpio event monitors
         if (!gpio_event_init()) {
             syslog(LOG_ERR, "failed to initialize gpio event subsystem");
             uav_shutdown(EXIT_FAILURE);
         }
 
-        if (!gpio_event_attach(&g_gpio_alt, arg_ultrasonic)) {
+        if (!gpio_event_attach(&g_gpio_alt, opts.uss)) {
             syslog(LOG_ERR, "failed to monitor ultrasonic gpio pin");
             uav_shutdown(EXIT_FAILURE);
         }
 
-        if (!gpio_event_attach(&g_gpio_aux, arg_override)) {
+        if (!gpio_event_attach(&g_gpio_aux, opts.ovr)) {
             syslog(LOG_ERR, "failed to monitor auxiliary override gpio pin");
             uav_shutdown(EXIT_FAILURE);
         }
@@ -930,14 +673,14 @@ int main(int argc, char *argv[])
             uav_shutdown(EXIT_FAILURE);
         }
 
-        g_muxsel = arg_mux;
-        if (0 > gpio_request(arg_mux, "uav_control mux select line")) {
-            syslog(LOG_ERR, "failed to request mux select gpio %d", arg_mux);
+        g_muxsel = opts.mux;
+        if (0 > gpio_request(opts.mux, "uav_control mux select line")) {
+            syslog(LOG_ERR, "failed to request mux select gpio %d", opts.mux);
             uav_shutdown(EXIT_FAILURE);
         }
 
-        if (0 > gpio_direction_output(arg_mux, 1)) {
-            syslog(LOG_ERR, "failed to set gpio %d direction to out", arg_mux);
+        if (0 > gpio_direction_output(opts.mux, 1)) {
+            syslog(LOG_ERR, "failed to set gpio %d direction to out", opts.mux);
             uav_shutdown(EXIT_FAILURE);
         }
 
@@ -952,18 +695,18 @@ int main(int argc, char *argv[])
     }
 
     // initialize video subsystem unless specified not to (no-video)
-    if (!flag_no_video) {
-        video_mode_t mode = { arg_width, arg_height, arg_fps };
-        syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", v4l_dev);
-        if (!video_init(v4l_dev, &mode)) {
+    if (!opts.no_video) {
+        video_mode_t mode = { opts.vid_width, opts.vid_height, opts.vid_fps };
+        syslog(LOG_INFO, "opening and configuring v4l device '%s'\n", opts.v4l_dev);
+        if (!video_init(opts.v4l_dev, &mode)) {
             syslog(LOG_ERR, "failed to initialize video subsystem\n");
             uav_shutdown(EXIT_FAILURE);
         }
     }
 
     // initialize color tracking subsystem
-    if (!flag_no_track) {
-        if (!flag_no_video) {
+    if (!opts.no_track) {
+        if (!opts.no_video) {
             // make a note that tracking isn't possible with video
             syslog(LOG_INFO, "initializing color tracking subsystem\n");
             if (!tracking_init(&g_client)) {
@@ -972,7 +715,7 @@ int main(int argc, char *argv[])
             }
 
             // set the initial tracking framerate (not tied to webcam framerate)
-            tracking_set_fps(arg_track_fps);
+            tracking_set_fps(opts.track_fps);
         }
         else {
             syslog(LOG_INFO, "color tracking not possible without video");
@@ -980,7 +723,7 @@ int main(int argc, char *argv[])
     }
 
     // initialize adc channels for battery monitoring
-    if (!flag_no_adc) {
+    if (!opts.no_adc) {
         syslog(LOG_INFO, "opening adc channels for battery monitoring\n");
         if (0 > adc_open_channels()) {
             syslog(LOG_ERR, "failed to open adc channels\n");
