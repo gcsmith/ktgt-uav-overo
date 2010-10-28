@@ -352,16 +352,20 @@ static void *dr_landing_thread(void *arg)
     control.alt = globals.carry_over;
 
     // back off the throttle in a decaying manner, until treshold reached
-    while ((AUTO_LANDING == globals.auto_state) && (control.alt > 0.525)) {
-        control.alt *= 0.9925;
+    while (AUTO_LANDING == globals.auto_state) {
+        // capture altitude
+        float fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
+        if (fd_alt < 10.0f)
+            break;
+
+        control.alt -= 0.0014f;
         fc_control(&control, VCM_AXIS_ALT);
-        usleep(300000); // 3.333 Hz -- TODO: make this routine better
-        fprintf(stderr, "dropping throttle to %f\n", control.alt);
     }
     fprintf(stderr, "done dropping throttle\n");
 
     // by this point the helicopter will hopefully be on the ground with 
     // minimal throttle so we can shut off motors completely
+    usleep(500);
     control.alt = 0.0f;
     fc_control(&control, VCM_AXIS_ALT);
 
