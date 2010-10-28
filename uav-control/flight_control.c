@@ -47,7 +47,6 @@ typedef struct fc_globals {
 
     pthread_mutex_t takeoff_lock;
     pthread_mutex_t landing_lock;
-    pthread_mutex_t alive_lock;
     pthread_mutex_t vcm_lock;
     pthread_mutex_t pid_lock;
     pthread_cond_t  takeoff_cond;
@@ -60,7 +59,7 @@ typedef struct fc_globals {
     int auto_state;
     int vcm_axes;
     int vcm_type;
-    int alive;
+    int enabled;
 
     const char *capture_path;
     const char *replay_path;
@@ -146,16 +145,6 @@ static void record_write_buckets(void)
 }
 
 // -----------------------------------------------------------------------------
-static int fc_get_alive(void)
-{
-    int alive = 0;
-    pthread_mutex_lock(&globals.alive_lock);
-    alive = globals.alive;
-    pthread_mutex_unlock(&globals.alive_lock);
-    return alive;
-}
-
-// -----------------------------------------------------------------------------
 static void assign_duty(pwm_channel_t *pwm, float duty)
 {
     int cmp_val = 0;
@@ -194,7 +183,7 @@ static void assign_value(pwm_channel_t *pwm, float val)
 // -----------------------------------------------------------------------------
 static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 {
-    if (!fc_get_alive())
+    if (!globals.enabled)
         return 0;
 
     if (chnl_flags & VCM_AXIS_ALT)
@@ -227,7 +216,7 @@ static void *auto_alt_thread(void *arg)
     pthread_mutex_unlock(&globals.takeoff_lock);
     fprintf(stderr, "auto_alt_thread starting...\n");
 
-    while (fc_get_alive()) {
+    while (AUTO_HOVERING == globals.auto_state) {
         // capture altitude
         fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
 
@@ -277,7 +266,7 @@ void *auto_imu_thread(void *arg)
     pid_reset_error(&globals.pid_roll);
     pid_reset_error(&globals.pid_yaw);
     
-    while (fc_get_alive()) {
+    while (AUTO_HOVERING == globals.auto_state) {
         // blocks on IMU data to capture current attitude
         if (0 > imu_read_angles(globals.imu, attitude, ACCESS_SYNC)) {
             // error occurred while trying to read IMU data
@@ -343,9 +332,8 @@ static void *dr_takeoff_thread(void *arg)
     memset(&control, 0, sizeof(control));
 
 #ifdef DBG_DO_TAKEOFF
-    int i;
     control.alt = 0.0f;
-    for (i = 0; i < 575; i++) {
+    while ((AUTO_TAKEOFF == globals.auto_state) && (control.alt < .6)) {
         control.alt += 0.0014;
         fc_control(&control, VCM_AXIS_ALT);
         usleep(10000);
@@ -355,6 +343,9 @@ static void *dr_takeoff_thread(void *arg)
     // sleep to give the autonomous thread a chance to wait on takeoff_cond
     sleep(1);
 #endif
+
+    if (AUTO_TAKEOFF == globals.auto_state)
+        globals.auto_state = AUTO_HOVERING;
 
 #ifdef DBG_DO_AUTONOMOUS
     // signal to the blocked altitude and orientation threads to start
@@ -392,8 +383,8 @@ static void *dr_landing_thread(void *arg)
     control.alt = 0.585f;
 
     // back off the throttle in a decaying manner, until treshold reached
-    while (control.alt > 0.0001f) {
-        control.alt *= 0.95;
+    while ((AUTO_LANDING == globals.auto_state) && (control.alt > 0.0001f)) {
+        control.alt *= 0.99;
         fc_control(&control, VCM_AXIS_ALT);
         usleep(10000);
         fprintf(stderr, "dropping throttle to %f\n", control.alt);
@@ -471,7 +462,6 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     globals.imu  = ypr_imu;
 
     // initialize all of our thread synchronization primitives
-    pthread_mutex_init(&globals.alive_lock, NULL);
     pthread_mutex_init(&globals.vcm_lock, NULL);
     pthread_mutex_init(&globals.pid_lock, NULL);
     pthread_mutex_init(&globals.takeoff_lock, NULL);
@@ -496,6 +486,7 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
         return 0;
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
+    globals.enabled = 1;
     globals.auto_state = AUTO_GROUNDED;
     fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
     syslog(LOG_INFO, "opened pwm device nodes\n");
@@ -508,7 +499,7 @@ void fc_shutdown(void)
     int i;
 
     // set flag for all controllers to see that flight control is shutting down
-    globals.alive = 0;
+    globals.enabled = 0;
 
     // TODO: Wait for controller threads to exit
 
@@ -517,7 +508,6 @@ void fc_shutdown(void)
 
     globals.usrf = NULL;
 
-    pthread_mutex_destroy(&globals.alive_lock);
     pthread_mutex_destroy(&globals.vcm_lock);
     pthread_mutex_destroy(&globals.pid_lock);
     pthread_mutex_destroy(&globals.takeoff_lock);
@@ -616,8 +606,9 @@ int fc_set_replay(const char *path)
 // -----------------------------------------------------------------------------
 int fc_request_takeoff(void)
 {
-    if (!fc_get_alive()) {
-        syslog(LOG_ERR, "flight_control cannot takeoff in dead state");
+    // don't do anything if this subsystem is disabled
+    if (!globals.enabled) {
+        syslog(LOG_ERR, "fc_request_takeoff: flight control not enabled\n");
         return 0;
     }
 
@@ -625,14 +616,14 @@ int fc_request_takeoff(void)
         pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, NULL);
     }
     else if (AUTO_GROUNDED == globals.auto_state) {
+        globals.auto_state = AUTO_TAKEOFF;
         pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
         pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
         pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
         pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
     }
     else {
-        syslog(LOG_ERR, "takeoff request denied, not grounded (%d)\n",
-               globals.auto_state);
+        syslog(LOG_ERR, "takeoff request denied, not grounded\n");
         return 0;
     }
 
@@ -642,12 +633,21 @@ int fc_request_takeoff(void)
 // -----------------------------------------------------------------------------
 int fc_request_landing(void)
 {
-    if (!fc_get_alive()) {
-        syslog(LOG_ERR, "flight_controll cannot land in dead state");
+    // don't do anything if this subsystem is disabled
+    if (!globals.enabled) {
+        syslog(LOG_ERR, "fc_request_landing: flight control not enabled\n");
         return 0;
     }
 
-    pthread_create(&globals.landing_thrd, NULL, dr_landing_thread, NULL);
+    if (AUTO_HOVERING == globals.auto_state) {
+        globals.auto_state = AUTO_LANDING;
+        pthread_create(&globals.landing_thrd, NULL, dr_landing_thread, NULL);
+    }
+    else {
+        syslog(LOG_ERR, "landing request denied, not hovering\n");
+        return 0;
+    }
+
     return 1;
 }
 
@@ -655,7 +655,6 @@ int fc_request_landing(void)
 static void fc_reset_state(void)
 {
     pwm_channel_t *ch = &globals.channels[0];
-    globals.alive = 0.0f;
     globals.curr_alt = 0.0f;
     globals.auto_state = AUTO_GROUNDED;
 
