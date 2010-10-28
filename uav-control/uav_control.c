@@ -295,12 +295,12 @@ void run_server(imu_data_t *imu, const char *port)
             switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
                 syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
-                fc_takeoff();
+                fc_request_takeoff();
                 send_simple_packet(&g_client, SERVER_ACK_TAKEOFF);
                 break;
             case CLIENT_REQ_LANDING:
                 syslog(LOG_INFO, "user requested landing -- landing...\n");
-                fc_land();
+                fc_request_landing();
                 send_simple_packet(&g_client, SERVER_ACK_LANDING);
                 break;
             case CLIENT_REQ_TELEMETRY:

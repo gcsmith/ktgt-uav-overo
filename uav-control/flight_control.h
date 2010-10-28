@@ -79,13 +79,13 @@ int fc_set_capture(const char *path);
 int fc_set_replay(const char *path);
 
 // request autonomous takeoff
-int fc_takeoff();
+int fc_request_takeoff(void);
 
 // request autonomous landing
-int fc_land();
+int fc_request_landing(void);
 
 // update vehicle control mode info (control type and enabled axes)
-void fc_set_vcm(int axis, int type);
+int fc_set_vcm(int axis, int type);
 
 // get the current control mode type and enabled axes
 void fc_get_vcm(int *axis, int *type);

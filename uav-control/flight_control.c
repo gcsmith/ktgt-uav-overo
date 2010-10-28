@@ -33,23 +33,29 @@
 #define DBG_DO_TAKEOFF
 #define DBG_DO_AUTONOMOUS
 
+#define AUTO_GROUNDED   0
+#define AUTO_TAKEOFF    1
+#define AUTO_HOVERING   2
+#define AUTO_LANDING    3
+
 typedef struct fc_globals {
     pthread_t replay_thrd;
     pthread_t takeoff_thrd;
-    pthread_t land_thrd;
+    pthread_t landing_thrd;
     pthread_t auto_alt_thrd;
     pthread_t auto_imu_thrd;
 
     pthread_cond_t  takeoff_cond;
+    pthread_mutex_t takeoff_lock;
     pthread_mutex_t alive_lock;
     pthread_mutex_t vcm_lock;
-    pthread_mutex_t takeoff_cond_lock;
     pthread_mutex_t pid_lock;
 
     pwm_channel_t channels[4];
     gpio_event_t *usrf; // ultrasonic range finder pwm
     imu_data_t *imu;    // imu sensor
 
+    int auto_state;
     int vcm_axes;
     int vcm_type;
     int alive;
@@ -148,14 +154,6 @@ static int fc_get_alive(void)
 }
 
 // -----------------------------------------------------------------------------
-static void fc_set_alive(int alive)
-{
-    pthread_mutex_lock(&globals.alive_lock);
-    globals.alive = alive;
-    pthread_mutex_unlock(&globals.alive_lock);
-}
-
-// -----------------------------------------------------------------------------
 static void assign_duty(pwm_channel_t *pwm, float duty)
 {
     int cmp_val = 0;
@@ -219,42 +217,22 @@ static void *auto_altitude_thread(void *arg)
     memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
     pid_reset_error(&globals.pid_alt);
     
-    // wait for the takeoff process to complete
+    // wait for the dr takeoff process to complete and signal pid altitude
     fprintf(stderr, "auto_altitude_thread waiting...\n");
-    pthread_mutex_lock(&globals.takeoff_cond_lock);
-    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_cond_lock);
-    pthread_mutex_unlock(&globals.takeoff_cond_lock);
+    pthread_mutex_lock(&globals.takeoff_lock);
+    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_lock);
+    pthread_mutex_unlock(&globals.takeoff_lock);
     fprintf(stderr, "auto_altitude_thread starting...\n");
 
     while (fc_get_alive()) {
-        int axes = VCM_AXIS_ALL;
-
         // capture altitude
         fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
 
         // capture flight control's mode and vcm axes
-        pthread_mutex_lock(&globals.vcm_lock);
-        vcm_axes = globals.vcm_axes;
-        vcm_type = globals.vcm_type;
-        pthread_mutex_unlock(&globals.vcm_lock);
+        fc_get_vcm(&vcm_axes, &vcm_type);
 
-        switch (vcm_type) {
-        case VCM_TYPE_KILL:
-            fprintf(stderr, "vcm_type = kill\n");
-            // reset all signals if flight control is of type kill
-            break;
-        case VCM_TYPE_AUTO:
-            fprintf(stderr, "vcm_type = auto\n");
-            axes = 0;
-            break;
-        case VCM_TYPE_MIXED:
-            fprintf(stderr, "vcm_type = mixed\n");
-            axes = vcm_axes;
-            break;
-        }
-            
         // check altitude bit is 0 for autonomous control
-        if (!(axes & VCM_AXIS_ALT)) {
+        if (!(vcm_axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
             float pid_result = pid_update(&globals.pid_alt, fd_alt);
             pthread_mutex_unlock(&globals.pid_lock);
@@ -285,14 +263,12 @@ void *auto_orientation_thread(void *arg)
     
     // wait for the takeoff process to complete
     fprintf(stderr, "auto_orientation_thread waiting...\n");
-    pthread_mutex_lock(&globals.takeoff_cond_lock);
-    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_cond_lock);
-    pthread_mutex_unlock(&globals.takeoff_cond_lock);
+    pthread_mutex_lock(&globals.takeoff_lock);
+    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_lock);
+    pthread_mutex_unlock(&globals.takeoff_lock);
     fprintf(stderr, "auto_orientation_thread starting...\n");
 
     while (fc_get_alive()) {
-        int axes = VCM_AXIS_ALL; // for testing purposes
-
         // blocks on IMU data to capture current attitude
         if (0 > imu_read_angles(globals.imu, attitude, ACCESS_SYNC)) {
             // error occurred while trying to read IMU data
@@ -301,28 +277,10 @@ void *auto_orientation_thread(void *arg)
         }
         
         // capture axes and type
-        pthread_mutex_lock(&globals.vcm_lock);
-        vcm_axes = globals.vcm_axes;
-        vcm_type = globals.vcm_type;
-        pthread_mutex_unlock(&globals.vcm_lock);
+        fc_get_vcm(&vcm_axes, &vcm_type);
 
-        switch (vcm_type) {
-        case VCM_TYPE_KILL:
-            fprintf(stderr, "vcm_type = kill\n");
-            // reset all signals if flight control is of type kill
-            break;
-        case VCM_TYPE_AUTO:
-            fprintf(stderr, "vcm_type = auto\n");
-            axes = 0;
-            break;
-        case VCM_TYPE_MIXED:
-            fprintf(stderr, "vcm_type = mixed\n");
-            axes = vcm_axes;
-            break;
-        }
-            
         // check for pitch
-        if (!(axes & VCM_AXIS_PITCH)) {
+        if (!(vcm_axes & VCM_AXIS_PITCH)) {
             pthread_mutex_lock(&globals.pid_lock);
             float pid_result = pid_update(&globals.pid_pitch, 
                     attitude[IMU_DATA_PITCH]);
@@ -332,7 +290,7 @@ void *auto_orientation_thread(void *arg)
         }
         
         // check for roll
-        if (!(axes & VCM_AXIS_ROLL)) {
+        if (!(vcm_axes & VCM_AXIS_ROLL)) {
             pthread_mutex_lock(&globals.pid_lock);
             float pid_result = pid_update(&globals.pid_roll, attitude[IMU_DATA_ROLL]);
             pthread_mutex_unlock(&globals.pid_lock);
@@ -341,7 +299,7 @@ void *auto_orientation_thread(void *arg)
         }
         
         // check for yaw
-        if (!(axes & VCM_AXIS_YAW)) {
+        if (!(vcm_axes & VCM_AXIS_YAW)) {
             pthread_mutex_lock(&globals.pid_lock);
             float pid_result = pid_update(&globals.pid_yaw, attitude[IMU_DATA_YAW]);
             pthread_mutex_unlock(&globals.pid_lock);
@@ -373,15 +331,6 @@ static void *dr_takeoff_thread(void *arg)
     // 0 is autonomous controlled
     // 1 is manual/mixed controlled
 
-    pthread_mutex_lock(&globals.vcm_lock);
-    globals.vcm_axes |= VCM_AXIS_ALT;
-
-    // spawn autopilot thread for altitude
-    pthread_create(&globals.auto_alt_thrd, NULL, auto_altitude_thread, NULL);
-    //pthread_create(&globals.auto_imu_thrd, NULL, auto_orientation_thread, NULL);
-
-    pthread_mutex_unlock(&globals.vcm_lock);
-
     memset(&control, 0, sizeof(control));
 
 #ifdef DBG_DO_TAKEOFF
@@ -399,15 +348,49 @@ static void *dr_takeoff_thread(void *arg)
 #endif
 
 #ifdef DBG_DO_AUTONOMOUS
-    pthread_mutex_lock(&globals.takeoff_cond_lock);
+    // signal to the blocked altitude and orientation threads to start
+    pthread_mutex_lock(&globals.takeoff_lock);
     pthread_cond_broadcast(&globals.takeoff_cond);
-    pthread_mutex_unlock(&globals.takeoff_cond_lock);
+    pthread_mutex_unlock(&globals.takeoff_lock);
 #else
     control.alt = 0.0f;
     fc_control(&control, VCM_AXIS_ALT);
 #endif
 
     fprintf(stderr, "takeoff thread exiting\n");
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+static void *dr_landing_thread(void *arg)
+{
+    ctl_sigs_t control;
+
+    // procedure:
+    // turn autonomous pitch on
+    // turn autonomous roll on
+    // turn autonomous altitude off
+    // slowly kill throttle
+    // once throttle is at minimum exit function
+
+    // drop to trimmed throttle
+    control.alt = 0.585f;
+
+    // back off the throttle in a decaying manner, until treshold reached
+    while (control.alt > 0.0001f) {
+        control.alt *= 0.95;
+        fc_control(&control, VCM_AXIS_ALT);
+        usleep(10000);
+        fprintf(stderr, "dropping throttle to %f\n", control.alt);
+    }
+    fprintf(stderr, "done dropping throttle\n");
+
+    // by this point the helicopter will hopefully be on the ground with 
+    // minimal throttle so we can shut off motors completely
+    control.alt = 0.0f;
+    fc_control(&control, VCM_AXIS_ALT);
+
+    fprintf(stderr, "helicopter landed\n");
     pthread_exit(NULL);
 }
 
@@ -437,48 +420,6 @@ static void *dr_replay_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-static void *landing_thread(void *arg)
-{
-    int i;
-    ctl_sigs_t control;
-
-    control.alt = 0.0f;
-
-    // procedure:
-    // turn autonomous pitch on
-    // turn autonomous roll on
-    // turn autonomous altitude off
-    // slowly kill throttle
-    // once throttle is at minimum exit function
-
-    pthread_mutex_lock(&globals.vcm_lock);
-    globals.vcm_axes &= ~(VCM_AXIS_PITCH);
-    globals.vcm_axes &= ~(VCM_AXIS_ROLL);
-    globals.vcm_axes |= VCM_AXIS_ALT;
-    pthread_mutex_unlock(&globals.vcm_lock);
-
-    // drop to trimmed throttle
-    control.alt = 0.585f;
-
-    // slowly back off of throttle
-    for (i = 0; i < 1000; i++) {
-        control.alt -= 0.0004;
-        fc_control(&control, VCM_AXIS_ALT);
-        usleep(10000);
-    }
-    fprintf(stderr, "done dropping throttle\n");
-
-    // by this point the helicopter will hopefully be on the ground with 
-    // minimal throttle so we can shut off motors completely
-    control.alt = 0.0f;
-    fc_control(&control, VCM_AXIS_ALT);
-
-    fprintf(stderr, "helicopter landed\n");
-
-    pthread_exit(NULL);
-}
-
-// -----------------------------------------------------------------------------
 static int init_channel(int index, int freq, float lo, float hi, float idle)
 {
     pwm_channel_t *pwm = &globals.channels[index];
@@ -504,13 +445,11 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
 {
     // at initialization, start in autonomous control with all axes enabled
     memset(&globals, 0, sizeof(fc_globals_t));
-    fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
 
     pid_init(&globals.pid_yaw,    0.0f, -12.0f, 12.0f);
     pid_init(&globals.pid_pitch,  0.0f, -12.0f, 12.0f);
     pid_init(&globals.pid_roll,   0.0f, -12.0f, 12.0f);
     pid_init(&globals.pid_alt,   42.0f, -12.0f, 12.0f);
-    // pid_init(&globals.pid_pitch, 5.0f, 0.01f, 0.01f, 0.001f);
 
     // save gpio event handles so we can fetch altitude and orgientation
     globals.usrf = pwm_usrf;
@@ -519,8 +458,9 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     // initialize all of our thread synchronization primitives
     pthread_mutex_init(&globals.alive_lock, NULL);
     pthread_mutex_init(&globals.vcm_lock, NULL);
-    pthread_cond_init(&globals.takeoff_cond, NULL);
     pthread_mutex_init(&globals.pid_lock, NULL);
+    pthread_mutex_init(&globals.takeoff_lock, NULL);
+    pthread_cond_init(&globals.takeoff_cond, NULL);
     
     // initialize the pwm channels for throttle, yaw, pitch, and roll
     if (!init_channel(PWM_ALT, 4582, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
@@ -539,18 +479,19 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
         return 0;
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
-    fc_set_alive(1);
+    globals.auto_state = AUTO_GROUNDED;
+    fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
     syslog(LOG_INFO, "opened pwm device nodes\n");
     return 1;
 }
 
 // -----------------------------------------------------------------------------
-void fc_shutdown()
+void fc_shutdown(void)
 {
     int i;
 
     // set flag for all controllers to see that flight control is shutting down
-    fc_set_alive(0);
+    globals.alive = 0;
 
     // TODO: Wait for controller threads to exit
 
@@ -561,8 +502,9 @@ void fc_shutdown()
 
     pthread_mutex_destroy(&globals.alive_lock);
     pthread_mutex_destroy(&globals.vcm_lock);
-    pthread_cond_destroy(&globals.takeoff_cond);
     pthread_mutex_destroy(&globals.pid_lock);
+    pthread_mutex_destroy(&globals.takeoff_lock);
+    pthread_cond_destroy(&globals.takeoff_cond);
 
     if (globals.capture_path) {
         // save and destroy the record buckets
@@ -653,7 +595,7 @@ int fc_set_replay(const char *path)
 }
 
 // -----------------------------------------------------------------------------
-int fc_takeoff()
+int fc_request_takeoff(void)
 {
     if (!fc_get_alive()) {
         syslog(LOG_ERR, "flight_control cannot takeoff in dead state");
@@ -664,25 +606,35 @@ int fc_takeoff()
         pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, NULL);
     }
     else {
-        pthread_create(&globals.takeoff_thrd, NULL, dr_takeoff_thread, NULL);
+        if (AUTO_GROUNDED == globals.auto_state) {
+            pthread_create(&globals.takeoff_thrd , NULL, dr_takeoff_thread, NULL);
+            // pthread_create(&globals.landing_thrd , NULL, dr_landing_thread, NULL);
+            pthread_create(&globals.auto_alt_thrd, NULL, auto_altitude_thread, NULL);
+            // pthread_create(&globals.auto_imu_thrd, NULL, auto_orientation_thread, NULL);
+        }
+        else {
+            syslog(LOG_ERR, "takeoff request denied, not grounded (%d)\n", globals.auto_state);
+            return 0;
+        }
     }
+
     return 1;
 }
 
 // -----------------------------------------------------------------------------
-int fc_land()
+int fc_request_landing(void)
 {
     if (!fc_get_alive()) {
         syslog(LOG_ERR, "flight_controll cannot land in dead state");
         return 0;
     }
 
-    pthread_create(&globals.land_thrd, NULL, landing_thread, NULL);
+    pthread_create(&globals.landing_thrd, NULL, dr_landing_thread, NULL);
     return 1;
 }
 
 // -----------------------------------------------------------------------------
-void fc_reset_channels(void)
+static void fc_reset_channels(void)
 {
     pwm_channel_t *ch = &globals.channels[0];
     globals.curr_alt = 0.0f;
@@ -694,31 +646,41 @@ void fc_reset_channels(void)
 }
 
 // -----------------------------------------------------------------------------
-void fc_set_vcm(int axes, int type)
+int fc_set_vcm(int axes, int type)
 {
     int curr_type;
-
     pthread_mutex_lock(&globals.vcm_lock);
-    curr_type = globals.vcm_type;
-    pthread_mutex_unlock(&globals.vcm_lock);
 
+    curr_type = globals.vcm_type;
     if (VCM_TYPE_KILL == curr_type) {
         // if we're killed, don't allow any more state transitions
+        pthread_mutex_unlock(&globals.vcm_lock);
         fprintf(stderr, "not alive. ignoring fc_set_vcm\n");
-        return;
+        return 0;
     }
 
     // otherwise, set the new type and axes and continue
-    pthread_mutex_lock(&globals.vcm_lock);
     globals.vcm_type = type;
     globals.vcm_axes = axes;
-    pthread_mutex_unlock(&globals.vcm_lock);
+    globals.alive = (VCM_TYPE_KILL != type) && (VCM_TYPE_LOCKOUT != type);
 
+    // reset the channels to their idle values every time we switch state
     fc_reset_channels();
-    fc_set_alive((VCM_TYPE_KILL != type) && (VCM_TYPE_LOCKOUT != type));
 
     // save the last timer tick every time we switch state
     clock_gettime(CLOCK_REALTIME, &globals.last_time);
+
+    pthread_mutex_unlock(&globals.vcm_lock);
+    return 1;
+}
+
+// -----------------------------------------------------------------------------
+void fc_get_vcm(int *axes, int *type)
+{
+    pthread_mutex_lock(&globals.vcm_lock);
+    *axes = globals.vcm_axes;
+    *type = globals.vcm_type;
+    pthread_mutex_unlock(&globals.vcm_lock);
 }
 
 // -----------------------------------------------------------------------------
@@ -741,13 +703,6 @@ void fc_set_ctl(ctl_sigs_t *sigs)
         // if --capture is enabled, store this control signal
         record_insert_sigs(sigs);
     }
-}
-
-// -----------------------------------------------------------------------------
-void fc_get_vcm(int *axes, int *type)
-{
-    *axes = globals.vcm_axes;
-    *type = globals.vcm_type;
 }
 
 // -----------------------------------------------------------------------------
