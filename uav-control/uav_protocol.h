@@ -10,7 +10,7 @@
 #define _UAV_PROTOCOL__H_
 
 #define IDENT_MAGIC     0x09291988  // identification number
-#define IDENT_VERSION   0x00000010  // uav_control protocal version
+#define IDENT_VERSION   0x00000011  // uav_control protocal version
 #define PKT_BUFF_LEN    2048        // max possible packet length
 
 // Packet commands from server to client
@@ -207,6 +207,7 @@
 #define SPIDS_KP            0
 #define SPIDS_KI            1
 #define SPIDS_KD            2
+#define SPIDS_SET           3
 
 #define PKT_SPIDS_PARAM     PKT_BASE + 0
 #define PKT_SPIDS_VALUE     PKT_BASE + 1
@@ -219,7 +220,8 @@
 #define PKT_GPIDS_KI        PKT_BASE + 1
 #define PKT_GPIDS_KD        PKT_BASE + 2
 #define PKT_GPIDS_AXIS      PKT_BASE + 3
-#define PKT_GPIDS_LENGTH    (sizeof(uint32_t) * (PKT_BASE + 4))
+#define PKT_GPIDS_SET       PKT_BASE + 4
+#define PKT_GPIDS_LENGTH    (sizeof(uint32_t) * (PKT_BASE + 5))
 
 #endif // _UAV_PROTOCOL__H_
 

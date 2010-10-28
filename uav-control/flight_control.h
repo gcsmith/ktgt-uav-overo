@@ -38,7 +38,8 @@
 #define PID_PARAM_KP    0
 #define PID_PARAM_KI    1
 #define PID_PARAM_KD    2
-#define PID_PARAM_COUNT 3
+#define PID_PARAM_SET   3
+#define PID_PARAM_COUNT 4
 
 typedef struct ctl_sigs
 {

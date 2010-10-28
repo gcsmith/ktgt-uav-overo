@@ -804,6 +804,9 @@ int fc_set_pid_param(int axis, int param, float value)
     case PID_PARAM_KD:
         fprintf(stderr, "kd = %f\n", value);
         pid->kd = value; break;
+    case PID_PARAM_SET:
+        fprintf(stderr, "setpoint = %f\n", value);
+        pid->setpoint = value; break;
     default:
         pthread_mutex_unlock(&globals.pid_lock);
         syslog(LOG_ERR, "invalid parameter specified for fc_set_pid_param\n");
@@ -824,21 +827,25 @@ void fc_get_pid_params(int axis, float *params)
         params[PID_PARAM_KP] = globals.pid_yaw.kp;
         params[PID_PARAM_KI] = globals.pid_yaw.ki;
         params[PID_PARAM_KD] = globals.pid_yaw.kd;
+        params[PID_PARAM_SET] = globals.pid_yaw.setpoint;
         break;
     case VCM_AXIS_PITCH:
         params[PID_PARAM_KP] = globals.pid_pitch.kp;
         params[PID_PARAM_KI] = globals.pid_pitch.ki;
         params[PID_PARAM_KD] = globals.pid_pitch.kd;
+        params[PID_PARAM_SET] = globals.pid_pitch.setpoint;
         break;
     case VCM_AXIS_ROLL:
         params[PID_PARAM_KP] = globals.pid_roll.kp;
         params[PID_PARAM_KI] = globals.pid_roll.ki;
         params[PID_PARAM_KD] = globals.pid_roll.kd;
+        params[PID_PARAM_SET] = globals.pid_roll.setpoint;
         break;
     case VCM_AXIS_ALT:
         params[PID_PARAM_KP] = globals.pid_alt.kp;
         params[PID_PARAM_KI] = globals.pid_alt.ki;
         params[PID_PARAM_KD] = globals.pid_alt.kd;
+        params[PID_PARAM_SET] = globals.pid_alt.setpoint;
         break;
     default:
         memset(params, 0, sizeof(float) * 3);
