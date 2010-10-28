@@ -13,9 +13,9 @@
 #include <pthread.h>
 #include "utility.h"
 
-#define IMU_DATA_ROLL  0
-#define IMU_DATA_PITCH 1
-#define IMU_DATA_YAW   2
+#define IMU_ROLL    0
+#define IMU_PITCH   1
+#define IMU_YAW     2
 
 typedef struct imu_data
 {
@@ -33,10 +33,19 @@ typedef struct imu_data
     unsigned long sample;
 } imu_data_t;
 
+// TODO: describe me
 int imu_init(const char *device, int baud, imu_data_t *data);
+
+// TODO: describe me
 int imu_read_angles(imu_data_t *imu, float *angles, access_mode_t mode);
+
+// TODO: describe me
 int imu_set_avg_filter(imu_data_t *data, unsigned int avg_len);
+
+// TODO: describe me
 int imu_get_avg_filter(imu_data_t *data);
+
+// TODO: describe me
 void imu_shutdown(imu_data_t *data);
 
 #endif // _UAV_RAZOR_IMU__H_

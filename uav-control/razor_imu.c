@@ -152,24 +152,27 @@ int imu_read_angles(imu_data_t *imu, float *angles, access_mode_t mode)
     switch (mode) {
     case ACCESS_ASYNC:
         // access in an asynchronous (non-blocking) fashion
-        angles[IMU_DATA_YAW]   = imu->angles[IMU_DATA_YAW];
-        angles[IMU_DATA_PITCH] = imu->angles[IMU_DATA_PITCH];
-        angles[IMU_DATA_ROLL]  = imu->angles[IMU_DATA_ROLL];
+        angles[IMU_YAW]   = imu->angles[IMU_YAW];
+        angles[IMU_PITCH] = imu->angles[IMU_PITCH];
+        angles[IMU_ROLL]  = imu->angles[IMU_ROLL];
         break;
     case ACCESS_SYNC:
         // access in a synchronous (blocking) fashion
         pthread_cond_wait(&imu->cond, &imu->lock);
-        angles[IMU_DATA_YAW]   = imu->angles[IMU_DATA_YAW];
-        angles[IMU_DATA_PITCH] = imu->angles[IMU_DATA_PITCH];
-        angles[IMU_DATA_ROLL]  = imu->angles[IMU_DATA_ROLL];
+        angles[IMU_YAW]   = imu->angles[IMU_YAW];
+        angles[IMU_PITCH] = imu->angles[IMU_PITCH];
+        angles[IMU_ROLL]  = imu->angles[IMU_ROLL];
         break;
     default:
+        // zero out the angles if invalid access mode encountered
+        pthread_mutex_unlock(&imu->lock);
+        memset(angles, 0, sizeof(float) * 3);
         syslog(LOG_ERR, "imu_read_angles: invalid access mode\n");
-        break;
+        return 0;
     }
 
     pthread_mutex_unlock(&imu->lock);
-    return 0;
+    return 1;
 }
 
 // -----------------------------------------------------------------------------

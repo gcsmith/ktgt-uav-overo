@@ -294,12 +294,12 @@ void run_server(imu_data_t *imu, const char *port)
 
             switch (cmd_buffer[PKT_COMMAND]) {
             case CLIENT_REQ_TAKEOFF:
-                syslog(LOG_INFO, "user requested takeoff -- taking off...\n");
+                syslog(LOG_INFO, "user requested takeoff -- try takeoff...\n");
                 fc_request_takeoff();
                 send_simple_packet(&g_client, SERVER_ACK_TAKEOFF);
                 break;
             case CLIENT_REQ_LANDING:
-                syslog(LOG_INFO, "user requested landing -- landing...\n");
+                syslog(LOG_INFO, "user requested landing -- try landing...\n");
                 fc_request_landing();
                 send_simple_packet(&g_client, SERVER_ACK_LANDING);
                 break;
@@ -309,14 +309,14 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_LENGTH]  = PKT_VTI_LENGTH;
 
                 imu_read_angles(imu, angles, ACCESS_ASYNC);
-                memcpy(&cmd_buffer[PKT_VTI_YAW],   &angles[IMU_DATA_YAW], 4);
-                memcpy(&cmd_buffer[PKT_VTI_PITCH], &angles[IMU_DATA_PITCH], 4);
-                memcpy(&cmd_buffer[PKT_VTI_ROLL],  &angles[IMU_DATA_ROLL], 4);
+                memcpy(&cmd_buffer[PKT_VTI_YAW],   &angles[IMU_YAW],   4);
+                memcpy(&cmd_buffer[PKT_VTI_PITCH], &angles[IMU_PITCH], 4);
+                memcpy(&cmd_buffer[PKT_VTI_ROLL],  &angles[IMU_ROLL],  4);
                 
                 cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
                 cmd_buffer[PKT_VTI_BATT] = read_vbatt();
 
-                // taken from maxbotix from spec: 147 us == 1 inch
+                // taken from maxbotix spec: 147 us == 1 inch
                 curr_alt = gpio_event_read(&g_gpio_alt, ACCESS_ASYNC) / 147.0f;
                 memcpy(&cmd_buffer[PKT_VTI_ALT], &curr_alt, 4);
 
@@ -342,16 +342,12 @@ void run_server(imu_data_t *imu, const char *port)
                 video_unlock();
 
                 // now send out the entire jpeg frame
-                jpg_buf[PKT_COMMAND] = SERVER_ACK_MJPG_FRAME;
-                jpg_buf[PKT_LENGTH]  = vid_data.length + PKT_MJPG_LENGTH;
-
+                jpg_buf[PKT_COMMAND]     = SERVER_ACK_MJPG_FRAME;
+                jpg_buf[PKT_LENGTH]      = vid_data.length + PKT_MJPG_LENGTH;
                 jpg_buf[PKT_MJPG_WIDTH]  = vid_data.mode.width;
                 jpg_buf[PKT_MJPG_HEIGHT] = vid_data.mode.height;
                 jpg_buf[PKT_MJPG_FPS]    = vid_data.mode.fps;
-                
                 send_packet(&g_client, jpg_buf, vid_data.length + PKT_MJPG_LENGTH);
-                //syslog(LOG_DEBUG, "send frame size %lu, pkt size %lu\n",
-                //       vid_data.length, vid_data.length + PKT_BASE_LENGTH);
                 break;
             case CLIENT_REQ_SET_CTL_MODE:
                 // interpret client's request for input mode change

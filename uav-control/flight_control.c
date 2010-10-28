@@ -30,9 +30,6 @@
 #define YAW_DUTY_HI 0.0948f
 #define YAW_DUTY_IDLE 0.07f
 
-#define DBG_DO_TAKEOFF
-#define DBG_DO_AUTONOMOUS
-
 #define AUTO_GROUNDED   0
 #define AUTO_TAKEOFF    1
 #define AUTO_HOVERING   2
@@ -53,13 +50,13 @@ typedef struct fc_globals {
     pthread_cond_t  landing_cond;
 
     pwm_channel_t channels[4];
-    gpio_event_t *usrf; // ultrasonic range finder pwm
-    imu_data_t *imu;    // imu sensor
+    gpio_event_t *usrf;         // ultrasonic range finder pwm
+    imu_data_t *imu;            // imu sensor
 
+    int enabled;
     int auto_state;
     int vcm_axes;
     int vcm_type;
-    int enabled;
 
     const char *capture_path;
     const char *replay_path;
@@ -170,7 +167,6 @@ static void assign_value(pwm_channel_t *pwm, float val)
     if (globals.channels[PWM_ALT].handle == pwm->handle) {
         cmp = min + (int)(range * val);
         cmp = CLAMP(cmp, min, max);
-        fprintf(stderr, "val %f\n", val);
     }
     else {
         cmp = min + hrange + (int)(hrange * val);
@@ -184,8 +180,10 @@ static void assign_value(pwm_channel_t *pwm, float val)
 // -----------------------------------------------------------------------------
 static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 {
-    if (!globals.enabled)
+    if (!globals.enabled) {
+        syslog(LOG_ERR, "fc_control: flight control is not enabled!");
         return 0;
+    }
 
     if (chnl_flags & VCM_AXIS_ALT)
         assign_value(&globals.channels[PWM_ALT], sigs->alt);
@@ -224,14 +222,12 @@ static void *auto_alt_thread(void *arg)
         // capture flight control's mode and vcm axes
         fc_get_vcm(&vcm_axes, &vcm_type);
 
-        fprintf(stderr, "vcm_axes = %d\n", vcm_axes);
         // check altitude bit is 0 for autonomous control
         if (!(vcm_axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
             float pid_result = pid_update(&globals.pid_alt, fd_alt);
             pthread_mutex_unlock(&globals.pid_lock);
             globals.carry_over = fc_sigs.alt = .585f + pid_result;
-            fprintf(stderr, "abs pid (%f) set alt to %f\n", pid_result, fc_sigs.alt);
             fc_control(&fc_sigs, VCM_AXIS_ALT);
         }
     }
@@ -246,11 +242,12 @@ static void *auto_alt_thread(void *arg)
 }
 
 // -----------------------------------------------------------------------------
-// Thread for autonomous orientation/servo control.
+// Thread for autonomous orientation/servo control. Control rate is locked to
+// the sampling razor of the 9DOF Razor IMU.
 void *auto_imu_thread(void *arg)
 {
     int vcm_axes, vcm_type;
-    float attitude[3] = { 0 };
+    float angles[3] = { 0 };
     ctl_sigs_t fc_sigs;
 
     // flight control's signal structure
@@ -269,8 +266,8 @@ void *auto_imu_thread(void *arg)
     pid_reset_error(&globals.pid_yaw);
     
     while (AUTO_HOVERING == globals.auto_state) {
-        // blocks on IMU data to capture current attitude
-        if (0 > imu_read_angles(globals.imu, attitude, ACCESS_SYNC)) {
+        // blocks on IMU data to capture current angles
+        if (!imu_read_angles(globals.imu, angles, ACCESS_SYNC)) {
             // error occurred while trying to read IMU data
             // is this an appropriate way of handling an error?
             continue;
@@ -279,34 +276,26 @@ void *auto_imu_thread(void *arg)
         // capture axes and type
         fc_get_vcm(&vcm_axes, &vcm_type);
 
-        // check for pitch
+        pthread_mutex_lock(&globals.pid_lock);
         if (!(vcm_axes & VCM_AXIS_PITCH)) {
-            pthread_mutex_lock(&globals.pid_lock);
-            float pid_result = pid_update(&globals.pid_pitch, attitude[IMU_DATA_PITCH]);
-            pthread_mutex_unlock(&globals.pid_lock);
-            fc_sigs.pitch = pid_result;
+            // compute PID result for pitch
+            fc_sigs.pitch = pid_update(&globals.pid_pitch, angles[IMU_PITCH]);
             fc_control(&fc_sigs, VCM_AXIS_PITCH);
         }
         
-        // check for roll
         if (!(vcm_axes & VCM_AXIS_ROLL)) {
-            pthread_mutex_lock(&globals.pid_lock);
-            float pid_result = pid_update(&globals.pid_roll, attitude[IMU_DATA_ROLL]);
-            pthread_mutex_unlock(&globals.pid_lock);
-            fc_sigs.roll = pid_result;
+            // compute PID result for roll
+            fc_sigs.roll = pid_update(&globals.pid_roll, angles[IMU_ROLL]);
             fc_control(&fc_sigs, VCM_AXIS_ROLL);
         }
         
-#if 0
-        // check for yaw
-        if (!(vcm_axes & VCM_AXIS_YAW)) {
-            pthread_mutex_lock(&globals.pid_lock);
-            float pid_result = pid_update(&globals.pid_yaw, attitude[IMU_DATA_YAW]);
-            pthread_mutex_unlock(&globals.pid_lock);
-            fc_sigs.yaw = pid_result;
-            fc_control(&fc_sigs, VCM_AXIS_YAW);
-        }
-#endif
+//      if (!(vcm_axes & VCM_AXIS_YAW)) {
+//          // compute PID result for yaw -- disabled for now due to EMF
+//          float pid_out = pid_update(&globals.pid_yaw, angles[IMU_YAW]);
+//          fc_sigs.yaw = pid_out;
+//          fc_control(&fc_sigs, VCM_AXIS_YAW);
+//      }
+        pthread_mutex_unlock(&globals.pid_lock);
     }
 
     fprintf(stderr, "auto_imu_thread exiting\n");
@@ -320,49 +309,28 @@ static void *dr_takeoff_thread(void *arg)
     int vcm_axes, vcm_type;
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
-
-    // We'll need the pitch controller for takeoff to account for the
-    // helicopter being front or back heavy, this will ensure the helicopter
-    // goes straight up
-    // 
-    // We'll set the autopilot to control only the pitch - altitude will be
-    // controlled through dead reckoning. Eventually the helicopter will
-    // be high enough where we can turn on the altitude controller.
-    
-    // vcm_axes bits - 
-    // 0 is autonomous controlled
-    // 1 is manual/mixed controlled
-
     memset(&control, 0, sizeof(control));
 
-#ifdef DBG_DO_TAKEOFF
     control.alt = 0.0f;
     while ((AUTO_TAKEOFF == globals.auto_state) && (control.alt < .65)) {
         fc_get_vcm(&vcm_axes, &vcm_type);
+
+        // this yields a ramp up time a little under 5 seconds: (.65/.0014)*10ms
         if (!(vcm_axes & VCM_AXIS_ALT)) {
-            control.alt += 0.0014;
+            control.alt += 0.0014f;
             fc_control(&control, VCM_AXIS_ALT);
-            usleep(10000);
+            usleep(10000); // 10 ms (100 Hz)
         }
     }
     printf("done ramping (abs) -- switching to pid autopilot thread\n");
-#else
-    // sleep to give the autonomous thread a chance to wait on takeoff_cond
-    sleep(1);
-#endif
 
     if (AUTO_TAKEOFF == globals.auto_state)
         globals.auto_state = AUTO_HOVERING;
 
-#ifdef DBG_DO_AUTONOMOUS
     // signal to the blocked altitude and orientation threads to start
     pthread_mutex_lock(&globals.takeoff_lock);
     pthread_cond_broadcast(&globals.takeoff_cond);
     pthread_mutex_unlock(&globals.takeoff_lock);
-#else
-    control.alt = 0.0f;
-    fc_control(&control, VCM_AXIS_ALT);
-#endif
 
     fprintf(stderr, "takeoff thread exiting\n");
     pthread_exit(NULL);
@@ -373,27 +341,21 @@ static void *dr_landing_thread(void *arg)
 {
     ctl_sigs_t control;
 
-    // procedure:
-    // turn autonomous pitch on
-    // turn autonomous roll on
-    // turn autonomous altitude off
-    // slowly kill throttle
-    // once throttle is at minimum exit function
-
+    // wait until the altitude hover thread signals us to continue
     fprintf(stderr, "dr_landing_thread waiting...\n");
     pthread_mutex_lock(&globals.landing_lock);
     pthread_cond_wait(&globals.landing_cond, &globals.landing_lock);
     pthread_mutex_unlock(&globals.landing_lock);
     fprintf(stderr, "dr_landing_thread starting...\n");
 
-    // drop to trimmed throttle
+    // start at the last throttle value asserted by the altitude hover thread
     control.alt = globals.carry_over;
 
     // back off the throttle in a decaying manner, until treshold reached
     while ((AUTO_LANDING == globals.auto_state) && (control.alt > 0.525)) {
         control.alt *= 0.9925;
         fc_control(&control, VCM_AXIS_ALT);
-        usleep(300000);
+        usleep(300000); // 3.333 Hz -- TODO: make this routine better
         fprintf(stderr, "dropping throttle to %f\n", control.alt);
     }
     fprintf(stderr, "done dropping throttle\n");
