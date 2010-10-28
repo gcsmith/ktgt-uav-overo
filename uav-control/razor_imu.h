@@ -13,9 +13,9 @@
 #include <pthread.h>
 #include "utility.h"
 
-#define IMU_DATA_YAW   0
+#define IMU_DATA_ROLL  0
 #define IMU_DATA_PITCH 1
-#define IMU_DATA_ROLL  2
+#define IMU_DATA_YAW   2
 
 typedef struct imu_data
 {
