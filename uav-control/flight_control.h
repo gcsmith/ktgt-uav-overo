@@ -38,8 +38,15 @@
 #define PID_PARAM_KP    0
 #define PID_PARAM_KI    1
 #define PID_PARAM_KD    2
-#define PID_PARAM_SET   3
+#define PID_PARAM_SP    3
 #define PID_PARAM_COUNT 4
+
+// PID default Setpoints
+#define PID_YAW_DEF_SP      0.0f
+#define PID_PITCH_DEF_SP    0.0f
+#define PID_ROLL_DEF_SP     0.0f
+#define PID_ALT_DEF_SP      42.0f
+
 
 typedef struct ctl_sigs
 {

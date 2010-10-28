@@ -531,12 +531,12 @@ void run_server(imu_data_t *imu, const char *port)
                 memcpy(&cmd_buffer[PKT_GPIDS_KP], &pid_params[PID_PARAM_KP], 4);
                 memcpy(&cmd_buffer[PKT_GPIDS_KI], &pid_params[PID_PARAM_KI], 4);
                 memcpy(&cmd_buffer[PKT_GPIDS_KD], &pid_params[PID_PARAM_KD], 4);
-                memcpy(&cmd_buffer[PKT_GPIDS_SET], &pid_params[PID_PARAM_SET], 4);
+                memcpy(&cmd_buffer[PKT_GPIDS_SP], &pid_params[PID_PARAM_SP], 4);
                 send_packet(&g_client, cmd_buffer, PKT_GPIDS_LENGTH);
 
                 fprintf(stderr, "sent: p = %f, i = %f, d = %f, set = %f for axis: %d\n", 
                         pid_params[PID_PARAM_KP], pid_params[PID_PARAM_KI],
-                        pid_params[PID_PARAM_KD], pid_params[PID_PARAM_SET],
+                        pid_params[PID_PARAM_KD], pid_params[PID_PARAM_SP],
                         cmd_buffer[PKT_GPIDS_AXIS]);
                 break;
             default:
@@ -576,22 +576,31 @@ void print_usage()
            "  -y, --height=NUM          specify resolution height for webcam\n"
            "  -f, --fps=NUM             specify capture framerate for webcam\n"
            "  -F, --track-fps=NUM       specify color tracking framerate\n"
+           "      --(axis)-(value)=NUM  specify value to set for an axis\n"
+           "                            (axis)   = yaw, pitch, roll, alt\n"
+           "                            (values) = trim, kp, ki, kd, sp\n"
+           /*
            "      --yaw-trim=NUM        specify yaw axis TRIM value\n"
            "      --yaw-kp=NUM          specify yaw axis KP value\n"
            "      --yaw-ki=NUM          specify yaw axis KI value\n"
            "      --yaw-kd=NUM          specify yaw axis KD value\n"
+           "      --yaw-sp=NUM          specify yaw axis setpoint value\n"
            "      --pitch-trim=NUM      specify pitch axis TRIM value\n"
            "      --pitch-kp=NUM        specify pitch axis KP value\n"
            "      --pitch-ki=NUM        specify pitch axis KI value\n"
            "      --pitch-kd=NUM        specify pitch axis KD value\n"
+           "      --pitch-sp=NUM        specify pitch axis setpoint value\n"
            "      --roll-trim=NUM       specify roll axis TRIM value\n"
            "      --roll-kp=NUM         specify roll axis KP value\n"
            "      --roll-ki=NUM         specify roll axis KI value\n"
            "      --roll-kd=NUM         specify roll axis KD value\n"
+           "      --roll-sp=NUM         specify roll axis setpoint value\n"
            "      --alt-trim=NUM        specify alt axis TRIM value\n"
            "      --alt-kp=NUM          specify alt axis KP value\n"
            "      --alt-ki=NUM          specify alt axis KI value\n"
-           "      --alt-kd=NUM          specify alt axis KD value\n"               
+           "      --alt-kd=NUM          specify alt axis KD value\n"  
+           "      --alt-sp=NUM          specify alt axis setpoint value\n"
+           */              
            "  -D, --daemonize           run as a background process\n"
            "  -V, --verbose             enable verbose logging\n"
            "  -h, --help                display this usage message\n"
@@ -617,6 +626,10 @@ int main(int argc, char *argv[])
     double arg_yaw_kp   = 0, arg_pitch_kp   = 0, arg_roll_kp   = 0, arg_alt_kp   = 0;
     double arg_yaw_ki   = 0, arg_pitch_ki   = 0, arg_roll_ki   = 0, arg_alt_ki   = 0;
     double arg_yaw_kd   = 0, arg_pitch_kd   = 0, arg_roll_kd   = 0, arg_alt_kd   = 0;
+    double arg_yaw_sp   = PID_YAW_DEF_SP;
+    double arg_pitch_sp = PID_PITCH_DEF_SP;
+    double arg_roll_sp  = PID_ROLL_DEF_SP;
+    double arg_alt_sp   = PID_ALT_DEF_SP;
     char port_str[DEV_LEN];
     char stty_dev[DEV_LEN] = "/dev/ttyS0";
     char v4l_dev[DEV_LEN] = "/dev/video0";
@@ -627,18 +640,22 @@ int main(int argc, char *argv[])
     #define YAW_KP          OPTION_START + 1
     #define YAW_KI          OPTION_START + 2
     #define YAW_KD          OPTION_START + 3
-    #define PITCH_TRIM      OPTION_START + 4
-    #define PITCH_KP        OPTION_START + 5
-    #define PITCH_KI        OPTION_START + 6
-    #define PITCH_KD        OPTION_START + 7
-    #define ROLL_TRIM       OPTION_START + 8
-    #define ROLL_KP         OPTION_START + 9
-    #define ROLL_KI         OPTION_START + 10
-    #define ROLL_KD         OPTION_START + 11
-    #define ALT_TRIM        OPTION_START + 12
-    #define ALT_KP          OPTION_START + 13
-    #define ALT_KI          OPTION_START + 14
-    #define ALT_KD          OPTION_START + 15
+    #define YAW_SP          OPTION_START + 4
+    #define PITCH_TRIM      OPTION_START + 5
+    #define PITCH_KP        OPTION_START + 6
+    #define PITCH_KI        OPTION_START + 7
+    #define PITCH_KD        OPTION_START + 8
+    #define PITCH_SP        OPTION_START + 9
+    #define ROLL_TRIM       OPTION_START + 10
+    #define ROLL_KP         OPTION_START + 11
+    #define ROLL_KI         OPTION_START + 12
+    #define ROLL_KD         OPTION_START + 13
+    #define ROLL_SP         OPTION_START + 14
+    #define ALT_TRIM        OPTION_START + 15
+    #define ALT_KP          OPTION_START + 16
+    #define ALT_KI          OPTION_START + 17
+    #define ALT_KD          OPTION_START + 18
+    #define ALT_SP          OPTION_START + 19
     
     struct option long_options[] = {
         { "capture",    required_argument, NULL, 'c' },
@@ -658,18 +675,22 @@ int main(int argc, char *argv[])
         { "yaw-kp",     required_argument, NULL, YAW_KP },
         { "yaw-ki",     required_argument, NULL, YAW_KI },
         { "yaw-kd",     required_argument, NULL, YAW_KD },
+        { "yaw-sp",     required_argument, NULL, YAW_SP },
         { "pitch-trim", required_argument, NULL, PITCH_TRIM },
         { "pitch-kp",   required_argument, NULL, PITCH_KP },
         { "pitch-ki",   required_argument, NULL, PITCH_KI },
         { "pitch-kd",   required_argument, NULL, PITCH_KD },
+        { "pitch-sp",   required_argument, NULL, PITCH_SP },
         { "roll-trim",  required_argument, NULL, ROLL_TRIM },
         { "roll-kp",    required_argument, NULL, ROLL_KP },
         { "roll-ki",    required_argument, NULL, ROLL_KI },
         { "roll-kd",    required_argument, NULL, ROLL_KD },
+        { "roll-sp",    required_argument, NULL, ROLL_SP },
         { "alt-trim",   required_argument, NULL, ALT_TRIM },
         { "alt-kp",     required_argument, NULL, ALT_KP },
         { "alt-ki",     required_argument, NULL, ALT_KI },
         { "alt-kd",     required_argument, NULL, ALT_KD },
+        { "alt-sp",     required_argument, NULL, ALT_SP },
 
         { "daemonize",  no_argument,       NULL, 'D' },
         { "verbose",    no_argument,       NULL, 'V' },
@@ -698,6 +719,9 @@ int main(int argc, char *argv[])
         case YAW_KD:
             arg_yaw_kd = atof(optarg);
             break;
+        case YAW_SP:
+            arg_yaw_sp = atof(optarg);
+            break;
 
         case PITCH_TRIM:
             arg_pitch_trim = atof(optarg);
@@ -710,6 +734,9 @@ int main(int argc, char *argv[])
             break;
         case PITCH_KD:
             arg_pitch_kd = atof(optarg);
+            break;
+        case PITCH_SP:
+            arg_pitch_sp = atof(optarg);
             break;
 
         case ROLL_TRIM:
@@ -724,6 +751,9 @@ int main(int argc, char *argv[])
         case ROLL_KD:
             arg_roll_kd = atof(optarg);
             break;
+        case ROLL_SP:
+            arg_roll_sp = atof(optarg);
+            break;
 
         case ALT_TRIM:
             arg_alt_trim = atof(optarg);
@@ -736,6 +766,9 @@ int main(int argc, char *argv[])
             break;
         case ALT_KD:
             arg_alt_kd = atof(optarg);
+            break;
+        case ALT_SP:
+            arg_alt_sp = atof(optarg);
             break;
 
         case 'c':
@@ -836,18 +869,22 @@ int main(int argc, char *argv[])
         fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KP, arg_yaw_kp); 
         fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KI, arg_yaw_ki); 
         fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_KD, arg_yaw_kd); 
+        fc_set_pid_param(VCM_AXIS_YAW,   PID_PARAM_SP, arg_yaw_sp);
 
         fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KP, arg_pitch_kp); 
         fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KI, arg_pitch_ki); 
         fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_KD, arg_pitch_kd); 
+        fc_set_pid_param(VCM_AXIS_PITCH, PID_PARAM_SP, arg_pitch_sp);
 
         fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KP, arg_roll_kp); 
         fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KI, arg_roll_ki); 
         fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_KD, arg_roll_kd); 
+        fc_set_pid_param(VCM_AXIS_ROLL,  PID_PARAM_SP, arg_roll_sp);
         
         fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KP, arg_alt_kp); 
         fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KI, arg_alt_ki); 
         fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_KD, arg_alt_kd); 
+        fc_set_pid_param(VCM_AXIS_ALT,   PID_PARAM_SP, arg_alt_sp);
 
         // check if we're capturing or replaying a trace
         if (capture_path && replay_path) {

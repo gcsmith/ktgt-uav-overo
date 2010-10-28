@@ -446,10 +446,10 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     // at initialization, start in autonomous control with all axes enabled
     memset(&globals, 0, sizeof(fc_globals_t));
 
-    pid_init(&globals.pid_yaw,    0.0f, -12.0f, 12.0f);
-    pid_init(&globals.pid_pitch,  0.0f, -12.0f, 12.0f);
-    pid_init(&globals.pid_roll,   0.0f, -12.0f, 12.0f);
-    pid_init(&globals.pid_alt,   42.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_yaw,    PID_YAW_DEF_SP,   -12.0f, 12.0f);
+    pid_init(&globals.pid_pitch,  PID_PITCH_DEF_SP, -12.0f, 12.0f);
+    pid_init(&globals.pid_roll,   PID_ROLL_DEF_SP,  -12.0f, 12.0f);
+    pid_init(&globals.pid_alt,    PID_ALT_DEF_SP,   -12.0f, 12.0f);
 
     // save gpio event handles so we can fetch altitude and orgientation
     globals.usrf = pwm_usrf;
@@ -804,7 +804,7 @@ int fc_set_pid_param(int axis, int param, float value)
     case PID_PARAM_KD:
         fprintf(stderr, "kd = %f\n", value);
         pid->kd = value; break;
-    case PID_PARAM_SET:
+    case PID_PARAM_SP:
         fprintf(stderr, "setpoint = %f\n", value);
         pid->setpoint = value; break;
     default:
@@ -827,25 +827,25 @@ void fc_get_pid_params(int axis, float *params)
         params[PID_PARAM_KP] = globals.pid_yaw.kp;
         params[PID_PARAM_KI] = globals.pid_yaw.ki;
         params[PID_PARAM_KD] = globals.pid_yaw.kd;
-        params[PID_PARAM_SET] = globals.pid_yaw.setpoint;
+        params[PID_PARAM_SP] = globals.pid_yaw.setpoint;
         break;
     case VCM_AXIS_PITCH:
         params[PID_PARAM_KP] = globals.pid_pitch.kp;
         params[PID_PARAM_KI] = globals.pid_pitch.ki;
         params[PID_PARAM_KD] = globals.pid_pitch.kd;
-        params[PID_PARAM_SET] = globals.pid_pitch.setpoint;
+        params[PID_PARAM_SP] = globals.pid_pitch.setpoint;
         break;
     case VCM_AXIS_ROLL:
         params[PID_PARAM_KP] = globals.pid_roll.kp;
         params[PID_PARAM_KI] = globals.pid_roll.ki;
         params[PID_PARAM_KD] = globals.pid_roll.kd;
-        params[PID_PARAM_SET] = globals.pid_roll.setpoint;
+        params[PID_PARAM_SP] = globals.pid_roll.setpoint;
         break;
     case VCM_AXIS_ALT:
         params[PID_PARAM_KP] = globals.pid_alt.kp;
         params[PID_PARAM_KI] = globals.pid_alt.ki;
         params[PID_PARAM_KD] = globals.pid_alt.kd;
-        params[PID_PARAM_SET] = globals.pid_alt.setpoint;
+        params[PID_PARAM_SP] = globals.pid_alt.setpoint;
         break;
     default:
         memset(params, 0, sizeof(float) * 3);
