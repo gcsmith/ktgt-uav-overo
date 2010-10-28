@@ -207,7 +207,8 @@ static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 }
 
 // -----------------------------------------------------------------------------
-static void *auto_altitude_thread(void *arg)
+// Thread for autonomous altitude/throttle control.
+static void *auto_alt_thread(void *arg)
 {
     int vcm_axes, vcm_type;
     float fd_alt;
@@ -218,11 +219,11 @@ static void *auto_altitude_thread(void *arg)
     pid_reset_error(&globals.pid_alt);
     
     // wait for the dr takeoff process to complete and signal pid altitude
-    fprintf(stderr, "auto_altitude_thread waiting...\n");
+    fprintf(stderr, "auto_alt_thread waiting...\n");
     pthread_mutex_lock(&globals.takeoff_lock);
     pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_lock);
     pthread_mutex_unlock(&globals.takeoff_lock);
-    fprintf(stderr, "auto_altitude_thread starting...\n");
+    fprintf(stderr, "auto_alt_thread starting...\n");
 
     while (fc_get_alive()) {
         // capture altitude
@@ -242,32 +243,33 @@ static void *auto_altitude_thread(void *arg)
         }
     }
 
-    fprintf(stderr, "auto_altitude_thread thread exiting\n");
+    fprintf(stderr, "auto_alt_thread thread exiting\n");
     pthread_exit(NULL);
 }
 
 // -----------------------------------------------------------------------------
-void *auto_orientation_thread(void *arg)
+// Thread for autonomous orientation/servo control.
+void *auto_imu_thread(void *arg)
 {
     int vcm_axes, vcm_type;
     float attitude[3] = { 0 };
+    ctl_sigs_t fc_sigs;
 
     // flight control's signal structure
-    ctl_sigs_t fc_sigs;
     memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
+
+    // wait for the takeoff process to complete
+    fprintf(stderr, "auto_imu_thread waiting...\n");
+    pthread_mutex_lock(&globals.takeoff_lock);
+    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_lock);
+    pthread_mutex_unlock(&globals.takeoff_lock);
+    fprintf(stderr, "auto_imu_thread starting...\n");
 
     // reset controllers' error collections
     pid_reset_error(&globals.pid_pitch);
     pid_reset_error(&globals.pid_roll);
     pid_reset_error(&globals.pid_yaw);
     
-    // wait for the takeoff process to complete
-    fprintf(stderr, "auto_orientation_thread waiting...\n");
-    pthread_mutex_lock(&globals.takeoff_lock);
-    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_lock);
-    pthread_mutex_unlock(&globals.takeoff_lock);
-    fprintf(stderr, "auto_orientation_thread starting...\n");
-
     while (fc_get_alive()) {
         // blocks on IMU data to capture current attitude
         if (0 > imu_read_angles(globals.imu, attitude, ACCESS_SYNC)) {
@@ -308,7 +310,7 @@ void *auto_orientation_thread(void *arg)
         }
     }
 
-    fprintf(stderr, "auto_orientation_thread exiting\n");
+    fprintf(stderr, "auto_imu_thread exiting\n");
     pthread_exit(NULL);
 }
 
@@ -605,17 +607,16 @@ int fc_request_takeoff(void)
     if (globals.replay_path) {
         pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, NULL);
     }
+    else if (AUTO_GROUNDED == globals.auto_state) {
+        pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
+        pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
+        pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
+        pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
+    }
     else {
-        if (AUTO_GROUNDED == globals.auto_state) {
-            pthread_create(&globals.takeoff_thrd , NULL, dr_takeoff_thread, NULL);
-            // pthread_create(&globals.landing_thrd , NULL, dr_landing_thread, NULL);
-            pthread_create(&globals.auto_alt_thrd, NULL, auto_altitude_thread, NULL);
-            // pthread_create(&globals.auto_imu_thrd, NULL, auto_orientation_thread, NULL);
-        }
-        else {
-            syslog(LOG_ERR, "takeoff request denied, not grounded (%d)\n", globals.auto_state);
-            return 0;
-        }
+        syslog(LOG_ERR, "takeoff request denied, not grounded (%d)\n",
+               globals.auto_state);
+        return 0;
     }
 
     return 1;
@@ -634,15 +635,25 @@ int fc_request_landing(void)
 }
 
 // -----------------------------------------------------------------------------
-static void fc_reset_channels(void)
+static void fc_reset_state(void)
 {
     pwm_channel_t *ch = &globals.channels[0];
+    globals.alive = 0.0f;
     globals.curr_alt = 0.0f;
+    globals.auto_state = AUTO_GROUNDED;
 
+    // wake up any threads that may be blocked so that they can exit cleanly
+    pthread_mutex_lock(&globals.takeoff_lock);
+    pthread_cond_broadcast(&globals.takeoff_cond);
+    pthread_mutex_unlock(&globals.takeoff_lock);
+
+    // reset the pwm outputs to their idle values
     assign_duty(&ch[PWM_ALT], ALT_DUTY_LO);
     assign_duty(&ch[PWM_YAW], YAW_DUTY_IDLE);
     assign_duty(&ch[PWM_PITCH], PITCH_DUTY_IDLE);
     assign_duty(&ch[PWM_ROLL], ROLL_DUTY_IDLE);
+
+    fprintf(stderr, "called fc_reset_state\n");
 }
 
 // -----------------------------------------------------------------------------
@@ -661,19 +672,16 @@ int fc_set_vcm(int axes, int type)
     case VCM_TYPE_RADIO:
     case VCM_TYPE_LOCKOUT:
     case VCM_TYPE_KILL:
-        // for any non-autonomous mode, clear the alive bit
+        // for any non-autonomous mode, reset axes
         globals.vcm_axes = VCM_AXIS_ALL;
-        globals.alive = 0;
         break;
     case VCM_TYPE_AUTO:
         // all manual axes disabled in full autonomous mode
         globals.vcm_axes = 0;
-        globals.alive = 1;
         break;
     case VCM_TYPE_MIXED:
         // set user specified axes in mixed mode
         globals.vcm_axes = axes;
-        globals.alive = 1;
         break;
     default:
         syslog(LOG_ERR, "unknown vcm type (%d) in fc_set_vcm", type);
@@ -683,7 +691,7 @@ int fc_set_vcm(int axes, int type)
     if (type != globals.vcm_type) {
         // reset the channels to their idle values every time we switch state
         globals.vcm_type = type;
-        fc_reset_channels();
+        fc_reset_state();
     }
 
     // save the last timer tick every time we switch state
