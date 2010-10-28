@@ -200,8 +200,8 @@ static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 // Thread for autonomous altitude/throttle control.
 static void *auto_alt_thread(void *arg)
 {
-    int vcm_axes, vcm_type;
-    float fd_alt;
+    int vcm_axes, vcm_type, timeout = 0;
+    float fd_alt, pid_result = 0.0f;
 
     // flight control's signal structure
     ctl_sigs_t fc_sigs;
@@ -225,12 +225,28 @@ static void *auto_alt_thread(void *arg)
         // check altitude bit is 0 for autonomous control
         if (!(vcm_axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
-            float pid_result = pid_update(&globals.pid_alt, fd_alt);
+            pid_result = pid_update(&globals.pid_alt, fd_alt);
             pthread_mutex_unlock(&globals.pid_lock);
             globals.carry_over = fc_sigs.alt = .585f + pid_result;
             fc_control(&fc_sigs, VCM_AXIS_ALT);
         }
     }
+
+    // when we transition to landing, make sure we're not in updward PID swing
+    do {
+        fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
+        fc_get_vcm(&vcm_axes, &vcm_type);
+        ++timeout;
+
+        // check altitude bit is 0 for autonomous control
+        if (!(vcm_axes & VCM_AXIS_ALT)) {
+            pthread_mutex_lock(&globals.pid_lock);
+            pid_result = pid_update(&globals.pid_alt, fd_alt);
+            pthread_mutex_unlock(&globals.pid_lock);
+            globals.carry_over = fc_sigs.alt = .585f + pid_result;
+            fc_control(&fc_sigs, VCM_AXIS_ALT);
+        }
+    } while ((timeout < 100) && (pid_result > 0.0f));
 
     // signal the landing dr thread to take over
     pthread_mutex_lock(&globals.landing_lock);
@@ -358,14 +374,14 @@ static void *dr_landing_thread(void *arg)
         if (fd_alt < 10.0f)
             break;
 
-        control.alt -= 0.0014f;
+        control.alt -= 0.0005f;
         fc_control(&control, VCM_AXIS_ALT);
     }
     fprintf(stderr, "done dropping throttle\n");
 
     // by this point the helicopter will hopefully be on the ground with 
     // minimal throttle so we can shut off motors completely
-    usleep(500);
+    usleep(800);
     control.alt = 0.0f;
     fc_control(&control, VCM_AXIS_ALT);
 
