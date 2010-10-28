@@ -45,11 +45,13 @@ typedef struct fc_globals {
     pthread_t auto_alt_thrd;
     pthread_t auto_imu_thrd;
 
-    pthread_cond_t  takeoff_cond;
     pthread_mutex_t takeoff_lock;
+    pthread_mutex_t landing_lock;
     pthread_mutex_t alive_lock;
     pthread_mutex_t vcm_lock;
     pthread_mutex_t pid_lock;
+    pthread_cond_t  takeoff_cond;
+    pthread_cond_t  landing_cond;
 
     pwm_channel_t channels[4];
     gpio_event_t *usrf; // ultrasonic range finder pwm
@@ -243,6 +245,11 @@ static void *auto_alt_thread(void *arg)
         }
     }
 
+    // signal the landing dr thread to take over
+    pthread_mutex_lock(&globals.landing_lock);
+    pthread_cond_broadcast(&globals.landing_cond);
+    pthread_mutex_unlock(&globals.landing_lock);
+
     fprintf(stderr, "auto_alt_thread thread exiting\n");
     pthread_exit(NULL);
 }
@@ -375,6 +382,12 @@ static void *dr_landing_thread(void *arg)
     // slowly kill throttle
     // once throttle is at minimum exit function
 
+    fprintf(stderr, "dr_landing_thread waiting...\n");
+    pthread_mutex_lock(&globals.landing_lock);
+    pthread_cond_wait(&globals.landing_cond, &globals.landing_lock);
+    pthread_mutex_unlock(&globals.landing_lock);
+    fprintf(stderr, "dr_landing_thread starting...\n");
+
     // drop to trimmed throttle
     control.alt = 0.585f;
 
@@ -462,7 +475,9 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     pthread_mutex_init(&globals.vcm_lock, NULL);
     pthread_mutex_init(&globals.pid_lock, NULL);
     pthread_mutex_init(&globals.takeoff_lock, NULL);
+    pthread_mutex_init(&globals.landing_lock, NULL);
     pthread_cond_init(&globals.takeoff_cond, NULL);
+    pthread_cond_init(&globals.landing_cond, NULL);
     
     // initialize the pwm channels for throttle, yaw, pitch, and roll
     if (!init_channel(PWM_ALT, 4582, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
@@ -506,7 +521,9 @@ void fc_shutdown(void)
     pthread_mutex_destroy(&globals.vcm_lock);
     pthread_mutex_destroy(&globals.pid_lock);
     pthread_mutex_destroy(&globals.takeoff_lock);
+    pthread_mutex_destroy(&globals.landing_lock);
     pthread_cond_destroy(&globals.takeoff_cond);
+    pthread_cond_destroy(&globals.landing_cond);
 
     if (globals.capture_path) {
         // save and destroy the record buckets
@@ -646,6 +663,10 @@ static void fc_reset_state(void)
     pthread_mutex_lock(&globals.takeoff_lock);
     pthread_cond_broadcast(&globals.takeoff_cond);
     pthread_mutex_unlock(&globals.takeoff_lock);
+
+    pthread_mutex_lock(&globals.landing_lock);
+    pthread_cond_broadcast(&globals.landing_cond);
+    pthread_mutex_unlock(&globals.landing_lock);
 
     // reset the pwm outputs to their idle values
     assign_duty(&ch[PWM_ALT], ALT_DUTY_LO);
