@@ -280,8 +280,7 @@ void *auto_imu_thread(void *arg)
         // check for pitch
         if (!(vcm_axes & VCM_AXIS_PITCH)) {
             pthread_mutex_lock(&globals.pid_lock);
-            float pid_result = pid_update(&globals.pid_pitch, 
-                    attitude[IMU_DATA_PITCH]);
+            float pid_result = pid_update(&globals.pid_pitch, attitude[IMU_DATA_PITCH]);
             pthread_mutex_unlock(&globals.pid_lock);
             fc_sigs.pitch = pid_result;
             fc_control(&fc_sigs, VCM_AXIS_PITCH);
@@ -296,6 +295,7 @@ void *auto_imu_thread(void *arg)
             fc_control(&fc_sigs, VCM_AXIS_ROLL);
         }
         
+#if 0
         // check for yaw
         if (!(vcm_axes & VCM_AXIS_YAW)) {
             pthread_mutex_lock(&globals.pid_lock);
@@ -304,6 +304,7 @@ void *auto_imu_thread(void *arg)
             fc_sigs.yaw = pid_result;
             fc_control(&fc_sigs, VCM_AXIS_YAW);
         }
+#endif
     }
 
     fprintf(stderr, "auto_imu_thread exiting\n");
