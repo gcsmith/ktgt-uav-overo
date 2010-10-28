@@ -308,12 +308,10 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_COMMAND] = SERVER_ACK_TELEMETRY;
                 cmd_buffer[PKT_LENGTH]  = PKT_VTI_LENGTH;
 
-                imu_read_angles(imu, ACCESS_ASYNC, angles);
-                //pthread_mutex_lock(&imu->lock);
+                imu_read_angles(imu, angles, ACCESS_ASYNC);
                 memcpy(&cmd_buffer[PKT_VTI_YAW],   &angles[0], 4);
                 memcpy(&cmd_buffer[PKT_VTI_PITCH], &angles[1], 4);
                 memcpy(&cmd_buffer[PKT_VTI_ROLL],  &angles[2], 4);
-                //pthread_mutex_unlock(&imu->lock);
                 
                 cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
                 cmd_buffer[PKT_VTI_BATT] = read_vbatt();

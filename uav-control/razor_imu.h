@@ -34,7 +34,7 @@ typedef struct imu_data
 } imu_data_t;
 
 int imu_init(const char *device, int baud, imu_data_t *data);
-int imu_read_angles(imu_data_t *imu, access_mode_t mode, float *angles);
+int imu_read_angles(imu_data_t *imu, float *angles, access_mode_t mode);
 int imu_set_avg_filter(imu_data_t *data, unsigned int avg_len);
 int imu_get_avg_filter(imu_data_t *data);
 void imu_shutdown(imu_data_t *data);

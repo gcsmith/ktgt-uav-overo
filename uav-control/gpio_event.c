@@ -115,7 +115,7 @@ static void *gpio_thread(void *pargs)
                         sorted_samples[j + 1] = sorted_samples[j];
                         --j;
                     }
-                    sorted_samples[j] = value;
+                    sorted_samples[j + 1] = value;
                 }
                 pevent->pulsewidth = sorted_samples[GPIO_SAMPLES >> 1];
 #endif

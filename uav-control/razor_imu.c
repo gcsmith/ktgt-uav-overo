@@ -145,7 +145,7 @@ int imu_init(const char *device, int baud, imu_data_t *data)
 }
 
 // -----------------------------------------------------------------------------
-int imu_read_angles(imu_data_t *imu, access_mode_t mode, float *angles)
+int imu_read_angles(imu_data_t *imu, float *angles, access_mode_t mode)
 {
     pthread_mutex_lock(&imu->lock);
 

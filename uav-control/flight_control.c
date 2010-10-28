@@ -290,12 +290,11 @@ void *auto_orientation_thread(void *arg)
     pthread_mutex_unlock(&globals.takeoff_cond_lock);
     fprintf(stderr, "auto_orientation_thread starting...\n");
 
-    while (fc_get_alive())
-    {
+    while (fc_get_alive()) {
         int axes = VCM_AXIS_ALL; // for testing purposes
 
         // blocks on IMU data to capture current attitude
-        if (0 > imu_read_angles(globals.imu, ACCESS_SYNC, attitude)) {
+        if (0 > imu_read_angles(globals.imu, attitude, ACCESS_SYNC)) {
             // error occurred while trying to read IMU data
             // is this an appropriate way of handling an error?
             continue;
