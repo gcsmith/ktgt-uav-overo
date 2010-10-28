@@ -64,6 +64,7 @@ typedef struct fc_globals {
     const char *capture_path;
     const char *replay_path;
     float curr_alt;
+    float carry_over;
 
     record_bucket_t *record_head, *record_tail;
     timespec_t last_time;
@@ -223,12 +224,13 @@ static void *auto_alt_thread(void *arg)
         // capture flight control's mode and vcm axes
         fc_get_vcm(&vcm_axes, &vcm_type);
 
+        fprintf(stderr, "vcm_axes = %d\n", vcm_axes);
         // check altitude bit is 0 for autonomous control
         if (!(vcm_axes & VCM_AXIS_ALT)) {
             pthread_mutex_lock(&globals.pid_lock);
             float pid_result = pid_update(&globals.pid_alt, fd_alt);
             pthread_mutex_unlock(&globals.pid_lock);
-            fc_sigs.alt = .585f + pid_result;
+            globals.carry_over = fc_sigs.alt = .585f + pid_result;
             fprintf(stderr, "abs pid (%f) set alt to %f\n", pid_result, fc_sigs.alt);
             fc_control(&fc_sigs, VCM_AXIS_ALT);
         }
@@ -315,6 +317,7 @@ void *auto_imu_thread(void *arg)
 static void *dr_takeoff_thread(void *arg)
 {
     ctl_sigs_t control;
+    int vcm_axes, vcm_type;
 
     fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
 
@@ -334,10 +337,13 @@ static void *dr_takeoff_thread(void *arg)
 
 #ifdef DBG_DO_TAKEOFF
     control.alt = 0.0f;
-    while ((AUTO_TAKEOFF == globals.auto_state) && (control.alt < .6)) {
-        control.alt += 0.0014;
-        fc_control(&control, VCM_AXIS_ALT);
-        usleep(10000);
+    while ((AUTO_TAKEOFF == globals.auto_state) && (control.alt < .65)) {
+        fc_get_vcm(&vcm_axes, &vcm_type);
+        if (!(vcm_axes & VCM_AXIS_ALT)) {
+            control.alt += 0.0014;
+            fc_control(&control, VCM_AXIS_ALT);
+            usleep(10000);
+        }
     }
     printf("done ramping (abs) -- switching to pid autopilot thread\n");
 #else
@@ -381,13 +387,13 @@ static void *dr_landing_thread(void *arg)
     fprintf(stderr, "dr_landing_thread starting...\n");
 
     // drop to trimmed throttle
-    control.alt = 0.585f;
+    control.alt = globals.carry_over;
 
     // back off the throttle in a decaying manner, until treshold reached
-    while ((AUTO_LANDING == globals.auto_state) && (control.alt > 0.0001f)) {
-        control.alt *= 0.99;
+    while ((AUTO_LANDING == globals.auto_state) && (control.alt > 0.525)) {
+        control.alt *= 0.9925;
         fc_control(&control, VCM_AXIS_ALT);
-        usleep(10000);
+        usleep(300000);
         fprintf(stderr, "dropping throttle to %f\n", control.alt);
     }
     fprintf(stderr, "done dropping throttle\n");
@@ -621,7 +627,7 @@ int fc_request_takeoff(void)
         pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
         pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
         pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
-        pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
+        // pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
     }
     else {
         syslog(LOG_ERR, "takeoff request denied, not grounded\n");
