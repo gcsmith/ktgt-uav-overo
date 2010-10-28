@@ -648,28 +648,46 @@ static void fc_reset_channels(void)
 // -----------------------------------------------------------------------------
 int fc_set_vcm(int axes, int type)
 {
-    int curr_type;
     pthread_mutex_lock(&globals.vcm_lock);
 
-    curr_type = globals.vcm_type;
-    if (VCM_TYPE_KILL == curr_type) {
+    if (VCM_TYPE_KILL == globals.vcm_type) {
         // if we're killed, don't allow any more state transitions
         pthread_mutex_unlock(&globals.vcm_lock);
         fprintf(stderr, "not alive. ignoring fc_set_vcm\n");
         return 0;
     }
 
-    // otherwise, set the new type and axes and continue
-    globals.vcm_type = type;
-    globals.vcm_axes = axes;
-    globals.alive = (VCM_TYPE_KILL != type) && (VCM_TYPE_LOCKOUT != type);
+    switch (type) {
+    case VCM_TYPE_RADIO:
+    case VCM_TYPE_LOCKOUT:
+    case VCM_TYPE_KILL:
+        // for any non-autonomous mode, clear the alive bit
+        globals.vcm_axes = VCM_AXIS_ALL;
+        globals.alive = 0;
+        break;
+    case VCM_TYPE_AUTO:
+        // all manual axes disabled in full autonomous mode
+        globals.vcm_axes = 0;
+        globals.alive = 1;
+        break;
+    case VCM_TYPE_MIXED:
+        // set user specified axes in mixed mode
+        globals.vcm_axes = axes;
+        globals.alive = 1;
+        break;
+    default:
+        syslog(LOG_ERR, "unknown vcm type (%d) in fc_set_vcm", type);
+        break;
+    }
 
-    // reset the channels to their idle values every time we switch state
-    fc_reset_channels();
+    if (type != globals.vcm_type) {
+        // reset the channels to their idle values every time we switch state
+        globals.vcm_type = type;
+        fc_reset_channels();
+    }
 
     // save the last timer tick every time we switch state
     clock_gettime(CLOCK_REALTIME, &globals.last_time);
-
     pthread_mutex_unlock(&globals.vcm_lock);
     return 1;
 }
