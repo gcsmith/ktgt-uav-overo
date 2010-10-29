@@ -599,7 +599,7 @@ int fc_request_takeoff(void)
         pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
         pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
         pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
-        // pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
+        pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
     }
     else {
         syslog(LOG_ERR, "takeoff request denied, not grounded\n");

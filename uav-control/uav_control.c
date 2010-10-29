@@ -610,6 +610,7 @@ int main(int argc, char *argv[])
         syslog(LOG_ERR, "failed to initialize IMU");
         uav_shutdown(EXIT_FAILURE);
     }
+    imu_set_avg_filter(&g_imu, 20);
 
     // attempt to initialize the flight control subsystem
     if (!opts.no_fc) {
