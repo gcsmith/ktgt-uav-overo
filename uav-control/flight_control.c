@@ -30,10 +30,10 @@
 #define YAW_DUTY_HI 0.0948f
 #define YAW_DUTY_IDLE 0.07f
 
-#define AUTO_GROUNDED   0
-#define AUTO_TAKEOFF    1
-#define AUTO_HOVERING   2
-#define AUTO_LANDING    3
+#define STATE_GROUNDED   0
+#define STATE_TAKEOFF    1
+#define STATE_HOVERING   2
+#define STATE_LANDING    3
 
 typedef struct fc_globals {
     pthread_t replay_thrd;
@@ -54,7 +54,7 @@ typedef struct fc_globals {
     imu_data_t *imu;            // imu sensor
 
     int enabled;
-    int auto_state;
+    int state;
     int vcm_axes;
     int vcm_type;
 
@@ -195,7 +195,7 @@ static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 }
 
 // -----------------------------------------------------------------------------
-// Thread for autonomous altitude/throttle control.
+// Thread for autonomous altitude/throttle control (hovering).
 static void *auto_alt_thread(void *arg)
 {
     int vcm_axes, vcm_type, timeout = 0;
@@ -213,38 +213,28 @@ static void *auto_alt_thread(void *arg)
     pthread_mutex_unlock(&globals.takeoff_lock);
     fprintf(stderr, "auto_alt_thread starting...\n");
 
-    while (AUTO_HOVERING == globals.auto_state) {
-        // capture altitude
+    while (STATE_HOVERING == globals.state || STATE_LANDING == globals.state) {
+        // capture altitude and flight control's mode and vcm axes
         fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
-
-        // capture flight control's mode and vcm axes
         fc_get_vcm(&vcm_axes, &vcm_type);
 
-        // check altitude bit is 0 for autonomous control
+        // only control altitude with PID if axis is enabled (mixed mode)
+        pthread_mutex_lock(&globals.pid_lock);
         if (!(vcm_axes & VCM_AXIS_ALT)) {
-            pthread_mutex_lock(&globals.pid_lock);
             pid_result = pid_update(&globals.pid_alt, fd_alt);
-            pthread_mutex_unlock(&globals.pid_lock);
-            globals.carry_over = fc_sigs.alt = .585f + pid_result;
+            fc_sigs.alt = .585f + pid_result;
             fc_control(&fc_sigs, VCM_AXIS_ALT);
+        }
+        pthread_mutex_unlock(&globals.pid_lock);
+
+        // if landing requested, try not to release while still accelerating
+        if (STATE_LANDING == globals.state) {
+            globals.carry_over = fc_sigs.alt;
+            if (++timeout > 100 || pid_result <= 0.0f) {
+                break;
+            }
         }
     }
-
-    // when we transition to landing, make sure we're not in updward PID swing
-    do {
-        fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
-        fc_get_vcm(&vcm_axes, &vcm_type);
-        ++timeout;
-
-        // check altitude bit is 0 for autonomous control
-        if (!(vcm_axes & VCM_AXIS_ALT)) {
-            pthread_mutex_lock(&globals.pid_lock);
-            pid_result = pid_update(&globals.pid_alt, fd_alt);
-            pthread_mutex_unlock(&globals.pid_lock);
-            globals.carry_over = fc_sigs.alt = .585f + pid_result;
-            fc_control(&fc_sigs, VCM_AXIS_ALT);
-        }
-    } while ((timeout < 100) && (pid_result > 0.0f));
 
     // signal the landing dr thread to take over
     pthread_mutex_lock(&globals.landing_lock);
@@ -279,7 +269,7 @@ void *auto_imu_thread(void *arg)
     pid_reset_error(&globals.pid_roll);
     pid_reset_error(&globals.pid_yaw);
     
-    while (AUTO_HOVERING == globals.auto_state) {
+    while (STATE_HOVERING == globals.state) {
         // blocks on IMU data to capture current angles
         if (!imu_read_angles(globals.imu, angles, ACCESS_SYNC)) {
             // error occurred while trying to read IMU data
@@ -305,8 +295,8 @@ void *auto_imu_thread(void *arg)
         
 //      if (!(vcm_axes & VCM_AXIS_YAW)) {
 //          // compute PID result for yaw -- disabled for now due to EMF
-//          float pid_out = pid_update(&globals.pid_yaw, angles[IMU_YAW]);
-//          fc_sigs.yaw = pid_out;
+//          float pid_result = pid_update(&globals.pid_yaw, angles[IMU_YAW]);
+//          fc_sigs.yaw = pid_result;
 //          fc_control(&fc_sigs, VCM_AXIS_YAW);
 //      }
         pthread_mutex_unlock(&globals.pid_lock);
@@ -326,7 +316,7 @@ static void *dr_takeoff_thread(void *arg)
     memset(&control, 0, sizeof(control));
 
     control.alt = 0.0f;
-    while ((AUTO_TAKEOFF == globals.auto_state) && (control.alt < .65)) {
+    while ((STATE_TAKEOFF == globals.state) && (control.alt < .65)) {
         fc_get_vcm(&vcm_axes, &vcm_type);
 
         // this yields a ramp up time a little under 5 seconds: (.65/.0014)*10ms
@@ -338,8 +328,8 @@ static void *dr_takeoff_thread(void *arg)
     }
     printf("done ramping (abs) -- switching to pid autopilot thread\n");
 
-    if (AUTO_TAKEOFF == globals.auto_state)
-        globals.auto_state = AUTO_HOVERING;
+    if (STATE_TAKEOFF == globals.state)
+        globals.state = STATE_HOVERING;
 
     // signal to the blocked altitude and orientation threads to start
     pthread_mutex_lock(&globals.takeoff_lock);
@@ -366,7 +356,7 @@ static void *dr_landing_thread(void *arg)
     control.alt = globals.carry_over;
 
     // back off the throttle in a decaying manner, until treshold reached
-    while (AUTO_LANDING == globals.auto_state) {
+    while (STATE_LANDING == globals.state) {
         // capture altitude
         float fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
         if (fd_alt < 10.0f)
@@ -474,7 +464,7 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
     globals.enabled = 1;
-    globals.auto_state = AUTO_GROUNDED;
+    globals.state = STATE_GROUNDED;
     fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
     syslog(LOG_INFO, "opened pwm device nodes\n");
     return 1;
@@ -602,8 +592,8 @@ int fc_request_takeoff(void)
     if (globals.replay_path) {
         pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, NULL);
     }
-    else if (AUTO_GROUNDED == globals.auto_state) {
-        globals.auto_state = AUTO_TAKEOFF;
+    else if (STATE_GROUNDED == globals.state) {
+        globals.state = STATE_TAKEOFF;
         pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
         pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
         pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
@@ -626,8 +616,8 @@ int fc_request_landing(void)
         return 0;
     }
 
-    if (AUTO_HOVERING == globals.auto_state) {
-        globals.auto_state = AUTO_LANDING;
+    if (STATE_HOVERING == globals.state) {
+        globals.state = STATE_LANDING;
         pthread_create(&globals.landing_thrd, NULL, dr_landing_thread, NULL);
     }
     else {
@@ -643,7 +633,7 @@ static void fc_reset_state(void)
 {
     pwm_channel_t *ch = &globals.channels[0];
     globals.curr_alt = 0.0f;
-    globals.auto_state = AUTO_GROUNDED;
+    globals.state = STATE_GROUNDED;
 
     // wake up any threads that may be blocked so that they can exit cleanly
     pthread_mutex_lock(&globals.takeoff_lock);
