@@ -42,12 +42,15 @@ static gpio_event_t g_gpio_alt; // ultrasonic PWM
 static gpio_event_t g_gpio_aux; // auxiliary PWM
 static client_info_t g_client;
 
-static pthread_t g_aux_thread;
-static ctl_sigs_t client_sigs = { 0 };
+static pthread_t g_aux_thread;  // thread handle for auxiliary monitor
+static pthread_t g_batt_thread; // thread handle for battery monitor
 static int g_muxsel = -1;
 
 // -----------------------------------------------------------------------------
-static void *aux_trigger_thread(void *arg)
+// Wake up on every gpio event and determine whether or not the auxiliary
+// override has been activated. When the auxiliary PWM signal is over 50%,
+// override is enabled, when less than 50%, override is disabled.
+static void *aux_monitor_thread(void *arg)
 {
     uint32_t cmd_buffer[16];
     int pulse = 0, axes = 0, type = 0, last_type = 0;
@@ -86,6 +89,27 @@ static void *aux_trigger_thread(void *arg)
             cmd_buffer[PKT_VCM_AXES] = VCM_AXIS_ALL;
             send_packet(&g_client, cmd_buffer, PKT_VCM_LENGTH);
         }
+    }
+
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+// Wake up every second and check the battery reading from the ADC. If the
+// battery drops below 5%, inform the flight control system to land.
+static void *batt_monitor_thread(void *arg)
+{
+    int battery;
+
+    for (;;) {
+        battery = read_vbatt();
+        fprintf(stderr, "current battery voltage: %d %%\n", battery);
+
+        // TODO: if hovering, land
+        // TODO: send a warning packet maybe?
+
+        // delay for a second between each battery reading
+        sleep(1);
     }
 
     pthread_exit(NULL);
@@ -212,6 +236,7 @@ void run_server(imu_data_t *imu, const char *port)
     char ip4[INET_ADDRSTRLEN];
     video_data_t vid_data;
     track_color_t tc;
+    ctl_sigs_t client_sigs = { 0 };
     float curr_alt, pid_val, pid_params[PID_PARAM_COUNT] = { 0 };
     float angles[3] = { 0 };
 
@@ -405,11 +430,6 @@ void run_server(imu_data_t *imu, const char *port)
                 memcpy(&client_sigs.pitch, &cmd_buffer[PKT_MCM_AXIS_PITCH], 4);
                 memcpy(&client_sigs.roll,  &cmd_buffer[PKT_MCM_AXIS_ROLL],  4);
                 memcpy(&client_sigs.yaw,   &cmd_buffer[PKT_MCM_AXIS_YAW],   4);
-
-                //syslog(LOG_DEBUG, "Received controls: %f, %f, %f, %f\n",
-                //        client_sigs.alt, client_sigs.pitch,
-                //        client_sigs.roll, client_sigs.yaw);
-                
                 fc_set_ctl(&client_sigs);
                 break;
             case CLIENT_REQ_CAM_TC:
@@ -684,9 +704,9 @@ int main(int argc, char *argv[])
             uav_shutdown(EXIT_FAILURE);
         }
 
-        // initialize the auxiliary pwm thread
-        if (0 != pthread_create(&g_aux_thread, NULL, aux_trigger_thread, 0)) {
-            syslog(LOG_ERR, "failed to create aux trigger thread");
+        // initialize the auxiliary override monitor thread
+        if (0 != pthread_create(&g_aux_thread, NULL, aux_monitor_thread, 0)) {
+            syslog(LOG_ERR, "failed to create aux monitor thread");
             uav_shutdown(EXIT_FAILURE);
         }
 
@@ -727,6 +747,12 @@ int main(int argc, char *argv[])
         syslog(LOG_INFO, "opening adc channels for battery monitoring\n");
         if (0 > adc_open_channels()) {
             syslog(LOG_ERR, "failed to open adc channels\n");
+            uav_shutdown(EXIT_FAILURE);
+        }
+
+        // initialize the battery monitor thread
+        if (0 != pthread_create(&g_batt_thread, NULL, batt_monitor_thread, 0)) {
+            syslog(LOG_ERR, "failed to create battery monitor thread");
             uav_shutdown(EXIT_FAILURE);
         }
     }
