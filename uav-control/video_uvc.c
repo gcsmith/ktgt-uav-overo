@@ -23,6 +23,7 @@ typedef struct video_globals
     struct vdIn *vd;
     pthread_t camthrd;
     int is_fresh;
+    int sync_access;
 } video_globals_t;
 
 video_globals_t global = { 0 };
@@ -72,6 +73,7 @@ static void *video_capture_thread(void *arg)
 #endif
 
         global.is_fresh = 1;
+        global.sync_access = 1;
 
         // signal fresh_frame
         pthread_cond_broadcast(&pglobal->db_update);
@@ -250,7 +252,10 @@ int video_lock(video_data_t *data, access_mode_t mode)
         break;
     case ACCESS_SYNC:
         // synchronous lock -- sleep until signalled by next fresh frame
-        pthread_cond_wait(&global.db_update, &global.db);
+        if (!global.sync_access) {
+            pthread_cond_wait(&global.db_update, &global.db);
+        }
+        global.sync_access = 0;
         break;
     default:
         syslog(LOG_ERR, "specified invalid lock type\n");

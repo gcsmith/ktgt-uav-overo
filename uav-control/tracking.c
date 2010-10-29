@@ -34,57 +34,56 @@ static tracking_args_t g_globals;
 static void *tracking_thread(void *arg)
 {
     tracking_args_t *data = (tracking_args_t *)arg;
-    track_color_t *color = &data->color;
     track_coords_t *box = &data->box;
     video_data_t vid_data;
     unsigned long buff_sz = 0;
     uint8_t *jpg_buf = NULL, *rgb_buff = NULL;
     uint32_t cmd_buffer[16];
-    int error = 0, tracking_fps = 0, streaming_fps = 0;
-    int frame_counter = 0;
-    struct timespec t0, t1; 
+    int delta, frames_computed = 0, tracking_fps = 0, streaming_fps = 0;
+    struct timespec t0, t1, tc;
     
+    clock_gettime(CLOCK_REALTIME, &t0);
     while (data->running) {
-
         // lock the colordetect parameters and determine our tracking fps
         pthread_mutex_lock(&data->lock);
         streaming_fps = video_get_fps();
         tracking_fps = MIN(data->trackingRate, streaming_fps);
         pthread_mutex_unlock(&data->lock);
         
+        // if tracking is disable - sleep and check for a change every second
         if (tracking_fps <= 0) {
-            // release the lock and sleep for a second, then check for a change
             sleep(1);
             continue;
         }
         
+        // make synchronous frame read -- sleep for a second and retry on fail
         if (!video_lock(&vid_data, ACCESS_SYNC)) {
-            // video error on synchronous access, sleep and try again
             syslog(LOG_ERR, "colordetect failed to lock frame\n");
             sleep(1);
             continue;
         }
 
-        error += tracking_fps;
-        if (error < streaming_fps) {
-            // don't track frames until error exceeds the streaming rate
+        clock_gettime(CLOCK_REALTIME, &tc);
+        delta = timespec_delta(&t0, &tc);
+        if (((frames_computed * 1000000) / delta) >= tracking_fps) {
             video_unlock();
             continue;
         }
-        error -= streaming_fps;
 
         // copy the jpeg to our buffer now that we're safely locked
         if (buff_sz < vid_data.length) {
             free(jpg_buf);
-            buff_sz = (vid_data.length);
+            buff_sz = vid_data.length;
             jpg_buf = (uint8_t *)malloc(buff_sz);
         }
 
         memcpy(jpg_buf, vid_data.data, vid_data.length);     
         video_unlock();
 
-        if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff, &box->width, &box->height)) {
-            colordetect_hsl_fp32(rgb_buff, color, box);
+        if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff,
+                             &box->width, &box->height)) {
+            colordetect_hsl_fp32(rgb_buff, &data->color, box);
+            frames_computed++;
         }
 
         if (box->detected) {
@@ -117,14 +116,13 @@ static void *tracking_thread(void *arg)
             fprintf(stderr, "lost target...\n");
         }
 
-        frame_counter++;
-        if (frame_counter == streaming_fps) {
+        if (frames_computed >= streaming_fps) {
             // every time we hit the streaming fps, dump out the tracking rate
             clock_gettime(CLOCK_REALTIME, &t1);
-            double delta_sec = ((double)timespec_delta(&t0, &t1) / 1000000.0);
-            fprintf(stderr, "Tracking FPS = %f\n", streaming_fps / delta_sec);
-            clock_gettime(CLOCK_REALTIME, &t0);
-            frame_counter = 0;
+            real_t delta = timespec_delta(&t0, &t1) / (real_t)1000000;
+            fprintf(stderr, "Tracking FPS = %f\n", streaming_fps / delta);
+            frames_computed = 0;
+            t0 = t1;
         }
     }
 

@@ -33,7 +33,7 @@ void colordetect_hsl(uint8_t *rgb_in,
 {
     track_color_t track_color = *color;
     // convert detect color from RGB to HSL
-    rgb_to_hsl(&track_color.r, &track_color.g, &track_color.b);                     
+    rgb_to_hsl(&track_color.r, &track_color.g, &track_color.b);
                 
     // convert the image to HSL
     color_image_rgb_to_hsl(rgb_in, box->width, box->height);
@@ -48,7 +48,7 @@ void colordetect_hsl_fp32(uint8_t *rgb_in,
 {
     track_color_t track_color = *color;
     // convert detect color from RGB to HSL
-    rgb_to_hsl_fp32(&track_color.r, &track_color.g, &track_color.b);                     
+    rgb_to_hsl_fp32(&track_color.r, &track_color.g, &track_color.b);
                         
     // convert the image to HSL
     color_image_rgb_to_hsl_fixed(rgb_in, box->width, box->height);
@@ -211,7 +211,7 @@ void find_color_hsl(const uint8_t *hsl_in,
             
             if (abs(h - (int)color->r) < (int)color->ht &&
                 (s > ((int)color->g - (int)color->st)) &&
-		        (s < ((int)color->g + (int)color->st)) &&
+                (s < ((int)color->g + (int)color->st)) &&
                 (l > 25) && 
                 (l < 225)) {
 
