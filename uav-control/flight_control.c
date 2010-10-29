@@ -719,7 +719,10 @@ void fc_set_ctl(ctl_sigs_t *sigs)
     // scale down the throttle signal, as the default [-1, 1] is too sensitive
     globals.curr_alt = CLAMP(globals.curr_alt + sigs->alt * 0.01, 0, 1);
     sigs->alt = globals.curr_alt;
-    sigs->yaw *= 0.25f;
+    if (sigs->yaw < 0.0f)
+        sigs->yaw *= 0.50;
+    else
+        sigs->yaw *= 0.25;
 
     fc_control(sigs, axes);
     pthread_mutex_unlock(&globals.vcm_lock);
