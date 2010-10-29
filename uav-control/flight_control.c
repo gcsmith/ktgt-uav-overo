@@ -431,10 +431,10 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     // at initialization, start in autonomous control with all axes enabled
     memset(&globals, 0, sizeof(fc_globals_t));
 
-    pid_init(&globals.pid_yaw,    PID_YAW_DEF_SP,   -12.0f, 12.0f);
-    pid_init(&globals.pid_pitch,  PID_PITCH_DEF_SP, -12.0f, 12.0f);
-    pid_init(&globals.pid_roll,   PID_ROLL_DEF_SP,  -12.0f, 12.0f);
-    pid_init(&globals.pid_alt,    PID_ALT_DEF_SP,   -12.0f, 12.0f);
+    pid_init(&globals.pid_yaw,   0.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_pitch, 0.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_roll,  0.0f, -12.0f, 12.0f);
+    pid_init(&globals.pid_alt,   0.0f, -12.0f, 12.0f);
 
     // save gpio event handles so we can fetch altitude and orgientation
     globals.usrf = pwm_usrf;

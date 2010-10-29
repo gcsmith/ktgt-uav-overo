@@ -9,14 +9,43 @@
 #ifndef _UAV_CMDLINE__H_
 #define _UAV_CMDLINE__H_
 
+// default values for unspecified parameters
+
 #define DEFAULT_PORT        8090
 #define DEFAULT_WIDTH       320
 #define DEFAULT_HEIGHT      240
 #define DEFAULT_FPS         15
 #define DEFAULT_TRACK       5
+
 #define DEFAULT_GPIO_MUX    170
 #define DEFAULT_GPIO_USS    171
 #define DEFAULT_GPIO_OVR    172
+
+#define DEFAULT_YAW_TRIM    800.0f
+#define DEFAULT_YAW_KP      0.00300f
+#define DEFAULT_YAW_KI      0.00010f
+#define DEFAULT_YAW_KD      0.04000f
+#define DEFAULT_YAW_SP      0.0f
+
+#define DEFAULT_PITCH_TRIM  -1500.0f
+#define DEFAULT_PITCH_KP    0.00300f
+#define DEFAULT_PITCH_KI    0.00010f
+#define DEFAULT_PITCH_KD    0.04000f
+#define DEFAULT_PITCH_SP    0.0f
+
+#define DEFAULT_ROLL_TRIM   1500.0f
+#define DEFAULT_ROLL_KP     0.00300f
+#define DEFAULT_ROLL_KI     0.00010f
+#define DEFAULT_ROLL_KD     0.04000f
+#define DEFAULT_ROLL_SP     0.0f
+
+#define DEFAULT_ALT_TRIM    0.0f
+#define DEFAULT_ALT_KP      0.00300f
+#define DEFAULT_ALT_KI      0.00010f
+#define DEFAULT_ALT_KD      0.04000f
+#define DEFAULT_ALT_SP      42.0f
+
+// identifiers for long options without short equivalents
 
 #define OPT_FIRST       2000
 #define OPT_YAW_TRIM    (OPT_FIRST + 0)

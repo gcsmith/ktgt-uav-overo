@@ -108,6 +108,30 @@ int cmdline_parse(int argc, char *argv[], cmdline_opts_t *opts)
     opts->uss        = DEFAULT_GPIO_USS;
     opts->ovr        = DEFAULT_GPIO_OVR;
 
+    opts->yaw[0] = DEFAULT_YAW_TRIM;
+    opts->yaw[1] = DEFAULT_YAW_KP;
+    opts->yaw[2] = DEFAULT_YAW_KI;
+    opts->yaw[3] = DEFAULT_YAW_KD;
+    opts->yaw[4] = DEFAULT_YAW_SP;
+
+    opts->pitch[0] = DEFAULT_PITCH_TRIM;
+    opts->pitch[1] = DEFAULT_PITCH_KP;
+    opts->pitch[2] = DEFAULT_PITCH_KI;
+    opts->pitch[3] = DEFAULT_PITCH_KD;
+    opts->pitch[4] = DEFAULT_PITCH_SP;
+
+    opts->roll[0] = DEFAULT_ROLL_TRIM;
+    opts->roll[1] = DEFAULT_ROLL_KP;
+    opts->roll[2] = DEFAULT_ROLL_KI;
+    opts->roll[3] = DEFAULT_ROLL_KD;
+    opts->roll[4] = DEFAULT_ROLL_SP;
+
+    opts->alt[0] = DEFAULT_ALT_TRIM;
+    opts->alt[1] = DEFAULT_ALT_KP;
+    opts->alt[2] = DEFAULT_ALT_KI;
+    opts->alt[3] = DEFAULT_ALT_KD;
+    opts->alt[4] = DEFAULT_ALT_SP;
+
     while (-1 != (opt = getopt_long(argc, argv, str, long_options, &index))) {
         switch (opt) {
         case OPT_YAW_TRIM:

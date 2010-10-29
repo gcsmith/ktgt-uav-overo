@@ -41,13 +41,6 @@
 #define PID_PARAM_SP    3
 #define PID_PARAM_COUNT 4
 
-// PID default Setpoints
-#define PID_YAW_DEF_SP      0.0f
-#define PID_PITCH_DEF_SP    0.0f
-#define PID_ROLL_DEF_SP     0.0f
-#define PID_ALT_DEF_SP      42.0f
-
-
 typedef struct ctl_sigs
 {
     float alt, pitch, roll, yaw;
@@ -101,8 +94,10 @@ void fc_get_vcm(int *axis, int *type);
 // inject manual input control signals
 void fc_set_ctl(ctl_sigs_t *sigs);
 
+// TODO: describe me
 void fc_set_trims(int axis, int value);
 
+// TODO: describe me
 int fc_get_trim(int axis);
 
 // tune a PID parameter
