@@ -328,6 +328,7 @@ static void *dr_takeoff_thread(void *arg)
     }
     printf("done ramping (abs) -- switching to pid autopilot thread\n");
 
+    // is the state still takeoff? -- if so, switch to hovering now
     if (STATE_TAKEOFF == globals.state)
         globals.state = STATE_HOVERING;
 
@@ -362,7 +363,7 @@ static void *dr_landing_thread(void *arg)
         if (fd_alt < 10.0f)
             break;
 
-        control.alt -= 0.0005f;
+        control.alt -= 0.0004f;
         fc_control(&control, VCM_AXIS_ALT);
     }
     fprintf(stderr, "done dropping throttle\n");
@@ -373,6 +374,7 @@ static void *dr_landing_thread(void *arg)
     control.alt = 0.0f;
     fc_control(&control, VCM_AXIS_ALT);
 
+    globals.state = STATE_GROUNDED;
     fprintf(stderr, "helicopter landed\n");
     pthread_exit(NULL);
 }
