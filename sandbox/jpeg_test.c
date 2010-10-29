@@ -141,6 +141,121 @@ float test_rgb2_stream(int iterations, const uint8_t *stream_in,
     clock_gettime(CLOCK_REALTIME, &t1);
     return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
 }
+//////////////////////////MEMORY TESTS//////////////////////////
+
+// -----------------------------------------------------------------------------
+// Benchmark jpeg decompression and hsl color tracking from memory
+float test_hsl_mem(int iterations, const uint8_t *stream_in,
+        unsigned long length, track_color_t *color)
+{
+    struct timespec t0, t1;
+    track_coords_t box = { 0 };
+    unsigned long j;
+    uint8_t *rgb_buff = NULL;
+    uint8_t *rgb_buff_temp = NULL;
+    uint8_t img_in[length];
+    track_color_t temp;
+
+    memcpy(img_in, stream_in, length);
+    jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
+    rgb_buff_temp = calloc(3 * box.width * box.height,sizeof(uint8_t)  );
+        
+    clock_gettime(CLOCK_REALTIME, &t0);
+    for (j = 0; j < iterations; j++) {
+        memcpy(&temp, color, sizeof(track_color_t));
+        memcpy(rgb_buff_temp, rgb_buff, sizeof(uint8_t) * 3 * box.width * box.height);
+        colordetect_hsl(rgb_buff_temp, &temp, &box);
+        printf(box.detected ? "." : "?"); fflush(stdout);
+    }
+    clock_gettime(CLOCK_REALTIME, &t1);
+    return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
+}
+
+// -----------------------------------------------------------------------------
+// Benchmark jpeg decompression and hsl color tracking from memory stream.
+float test_hsl_fp32_mem(int iterations, const uint8_t *stream_in,
+        unsigned long length, track_color_t *color)
+{
+    struct timespec t0, t1;
+    track_coords_t box = { 0 };
+    unsigned long j;
+    uint8_t *rgb_buff = NULL;
+    uint8_t *rgb_buff_temp = NULL;
+    uint8_t img_in[length];
+    track_color_t temp;
+
+    memcpy(img_in, stream_in, length);
+    jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
+    rgb_buff_temp = calloc(3 * box.width * box.height,sizeof(uint8_t)  );
+        
+    clock_gettime(CLOCK_REALTIME, &t0);
+    for (j = 0; j < iterations; j++) {
+        memcpy(&temp, color, sizeof(track_color_t));
+        memcpy(rgb_buff_temp, rgb_buff, sizeof(uint8_t) * 3 * box.width * box.height);
+        colordetect_hsl_fp32(rgb_buff_temp, &temp, &box);
+        printf(box.detected ? "." : "?"); fflush(stdout);
+    }
+    clock_gettime(CLOCK_REALTIME, &t1);
+    return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
+}
+
+// -----------------------------------------------------------------------------
+// Benchmark jpeg decompression and rgb color tracking from memory stream.
+float test_rgb1_mem(int iterations, const uint8_t *stream_in,
+        unsigned long length, track_color_t *color)
+{
+    struct timespec t0, t1;
+    track_coords_t box = { 0 };
+    unsigned long j;
+    uint8_t *rgb_buff = NULL;
+    uint8_t *rgb_buff_temp = NULL;
+    uint8_t img_in[length];
+
+    color->ht = 10;
+    color->st = 10;
+    color->lt = 10;
+    
+    memcpy(img_in, stream_in, length);
+    jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
+    rgb_buff_temp = calloc(3 * box.width * box.height,sizeof(uint8_t)  );
+
+    clock_gettime(CLOCK_REALTIME, &t0);
+    for (j = 0; j < iterations; j++) {
+        memcpy(rgb_buff_temp, rgb_buff, sizeof(uint8_t) * 3 * box.width * box.height);
+        colordetect_rgb(rgb_buff_temp, color, &box);
+        printf(box.detected ? "." : "?"); fflush(stdout);
+    }
+    clock_gettime(CLOCK_REALTIME, &t1);
+    return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
+}
+
+// -----------------------------------------------------------------------------
+// Benchmark jpeg decompression and rgb color tracking from memory stream.
+float test_rgb2_mem(int iterations, const uint8_t *stream_in,
+        unsigned long length, track_color_t *color)
+{
+    struct timespec t0, t1;
+    track_coords_t box = { 0 };
+    unsigned long j;
+    uint8_t *rgb_buff = NULL;
+    uint8_t *rgb_buff_temp = NULL;
+    uint8_t img_in[length];
+
+    memcpy(img_in, stream_in, length);
+    jpeg_rd_mem(img_in, length, &rgb_buff, &box.width, &box.height);
+    rgb_buff_temp = calloc(3 * box.width * box.height,sizeof(uint8_t)  );
+        
+    clock_gettime(CLOCK_REALTIME, &t0);
+    for (j = 0; j < iterations; j++) {
+        memcpy(rgb_buff_temp, rgb_buff, sizeof(uint8_t) * 3 * box.width * box.height);
+        colordetect_rgb_dist(rgb_buff_temp, (real_t)15, color, &box);
+        printf(box.detected ? "." : "?"); fflush(stdout);
+    }
+    clock_gettime(CLOCK_REALTIME, &t1);
+    return iterations / ((double)compute_delta(&t0, &t1) / 1000000.0);
+}
+
+
 
 // -----------------------------------------------------------------------------
 // Information about command line arguments
@@ -154,14 +269,20 @@ void print_usage()
            "  -h [ --help ]           : display this usage message\n"
            "  --no-decompress         : do not run the decompression benchmark\n"
            "  --no-hsl                : do not run the hsl benchmark\n"
+           "  --no-hsl-fp             : do not run the hsl fp benchmark\n"
            "  --no-rgb1               : do not run the rgb1 benchmark\n"
-           "  --no-rgb2               : do not run the rgb2 benchmark\n");
+           "  --no-rgb2               : do not run the rgb2 benchmark\n"
+           "  --no-hsl-mem            : do not run the hslmem benchmark\n"
+           "  --no-hsl-fp-mem         : do not run the hsl fp mem benchmark\n"
+           "  --no-rgb1-mem           : do not run the rgb1 mem benchmark\n"
+           "  --no-rgb2-mem           : do not run the rgb2 mem benchmark\n");
 }
 
 // -----------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    int flag_decompress = 0, flag_hsl = 0, flag_rgb1 = 0, flag_rgb2 = 0;
+    int flag_decompress = 0, flag_hsl = 0, flag_hsl_fp = 0, flag_rgb1 = 0, flag_rgb2 = 0;
+    int flag_hsl_mem = 0, flag_hsl_fp_mem = 0, flag_rgb1_mem = 0, flag_rgb2_mem = 0;
     int opt, index;
     unsigned long img_size, bytes_read, i;
     uint8_t *stream_in;
@@ -183,8 +304,13 @@ int main(int argc, char *argv[])
         { "thresh",         required_argument, NULL,            't' },
         { "no-decompress",  no_argument,       &flag_decompress, 1 },
         { "no-hsl",         no_argument,       &flag_hsl,        1 },
+        { "no-hsl-fp",      no_argument,       &flag_hsl_fp,     1 },
         { "no-rgb1",        no_argument,       &flag_rgb1,       1 },
         { "no-rgb2",        no_argument,       &flag_rgb2,       1 },
+        { "no-hsl-mem",     no_argument,       &flag_hsl_mem,        1 },
+        { "no-hsl-fp-mem",  no_argument,       &flag_hsl_fp_mem,     1 },
+        { "no-rgb1-mem",    no_argument,       &flag_rgb1_mem,       1 },
+        { "no-rgb2-mem",    no_argument,       &flag_rgb2_mem,       1 },
         { 0, 0, 0, 0 }
     };
 
@@ -243,7 +369,7 @@ int main(int argc, char *argv[])
         printf(" %f FPS\n", test_hsl_stream(40, stream_in, img_size, &color));
     }
 
-    if (!flag_hsl) {
+    if (!flag_hsl_fp) {
         printf("HSL fp32 stream loop : ");
         printf(" %f FPS\n", test_hsl_fp32_stream(40, stream_in, img_size, &color));
     }
@@ -256,6 +382,27 @@ int main(int argc, char *argv[])
     if (!flag_rgb2) {
         printf("RGB2 stream loop     : ");
         printf(" %f FPS\n", test_rgb2_stream(40, stream_in, img_size, &color));
+    }
+
+
+    if (!flag_hsl_mem) {
+        printf("HSL Memory loop      : ");
+        printf(" %f FPS\n", test_hsl_mem(40, stream_in, img_size, &color));
+    }
+
+    if (!flag_hsl_mem) {
+        printf("HSL fp32 Memory loop : ");
+        printf(" %f FPS\n", test_hsl_fp32_mem(40, stream_in, img_size, &color));
+    }
+
+    if (!flag_rgb1_mem) {
+        printf("RGB1 Memory loop     : ");
+        printf(" %f FPS\n", test_rgb1_mem(40, stream_in, img_size, &color));
+    }
+
+    if (!flag_rgb2_mem) {
+        printf("RGB2 Memory loop     : ");
+        printf(" %f FPS\n", test_rgb2_mem(40, stream_in, img_size, &color));
     }
 
     PUT_BANNER(80);
