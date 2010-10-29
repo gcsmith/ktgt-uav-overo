@@ -11,18 +11,19 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <math.h>
 #include <pthread.h>
 
-// return the smallest of the two specified values
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#ifndef PI
+#define PI ((real_t)3.141592653589793)
+#endif
 
-// return the largest of the two specified values
+// return the smallest/largest of the two specified values
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
-// return the smallest of the three specified values
+// return the smallest/largest of the three specified values
 #define MIN3(a,b,c) ((a)<(b) ? ((a)<(c) ? (a) : (c)) : ((b)<(c) ? (b) : (c)))
-
-// return the largest of the three specified values
 #define MAX3(a,b,c) ((a)>(b) ? ((a)>(c) ? (a) : (c)) : ((b)>(c) ? (b) : (c)))
 
 // clamp the value x within the bounds [l, u]
@@ -30,6 +31,10 @@
 
 // return the number of elements of a statically declared array
 #define ELEMENTS(x) (sizeof(x) / sizeof((x)[0]))
+
+// convert between degrees and radians
+#define DEG_TO_RAD(x)  ((x) * (PI / 180.0f))
+#define RAD_TO_DEG(x)  ((x) * (180.0f / PI))
 
 // allow us to toggle the precision of all internal floating point algorithms
 typedef float real_t;

@@ -199,11 +199,12 @@ static int fc_control(const ctl_sigs_t *sigs, int chnl_flags)
 static void *auto_alt_thread(void *arg)
 {
     int vcm_axes, vcm_type, timeout = 0;
-    float fd_alt, pid_result = 0.0f;
+    float p_rad, r_rad, angles[3], altitude, pid_result = 0.0f;
+    ctl_sigs_t signal;
 
     // flight control's signal structure
-    ctl_sigs_t fc_sigs;
-    memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
+    memset(&signal, 0, sizeof(ctl_sigs_t));
+    memset(&angles, 0, sizeof(float) * 3);
     pid_reset_error(&globals.pid_alt);
     
     // wait for the dr takeoff process to complete and signal pid altitude
@@ -215,21 +216,32 @@ static void *auto_alt_thread(void *arg)
 
     while (STATE_HOVERING == globals.state || STATE_LANDING == globals.state) {
         // capture altitude and flight control's mode and vcm axes
-        fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
+        altitude = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
         fc_get_vcm(&vcm_axes, &vcm_type);
+
+        if (imu_read_angles(globals.imu, angles, ACCESS_ASYNC)) {
+            // compensate for offsets in current yaw and pitch angles
+            p_rad = DEG_TO_RAD(angles[IMU_PITCH]);
+            r_rad = DEG_TO_RAD(angles[IMU_ROLL]);
+            altitude = altitude * cos(p_rad) * cos(r_rad);
+        }
+        else {
+            // shouldn't happen, but if it does just use the altitude by itself
+            syslog(LOG_ERR, "auto_alt_thread: failed to read imu angles");
+        }
 
         // only control altitude with PID if axis is enabled (mixed mode)
         pthread_mutex_lock(&globals.pid_lock);
         if (!(vcm_axes & VCM_AXIS_ALT)) {
-            pid_result = pid_update(&globals.pid_alt, fd_alt);
-            fc_sigs.alt = .585f + pid_result;
-            fc_control(&fc_sigs, VCM_AXIS_ALT);
+            pid_result = pid_update(&globals.pid_alt, altitude);
+            signal.alt = .585f + pid_result;
+            fc_control(&signal, VCM_AXIS_ALT);
         }
         pthread_mutex_unlock(&globals.pid_lock);
 
         // if landing requested, try not to release while still accelerating
         if (STATE_LANDING == globals.state) {
-            globals.carry_over = fc_sigs.alt;
+            globals.carry_over = signal.alt;
             if (++timeout > 100 || pid_result <= 0.0f) {
                 break;
             }
@@ -252,10 +264,10 @@ void *auto_imu_thread(void *arg)
 {
     int vcm_axes, vcm_type;
     float angles[3] = { 0 };
-    ctl_sigs_t fc_sigs;
+    ctl_sigs_t signal;
 
     // flight control's signal structure
-    memset(&fc_sigs, 0, sizeof(ctl_sigs_t));
+    memset(&signal, 0, sizeof(ctl_sigs_t));
 
     // wait for the takeoff process to complete
     fprintf(stderr, "auto_imu_thread waiting...\n");
@@ -283,21 +295,21 @@ void *auto_imu_thread(void *arg)
         pthread_mutex_lock(&globals.pid_lock);
         if (!(vcm_axes & VCM_AXIS_PITCH)) {
             // compute PID result for pitch
-            fc_sigs.pitch = pid_update(&globals.pid_pitch, angles[IMU_PITCH]);
-            fc_control(&fc_sigs, VCM_AXIS_PITCH);
+            signal.pitch = pid_update(&globals.pid_pitch, angles[IMU_PITCH]);
+            fc_control(&signal, VCM_AXIS_PITCH);
         }
         
         if (!(vcm_axes & VCM_AXIS_ROLL)) {
             // compute PID result for roll
-            fc_sigs.roll = pid_update(&globals.pid_roll, angles[IMU_ROLL]);
-            fc_control(&fc_sigs, VCM_AXIS_ROLL);
+            signal.roll = pid_update(&globals.pid_roll, angles[IMU_ROLL]);
+            fc_control(&signal, VCM_AXIS_ROLL);
         }
         
 //      if (!(vcm_axes & VCM_AXIS_YAW)) {
 //          // compute PID result for yaw -- disabled for now due to EMF
 //          float pid_result = pid_update(&globals.pid_yaw, angles[IMU_YAW]);
-//          fc_sigs.yaw = pid_result;
-//          fc_control(&fc_sigs, VCM_AXIS_YAW);
+//          signal.yaw = pid_result;
+//          fc_control(&signal, VCM_AXIS_YAW);
 //      }
         pthread_mutex_unlock(&globals.pid_lock);
     }
@@ -359,8 +371,8 @@ static void *dr_landing_thread(void *arg)
     // back off the throttle in a decaying manner, until treshold reached
     while (STATE_LANDING == globals.state) {
         // capture altitude
-        float fd_alt = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
-        if (fd_alt < 10.0f)
+        float altitude = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
+        if (altitude < 10.0f)
             break;
 
         control.alt -= 0.0004f;
