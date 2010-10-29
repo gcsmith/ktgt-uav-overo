@@ -169,13 +169,13 @@ int main(int argc, char *argv[])
 
     // default values for rgb/hsl color tracking
     track_color_t color = {
-        151, 242, 192,  // rgb target color
-        21, 71, 255,    // hsl thresholds
+        90, 35, 44,     // rgb target color
+        10, 20, 255,    // hsl thresholds
         5               // filter consecutive pixels
     };
 
     // default jpeg image file path to load
-    char filename[MAX_PATH] = "./Data/frisbee.jpg";
+    char filename[MAX_PATH] = "./Data/camera.jpg";
 
     struct option long_options[] = {
         { "file",           required_argument, NULL,            'f' },
