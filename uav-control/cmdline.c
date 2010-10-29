@@ -35,21 +35,21 @@ static void print_usage(void)
            "  -D, --daemonize           run as a background process\n"
            "  -V, --verbose             enable verbose logging\n"
            "  -h, --help                display this usage message\n"
-           "      --[AXIS]-[PARAM]=NUM  specify value to set for an axis\n"
-           "                              AXIS = yaw | pitch | roll | alt\n"
-           "                              PARAM = trim | kp | ki | kd | sp\n"
            "      --no-adc              do not capture data from adc\n"
            "      --no-fc               do not enable autonomous flight\n"
            "      --no-gpio             do not perform any gpio processing\n"
            "      --no-track            do not perform color tracking\n"
-           "      --no-video            do not capture video from webcam\n");
+           "      --no-video            do not capture video from webcam\n"
+           "      --AXIS-PARAM=NUM      specify value to set for an axis\n"
+           "                            AXIS = yaw | pitch | roll | alt\n"
+           "                            PARAM = trim | kp | ki | kd | sp\n");
 }
 
 // -----------------------------------------------------------------------------
 int cmdline_parse(int argc, char *argv[], cmdline_opts_t *opts)
 {
     int index, opt;
-    static const char *str = "c:r:s:v:p:m:u:o:x:y:f:F:Y:P:R:A:DVh?";
+    static const char *str = "c:r:s:v:p:m:u:o:x:y:f:F:DVh?";
     struct option long_options[] = {
         { "capture",    required_argument, NULL, 'c' },
         { "replay",     required_argument, NULL, 'r' },
