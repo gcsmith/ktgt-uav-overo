@@ -145,11 +145,9 @@ static void record_write_buckets(void)
 // -----------------------------------------------------------------------------
 static void assign_duty(pwm_channel_t *pwm, float duty)
 {
-    int cmp_val = 0;
-    
     duty = CLAMP(duty, pwm->duty_lo, pwm->duty_hi);
-    cmp_val = (int)(pwm->rng_min + (int)((pwm->rng_max - pwm->rng_min) * duty));
-    pwm_set_compare(pwm->handle, cmp_val);
+    pwm->cmp = (int)(pwm->rng_min + (int)((pwm->rng_max - pwm->rng_min) * duty));
+    pwm_set_compare(pwm->handle, pwm->cmp);
 }
 
 // -----------------------------------------------------------------------------
