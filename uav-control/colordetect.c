@@ -245,8 +245,10 @@ void find_color_hsl(const uint8_t *hsl_in,
         box->detected = 0;
     }
     else {
-        // color was detected
+        // color was detected -- just do box center for now, can we do better?
         box->detected = 1;
+        box->xc = (box->x2 - box->x1) >> 1;
+        box->yc = (box->y2 - box->y1) >> 1;
     }
 }
 
@@ -308,8 +310,10 @@ void find_color_rgb(const uint8_t *rgb_in,
         box->detected = 0;
     }
     else {
-        // color was detected
+        // color was detected -- just do box center for now, can we do better?
         box->detected = 1;
+        box->xc = (box->x2 - box->x1) >> 1;
+        box->yc = (box->y2 - box->y1) >> 1;
     }
 }
 
@@ -377,8 +381,10 @@ void find_color_rgb_dist(const uint8_t *rgb_in, int threshold,
         box->detected = 0;
     }
     else {
-        // color was detected
+        // color was detected -- just do box center for now, can we do better?
         box->detected = 1;
+        box->xc = (box->x2 - box->x1) >> 1;
+        box->yc = (box->y2 - box->y1) >> 1;
     }
 }
 
