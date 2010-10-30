@@ -260,6 +260,12 @@ int gpio_event_read(gpio_event_t *event, access_mode_t mode)
         // access in a synchronous (blocking) fashion
         pthread_cond_wait(&event->cond, &event->lock);
         pulse = event->pulsewidth;
+        break;
+    default:
+        // just return zero for invalid accesses
+        pulse = 0;
+        syslog(LOG_ERR, "gpio_event_read: invalid access mode");
+        break;
     }
 
     pthread_mutex_unlock(&event->lock);

@@ -18,27 +18,28 @@
 
 typedef struct tracking_args
 {
-    client_info_t *client;      // connect client handle
-    track_color_t  color;       // current color to track
-    track_coords_t box;         // bounding box of tracked color 
-    unsigned int   running;     // subsystem is currently running
-    unsigned int   tracking;
-    pthread_t      thread;      // handle to color detect thread
-    unsigned int   trackingRate;
+    client_info_t  *client;     // connect client handle
+    track_color_t   color;      // current color to track
+    track_coords_t  coords;     // bounding box of tracked color 
+    unsigned int    running;    // subsystem is currently running
+    unsigned int    tracking;
+    pthread_t       thread;     // handle to color detect thread
+    unsigned int    trackingRate;
     pthread_mutex_t lock;
+    pthread_mutex_t coord_lock;
+    pthread_cond_t  coord_cond;
 } tracking_args_t;
 
-static tracking_args_t g_globals;
+static tracking_args_t globals;
 
 // -----------------------------------------------------------------------------
 static void *tracking_thread(void *arg)
 {
     tracking_args_t *data = (tracking_args_t *)arg;
-    track_coords_t *box = &data->box;
+    track_coords_t coords;
     video_data_t vid_data;
     unsigned long buff_sz = 0;
     uint8_t *jpg_buf = NULL, *rgb_buff = NULL;
-    uint32_t cmd_buffer[16];
     int delta, frames_computed = 0, tracking_fps = 0, streaming_fps = 0;
     struct timespec t0, t1, tc;
     
@@ -81,40 +82,19 @@ static void *tracking_thread(void *arg)
         video_unlock();
 
         if (0 != jpeg_rd_mem(jpg_buf, buff_sz, &rgb_buff,
-                             &box->width, &box->height)) {
-            colordetect_hsl_fp32(rgb_buff, &data->color, box);
+                             &coords.width, &coords.height)) {
+            colordetect_hsl_fp32(rgb_buff, &data->color, &coords);
             frames_computed++;
         }
 
-        if (box->detected) {
-            // we've detected an object, send the updated bounding box
-            cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
-            cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
-            cmd_buffer[PKT_CTS_STATE] = CTS_STATE_DETECTED;
-            cmd_buffer[PKT_CTS_X1]    = (uint32_t)box->x1;
-            cmd_buffer[PKT_CTS_Y1]    = (uint32_t)box->y1;
-            cmd_buffer[PKT_CTS_X2]    = (uint32_t)box->x2;
-            cmd_buffer[PKT_CTS_Y2]    = (uint32_t)box->y2;
-            cmd_buffer[PKT_CTS_XC]    = (uint32_t)box->xc;
-            cmd_buffer[PKT_CTS_YC]    = (uint32_t)box->yc;
+        pthread_mutex_lock(&data->coord_lock);
 
-            send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
-            data->tracking = 1;
+        // copy over the updated coordinates to the global struct
+        globals.coords = coords;
 
-            fprintf(stderr, "Bounding box: (%d,%d) (%d,%d)\n",
-                    box->x1, box->y1, box->x2, box->y2);
-        }
-        else if (data->tracking) {
-            // this means we were tracking, but lost our target. tell the client
-            memset(cmd_buffer, 0, PKT_CTS_LENGTH);
-            cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
-            cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
-            cmd_buffer[PKT_CTS_STATE] = CTS_STATE_SEARCHING;
-            send_packet(data->client, cmd_buffer, PKT_CTS_LENGTH);
-            data->tracking = 0;
-
-            fprintf(stderr, "lost target...\n");
-        }
+        // inform any listeners that new data is available
+        pthread_cond_broadcast(&globals.coord_cond);
+        pthread_mutex_unlock(&data->coord_lock);
 
         if (frames_computed >= streaming_fps) {
             // every time we hit the streaming fps, dump out the tracking rate
@@ -133,39 +113,47 @@ static void *tracking_thread(void *arg)
 int tracking_init(client_info_t *client)
 {   
     int rc;
-    if (g_globals.running) {
+    if (globals.running) {
         syslog(LOG_INFO, "attempting multiple colordetect_init calls\n");
         return 0;
     }
 
     // zero out all globals
-    memset(&g_globals, 0, sizeof(g_globals));
+    memset(&globals, 0, sizeof(globals));
 
-    g_globals.running = 1;
-    g_globals.tracking = 0;
-    g_globals.client = client;
+    globals.running = 1;
+    globals.tracking = 0;
+    globals.client = client;
 
     // set initial color value to track
-    g_globals.color.r = 159;
-    g_globals.color.g = 39;
-    g_globals.color.b = 100;
+    globals.color.r = 159;
+    globals.color.g = 39;
+    globals.color.b = 100;
 
     // set initial tracking threshold values
-    g_globals.color.ht = 10;
-    g_globals.color.st = 20;
-    g_globals.color.lt = 30;
+    globals.color.ht = 10;
+    globals.color.st = 20;
+    globals.color.lt = 30;
+    globals.color.filter = 10;
 
-    g_globals.color.filter = 10;
+    if (0 != (rc = pthread_mutex_init(&globals.lock, NULL))) {
+        syslog(LOG_ERR, "error creating colordetect param mutex (%d)", rc);
+        return 0;
+    }
 
+    if (0 != (rc = pthread_mutex_init(&globals.coord_lock, NULL))) {
+        syslog(LOG_ERR, "error creating colordetect coord mutex (%d)", rc);
+        return 0;
+    }
 
-    if (0 != (rc = pthread_mutex_init(&g_globals.lock, NULL))) {
-        syslog(LOG_ERR, "error creating colordetect mutex (%d)", rc);
+    if (0 != (rc = pthread_cond_init(&globals.coord_cond, NULL))) {
+        syslog(LOG_ERR, "error creating tracking event condition (%d)", rc);
         return 0;
     }
 
     // create and kick off the color tracking thread
-    pthread_create(&g_globals.thread, 0, tracking_thread, &g_globals);
-    pthread_detach(g_globals.thread);
+    pthread_create(&globals.thread, 0, tracking_thread, &globals);
+    pthread_detach(globals.thread);
 
     return 1;
 }
@@ -173,14 +161,16 @@ int tracking_init(client_info_t *client)
 // -----------------------------------------------------------------------------
 void tracking_shutdown(void)
 {   
-    if (!g_globals.running) {
+    if (!globals.running) {
         syslog(LOG_INFO, "calling colordetect_shutdown prior to init\n");
         return;
     }
 
-    g_globals.running = 0;
-    pthread_cancel(g_globals.thread);
-    pthread_mutex_destroy(&g_globals.lock);
+    globals.running = 0;
+    pthread_cancel(globals.thread);
+    pthread_mutex_destroy(&globals.lock);
+    pthread_mutex_destroy(&globals.coord_lock);
+    pthread_cond_destroy(&globals.coord_cond);
 }
 
 // -----------------------------------------------------------------------------
@@ -195,30 +185,55 @@ void tracking_enable(int enabled)
 // -----------------------------------------------------------------------------
 void tracking_set_color(track_color_t *color)
 {
-    g_globals.color = *color;
+    globals.color = *color;
 }
 
 // -----------------------------------------------------------------------------
 track_color_t tracking_get_color(void)
 {
-    return g_globals.color;
+    return globals.color;
 }
 
 //------------------------------------------------------------------------------
 void tracking_set_fps(unsigned int fps)
 {
-    pthread_mutex_lock(&g_globals.lock);
-    g_globals.trackingRate = fps;
-    pthread_mutex_unlock(&g_globals.lock);
+    pthread_mutex_lock(&globals.lock);
+    globals.trackingRate = fps;
+    pthread_mutex_unlock(&globals.lock);
 }
 
 //------------------------------------------------------------------------------
 unsigned int tracking_get_fps()
 {
     unsigned int rval;
-    pthread_mutex_lock(&g_globals.lock);
-    rval = g_globals.trackingRate;
-    pthread_mutex_unlock(&g_globals.lock);
+    pthread_mutex_lock(&globals.lock);
+    rval = globals.trackingRate;
+    pthread_mutex_unlock(&globals.lock);
     return rval;
+}
+
+//------------------------------------------------------------------------------
+int tracking_read_state(track_coords_t *coords, access_mode_t mode)
+{
+    pthread_mutex_lock(&globals.coord_lock);
+
+    switch (mode) {
+    case ACCESS_ASYNC:
+        // access in an asynchronous (non-blocking) fashion
+        break;
+    case ACCESS_SYNC:
+        // access in a synchronous (blocking) fashion
+        pthread_cond_wait(&globals.coord_cond, &globals.coord_lock);
+        break;
+    default:
+        pthread_mutex_unlock(&globals.coord_lock);
+        memset(coords, 0, sizeof(track_coords_t));
+        syslog(LOG_ERR, "tracking_read_state: invalid access mode\n");
+        return 0;
+    }
+
+    *coords = globals.coords;
+    pthread_mutex_unlock(&globals.coord_lock);
+    return 1;
 }
 

@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <syslog.h>
+#include "tracking.h"
 #include "flight_control.h"
 #include "pid.h"
 
@@ -262,9 +263,10 @@ static void *auto_alt_thread(void *arg)
 // the sampling razor of the 9DOF Razor IMU.
 void *auto_imu_thread(void *arg)
 {
-    int vcm_axes, vcm_type;
+    int axes, vcm_type;
     float angles[3] = { 0 };
     ctl_sigs_t signal;
+    track_coords_t tc;
 
     // flight control's signal structure
     memset(&signal, 0, sizeof(ctl_sigs_t));
@@ -290,27 +292,30 @@ void *auto_imu_thread(void *arg)
         }
         
         // capture axes and type
-        fc_get_vcm(&vcm_axes, &vcm_type);
+        fc_get_vcm(&axes, &vcm_type);
 
         pthread_mutex_lock(&globals.pid_lock);
-        if (!(vcm_axes & VCM_AXIS_PITCH)) {
+        if (!(axes & VCM_AXIS_PITCH)) {
             // compute PID result for pitch
             signal.pitch = pid_update(&globals.pid_pitch, angles[IMU_PITCH]);
             fc_control(&signal, VCM_AXIS_PITCH);
         }
         
-        if (!(vcm_axes & VCM_AXIS_ROLL)) {
+        if (!(axes & VCM_AXIS_ROLL)) {
             // compute PID result for roll
             signal.roll = pid_update(&globals.pid_roll, angles[IMU_ROLL]);
             fc_control(&signal, VCM_AXIS_ROLL);
         }
         
-//      if (!(vcm_axes & VCM_AXIS_YAW)) {
-//          // compute PID result for yaw -- disabled for now due to EMF
-//          float pid_result = pid_update(&globals.pid_yaw, angles[IMU_YAW]);
-//          signal.yaw = pid_result;
-//          fc_control(&signal, VCM_AXIS_YAW);
-//      }
+        if (!(axes & VCM_AXIS_YAW) && tracking_read_state(&tc, ACCESS_ASYNC)) {
+            if (tc.detected) {
+                fprintf(stderr, "auto_imu_thread: detected\n");
+            }
+            // compute PID result for yaw -- disabled for now due to EMF
+            //float pid_result = pid_update(&globals.pid_yaw, angles[IMU_YAW]);
+            //signal.yaw = pid_result;
+            //fc_control(&signal, VCM_AXIS_YAW);
+        }
         pthread_mutex_unlock(&globals.pid_lock);
     }
 

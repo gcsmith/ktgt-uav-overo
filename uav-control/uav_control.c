@@ -42,8 +42,9 @@ static gpio_event_t g_gpio_alt; // ultrasonic PWM
 static gpio_event_t g_gpio_aux; // auxiliary PWM
 static client_info_t g_client;
 
-static pthread_t g_aux_thread;  // thread handle for auxiliary monitor
-static pthread_t g_batt_thread; // thread handle for battery monitor
+static pthread_t g_aux_thrd;  // thread handle for auxiliary monitor
+static pthread_t g_batt_thrd; // thread handle for battery monitor
+static pthread_t g_track_thrd; // thread handle for battery monitor
 static int g_muxsel = -1;
 
 // -----------------------------------------------------------------------------
@@ -113,6 +114,51 @@ static void *batt_monitor_thread(void *arg)
     }
 
     pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+// Wake up whenever the color tracking subsystem produces an updated tracking
+// state and bounding box. Transmit the tracking status back to the UI.
+static void *tracking_monitor_thread(void *arg)
+{
+    uint32_t cmd_buffer[16];
+    track_coords_t coords;
+    int was_tracking = 0;
+
+    for (;;) {
+        // block until the tracking subsystem provides an updated bounding box
+        if (!tracking_read_state(&coords, ACCESS_SYNC))
+            continue;
+
+        if (coords.detected) {
+            // we've detected an object, send the updated bounding box
+            cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
+            cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
+            cmd_buffer[PKT_CTS_STATE] = CTS_STATE_DETECTED;
+            cmd_buffer[PKT_CTS_X1]    = (uint32_t)coords.x1;
+            cmd_buffer[PKT_CTS_Y1]    = (uint32_t)coords.y1;
+            cmd_buffer[PKT_CTS_X2]    = (uint32_t)coords.x2;
+            cmd_buffer[PKT_CTS_Y2]    = (uint32_t)coords.y2;
+            cmd_buffer[PKT_CTS_XC]    = (uint32_t)coords.xc;
+            cmd_buffer[PKT_CTS_YC]    = (uint32_t)coords.yc;
+            send_packet(&g_client, cmd_buffer, PKT_CTS_LENGTH);
+
+            was_tracking = 1;
+            fprintf(stderr, "Bounding box: (%d,%d) (%d,%d)\n",
+                    coords.x1, coords.y1, coords.x2, coords.y2);
+        }
+        else if (was_tracking) {
+            // this means we were tracking, but lost our target. tell the client
+            memset(cmd_buffer, 0, PKT_CTS_LENGTH);
+            cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_TRACKING;
+            cmd_buffer[PKT_LENGTH]    = PKT_CTS_LENGTH;
+            cmd_buffer[PKT_CTS_STATE] = CTS_STATE_SEARCHING;
+            send_packet(&g_client, cmd_buffer, PKT_CTS_LENGTH);
+
+            was_tracking = 0;
+            fprintf(stderr, "lost target...\n");
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -706,7 +752,7 @@ int main(int argc, char *argv[])
         }
 
         // initialize the auxiliary override monitor thread
-        if (0 != pthread_create(&g_aux_thread, NULL, aux_monitor_thread, 0)) {
+        if (0 != pthread_create(&g_aux_thrd, NULL, aux_monitor_thread, 0)) {
             syslog(LOG_ERR, "failed to create aux monitor thread");
             uav_shutdown(EXIT_FAILURE);
         }
@@ -737,6 +783,12 @@ int main(int argc, char *argv[])
 
             // set the initial tracking framerate (not tied to webcam framerate)
             tracking_set_fps(opts.track_fps);
+
+            // initialize the battery monitor thread
+            if (0 != pthread_create(&g_track_thrd, NULL, tracking_monitor_thread, 0)) {
+                syslog(LOG_ERR, "failed to create tracking monitor thread");
+                uav_shutdown(EXIT_FAILURE);
+            }
         }
         else {
             syslog(LOG_INFO, "color tracking not possible without video");
@@ -752,7 +804,7 @@ int main(int argc, char *argv[])
         }
 
         // initialize the battery monitor thread
-        if (0 != pthread_create(&g_batt_thread, NULL, batt_monitor_thread, 0)) {
+        if (0 != pthread_create(&g_batt_thrd, NULL, batt_monitor_thread, 0)) {
             syslog(LOG_ERR, "failed to create battery monitor thread");
             uav_shutdown(EXIT_FAILURE);
         }
