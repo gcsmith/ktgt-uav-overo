@@ -196,12 +196,14 @@ static void *state_mon_thread(void *arg)
         cmd_buffer[PKT_FCS_STATE] = state;
         send_packet(&g_client, cmd_buffer, PKT_FCS_LENGTH);
     }
+
+    pthread_exit(NULL);
 }
 
 // -----------------------------------------------------------------------------
 void send_enum_ctrl(const struct v4l2_queryctrl *qc)
 {
-    uint32_t cmd_buffer[32];
+    uint32_t cmd_buffer[PKT_CAM_DCI_NUM];
 
     cmd_buffer[PKT_COMMAND] = SERVER_UPDATE_CAM_DCI;
     cmd_buffer[PKT_LENGTH]  = PKT_CAM_DCI_LENGTH;
@@ -239,11 +241,10 @@ void send_enum_ctrl(const struct v4l2_queryctrl *qc)
 // -----------------------------------------------------------------------------
 void send_enum_menu(const struct v4l2_querymenu *qm)
 {
-    uint32_t cmd_buffer[32];
+    uint32_t cmd_buffer[PKT_CAM_DCM_NUM];
 
-    cmd_buffer[PKT_COMMAND] = SERVER_UPDATE_CAM_DCM;
-    cmd_buffer[PKT_LENGTH]  = PKT_CAM_DCM_LENGTH;
-
+    cmd_buffer[PKT_COMMAND]       = SERVER_UPDATE_CAM_DCM;
+    cmd_buffer[PKT_LENGTH]        = PKT_CAM_DCM_LENGTH;
     cmd_buffer[PKT_CAM_DCM_ID]    = qm->id;
     cmd_buffer[PKT_CAM_DCM_INDEX] = qm->index;
     memcpy(&cmd_buffer[PKT_CAM_DCM_NAME], qm->name, 32);
