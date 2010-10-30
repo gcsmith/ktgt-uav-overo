@@ -233,22 +233,29 @@ static void *auto_alt_thread(void *arg)
         altitude = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
         fc_get_vcm(&vcm_axes, &vcm_type);
 
-        if (imu_read_angles(globals.imu, angles, ACCESS_ASYNC)) {
-            // compensate for offsets in current yaw and pitch angles
-            p_rad = DEG_TO_RAD(angles[IMU_PITCH]);
-            r_rad = DEG_TO_RAD(angles[IMU_ROLL]);
-            altitude = altitude * cos(p_rad) * cos(r_rad);
-        }
-        else {
+        if (!imu_read_angles(globals.imu, angles, ACCESS_ASYNC)) {
             // shouldn't happen, but if it does just use the altitude by itself
             syslog(LOG_ERR, "auto_alt_thread: failed to read imu angles");
+            angles[IMU_PITCH] = 0.0f;
+            angles[IMU_ROLL]  = 0.0f;
         }
+        p_rad = DEG_TO_RAD(angles[IMU_PITCH]);
+        r_rad = DEG_TO_RAD(angles[IMU_ROLL]);
 
         // only control altitude with PID if axis is enabled (mixed mode)
         pthread_mutex_lock(&globals.pid_lock);
         if (!(vcm_axes & VCM_AXIS_ALT)) {
+            // compensate for the pitch and roll angles (method 1)
+            altitude *= (cos(p_rad) * cos(r_rad));
+
             pid_result = pid_update(&globals.pid_alt, altitude);
             signal.alt = .585f + pid_result;
+
+            // compensate for the pitch and roll angles (method 2)
+            float tpr = tan(p_rad);
+            float trr = tan(r_rad);
+            signal.alt /= (1.0f + atan(sqrt(tpr * tpr + trr * trr)));
+
             fc_control(&signal, VCM_AXIS_ALT);
         }
         pthread_mutex_unlock(&globals.pid_lock);
