@@ -39,6 +39,20 @@ static inline void calc_moving_avg(imu_data_t *data, float *new_samples)
 }
 
 // -----------------------------------------------------------------------------
+static inline void calc_low_pass_filter(imu_data_t *data, float *new_samples)
+{
+    // calculate output angles using running-sum low pass filter
+    data->angles[0] = .1f * data->moving_sum[0] + .9f * new_samples[0];
+    data->angles[1] = .1f * data->moving_sum[1] + .9f * new_samples[1];
+    data->angles[2] = .1f * data->moving_sum[2] + .9f * new_samples[2];
+
+    // store the current unfiltered samples for the next iteration
+    data->moving_sum[0] = new_samples[0];
+    data->moving_sum[1] = new_samples[1];
+    data->moving_sum[2] = new_samples[2];
+}
+
+// -----------------------------------------------------------------------------
 static void *imu_rd_thread(void *thread_args)
 {
     imu_data_t *data = (imu_data_t *)thread_args;
@@ -67,7 +81,8 @@ static void *imu_rd_thread(void *thread_args)
                         }
                         else {
                             // calculate a moving average of the samples
-                            calc_moving_avg(data, temp_data);
+                            // calc_moving_avg(data, temp_data);
+                            calc_low_pass_filter(data, temp_data);
                         }
 
                         //fprintf(stderr, "imu ( %f , %f , %f )\n",
