@@ -227,7 +227,8 @@ static void *auto_alt_thread(void *arg)
     pthread_mutex_unlock(&globals.takeoff_lock);
     syslog(LOG_INFO, "auto_alt_thread: starting...");
 
-    while (STATE_HOVERING == globals.state || STATE_LANDING == globals.state) {
+    while (FCS_STATE_HOVERING == globals.state ||
+            FCS_STATE_LANDING == globals.state) {
         // capture altitude and flight control's mode and vcm axes
         altitude = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
         fc_get_vcm(&vcm_axes, &vcm_type);
@@ -253,7 +254,7 @@ static void *auto_alt_thread(void *arg)
         pthread_mutex_unlock(&globals.pid_lock);
 
         // if landing requested, try not to release while still accelerating
-        if (STATE_LANDING == globals.state) {
+        if (FCS_STATE_LANDING == globals.state) {
             globals.carry_over = signal.alt;
             if (++timeout > 100 || pid_result <= 0.0f) {
                 break;
@@ -295,7 +296,7 @@ void *auto_imu_thread(void *arg)
     pid_reset_error(&globals.pid_roll);
     pid_reset_error(&globals.pid_yaw);
     
-    while (STATE_HOVERING == globals.state) {
+    while (FCS_STATE_HOVERING == globals.state) {
         // blocks on IMU data to capture current angles
         if (!imu_read_angles(globals.imu, angles, ACCESS_SYNC)) {
             // error occurred while trying to read IMU data
@@ -345,7 +346,7 @@ static void *dr_takeoff_thread(void *arg)
     memset(&control, 0, sizeof(control));
 
     control.alt = 0.0f;
-    while ((STATE_TAKEOFF == globals.state) && (control.alt < .65)) {
+    while ((FCS_STATE_TAKEOFF == globals.state) && (control.alt < .65)) {
         fc_get_vcm(&vcm_axes, &vcm_type);
 
         // this yields a ramp up time a little under 5 seconds: (.65/.0014)*10ms
@@ -358,8 +359,8 @@ static void *dr_takeoff_thread(void *arg)
     syslog(LOG_INFO, "dr_takeoff_thread: done ramping -- switching to pid");
 
     // is the state still takeoff? -- if so, switch to hovering now
-    if (STATE_TAKEOFF == globals.state)
-        fc_set_state(STATE_HOVERING);
+    if (FCS_STATE_TAKEOFF == globals.state)
+        fc_set_state(FCS_STATE_HOVERING);
 
     // signal to the blocked altitude and orientation threads to start
     pthread_mutex_lock(&globals.takeoff_lock);
@@ -386,7 +387,7 @@ static void *dr_landing_thread(void *arg)
     control.alt = globals.carry_over;
 
     // back off the throttle in a decaying manner, until treshold reached
-    while (STATE_LANDING == globals.state) {
+    while (FCS_STATE_LANDING == globals.state) {
         // capture altitude
         float altitude = gpio_event_read(globals.usrf, ACCESS_SYNC) / (real_t)147;
         if (altitude < 10.0f)
@@ -403,7 +404,7 @@ static void *dr_landing_thread(void *arg)
     control.alt = 0.0f;
     fc_control(&control, VCM_AXIS_ALT);
 
-    fc_set_state(STATE_GROUNDED);
+    fc_set_state(FCS_STATE_GROUNDED);
     syslog(LOG_INFO, "dr_landing_thread: exiting");
     pthread_exit(NULL);
 }
@@ -459,7 +460,7 @@ static void fc_reset_internals(void)
 {
     pwm_channel_t *ch = &globals.channels[0];
     globals.curr_alt = 0.0f;
-    fc_set_state(STATE_GROUNDED);
+    fc_set_state(FCS_STATE_GROUNDED);
 
     // wake up any threads that may be blocked so that they can exit cleanly
     pthread_mutex_lock(&globals.takeoff_lock);
@@ -521,7 +522,7 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
     globals.enabled = 1;
-    fc_set_state(STATE_GROUNDED);
+    fc_set_state(FCS_STATE_GROUNDED);
     fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
     syslog(LOG_INFO, "opened pwm device nodes\n");
     return 1;
@@ -649,19 +650,19 @@ int fc_request_takeoff(void)
     }
 
     // only permit takeoff from the grounded state
-    if (STATE_GROUNDED != globals.state) {
+    if (FCS_STATE_GROUNDED != globals.state) {
         syslog(LOG_ERR, "fc_request_takeoff: takeoff denied, not grounded\n");
         return 0;
     }
 
     if (globals.replay_path) {
         syslog(LOG_INFO, "fc_request_takeoff: beginning replay execution\n");
-        fc_set_state(STATE_REPLAY);
+        fc_set_state(FCS_STATE_REPLAY);
         pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, NULL);
     }
     else {
         syslog(LOG_INFO, "fc_request_takeoff: beginning takeoff process\n");
-        fc_set_state(STATE_TAKEOFF);
+        fc_set_state(FCS_STATE_TAKEOFF);
         pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
         pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
         pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
@@ -681,13 +682,13 @@ int fc_request_landing(void)
     }
 
     // only permit landing from the hovering state
-    if (STATE_HOVERING != globals.state) {
+    if (FCS_STATE_HOVERING != globals.state) {
         syslog(LOG_ERR, "fc_request_landing: landing denied, not hovering\n");
         return 0;
     }
 
     syslog(LOG_INFO, "fc_request_landing: beginning landing process\n");
-    fc_set_state(STATE_LANDING);
+    fc_set_state(FCS_STATE_LANDING);
     return 1;
 }
 

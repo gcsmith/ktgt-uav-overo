@@ -181,9 +181,16 @@ static void *track_mon_thread(void *arg)
 static void *state_mon_thread(void *arg)
 {
     int state;
+    uint32_t cmd_buffer[PKT_FCS_NUM];
+
     for (;;) {
         state = fc_get_state(ACCESS_SYNC);
         syslog(LOG_INFO, "flight control set state: %d", state);
+
+        cmd_buffer[PKT_COMMAND]   = SERVER_UPDATE_STATE;
+        cmd_buffer[PKT_LENGTH]    = PKT_FCS_LENGTH;
+        cmd_buffer[PKT_FCS_STATE] = state;
+        send_packet(&g_client, cmd_buffer, PKT_FCS_LENGTH);
     }
 }
 
