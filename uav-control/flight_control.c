@@ -316,7 +316,7 @@ void *auto_imu_thread(void *arg)
         
         if (!(axes & VCM_AXIS_ROLL)) {
             // compute PID result for roll
-            signal.roll += pid_update(&globals.pid_roll, angles[IMU_ROLL]);
+            signal.roll = pid_update(&globals.pid_roll, angles[IMU_ROLL]);
             signal.roll = CLAMP(signal.roll, -1.0f, 1.0f);
             fprintf(stderr, "signal.roll = %f\n", signal.roll);
             fc_control(&signal, VCM_AXIS_ROLL);
@@ -398,7 +398,7 @@ static void *dr_landing_thread(void *arg)
         if (altitude < 10.0f)
             break;
 
-        control.alt -= 0.0004f;
+        control.alt -= 0.0008f;
         fc_control(&control, VCM_AXIS_ALT);
     }
     syslog(LOG_INFO, "dr_landing_thread: done dropping throttle");

@@ -34,9 +34,9 @@
 #define DEFAULT_PITCH_SP    40.0f
 
 #define DEFAULT_ROLL_TRIM   1033.0f
-#define DEFAULT_ROLL_KP     0.01000f
+#define DEFAULT_ROLL_KP     0.00300f
 #define DEFAULT_ROLL_KI     0.00000f
-#define DEFAULT_ROLL_KD     0.30000f
+#define DEFAULT_ROLL_KD     0.04000f
 #define DEFAULT_ROLL_SP     5.0f
 
 #define DEFAULT_ALT_TRIM    0.0f
