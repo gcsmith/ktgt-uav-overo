@@ -159,6 +159,8 @@ static void *tracking_monitor_thread(void *arg)
             fprintf(stderr, "lost target...\n");
         }
     }
+
+    pthread_exit(NULL);
 }
 
 // -----------------------------------------------------------------------------
