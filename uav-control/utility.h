@@ -18,6 +18,10 @@
 #define PI ((real_t)3.141592653589793)
 #endif
 
+#define BATTERY_MIN         55.0f
+#define BATTERY_CHECK_TICKS 15
+#define BATTERY_PRINT_TICKS 5
+
 // return the smallest/largest of the two specified values
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))

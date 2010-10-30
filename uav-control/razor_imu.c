@@ -70,10 +70,10 @@ static void *imu_rd_thread(void *thread_args)
                             calc_moving_avg(data, temp_data);
                         }
 
-                        fprintf(stderr, "imu ( %f , %f , %f )\n",
-                                data->angles[0],
-                                data->angles[1],
-                                data->angles[2]);
+                        //fprintf(stderr, "imu ( %f , %f , %f )\n",
+                        //        data->angles[0],
+                        //        data->angles[1],
+                        //        data->angles[2]);
 
                         data->sample++;
                         pthread_cond_broadcast(&data->cond);

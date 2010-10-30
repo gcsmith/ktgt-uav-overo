@@ -101,23 +101,27 @@ static void *aux_mon_thread(void *arg)
 // battery drops below 5%, inform the flight control system to land.
 static void *batt_mon_thread(void *arg)
 {
-    int battery;
-    int print_ticker = 0;
+    int battery, print_ticker = 0, land_ticker = 0;
 
     for (;;) {
         battery = read_vbatt();
         
         // log the battery readout every now and then
-        if (++print_ticker > 5) {
+        if (++print_ticker > BATTERY_PRINT_TICKS) {
             syslog(LOG_INFO, "current battery voltage: %d%%", battery);
             print_ticker = 0;
         }
 
         // force a landing when the battery is critical
-        if (battery < 55.0f) {
-            syslog(LOG_INFO, "battery almost empty. requesting to land...");
-            fc_request_landing();
-            break;
+        if (battery < BATTERY_MIN) {
+            if (++land_ticker > BATTERY_CHECK_TICKS) {
+                syslog(LOG_INFO, "battery almost empty. requesting to land...");
+                fc_request_landing();
+                break;
+            }
+        }
+        else {
+            land_ticker = 0;
         }
 
         // delay for a second between each battery reading

@@ -310,20 +310,25 @@ void *auto_imu_thread(void *arg)
         pthread_mutex_lock(&globals.pid_lock);
         if (!(axes & VCM_AXIS_PITCH)) {
             // compute PID result for pitch
-            signal.pitch = pid_update(&globals.pid_pitch, angles[IMU_PITCH]);
+            signal.pitch += pid_update(&globals.pid_pitch, angles[IMU_PITCH]);
             fc_control(&signal, VCM_AXIS_PITCH);
         }
         
         if (!(axes & VCM_AXIS_ROLL)) {
             // compute PID result for roll
-            signal.roll = pid_update(&globals.pid_roll, angles[IMU_ROLL]);
+            signal.roll += pid_update(&globals.pid_roll, angles[IMU_ROLL]);
+            signal.roll = CLAMP(signal.roll, -1.0f, 1.0f);
+            fprintf(stderr, "signal.roll = %f\n", signal.roll);
             fc_control(&signal, VCM_AXIS_ROLL);
         }
         
         if (!(axes & VCM_AXIS_YAW) && tracking_read_state(&tc, ACCESS_ASYNC)) {
+            signal.yaw = 0.0f;
             if (tc.detected) {
-                fprintf(stderr, "auto_imu_thread: detected\n");
+                signal.yaw = (tc.yc < 120) ? -0.4f : 0.2f;
+                fprintf(stderr, "detected: move %f\n", signal.yaw);
             }
+            fc_control(&signal, VCM_AXIS_YAW);
             // compute PID result for yaw -- disabled for now due to EMF
             //float pid_result = pid_update(&globals.pid_yaw, angles[IMU_YAW]);
             //signal.yaw = pid_result;
