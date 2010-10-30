@@ -16,6 +16,12 @@
 #include "uav_protocol.h"
 #include "utility.h"
 
+#define STATE_GROUNDED  0
+#define STATE_REPLAY    1
+#define STATE_TAKEOFF   2
+#define STATE_HOVERING  3
+#define STATE_LANDING   4
+
 #define PWM_ALT     0
 #define PWM_YAW     1
 #define PWM_PITCH   2
@@ -90,6 +96,9 @@ int fc_set_vcm(int axis, int type);
 
 // get the current control mode type and enabled axes
 void fc_get_vcm(int *axis, int *type);
+
+// TODO: describe me
+int fc_get_state(access_mode_t mode);
 
 // inject manual input control signals
 void fc_set_ctl(ctl_sigs_t *sigs);

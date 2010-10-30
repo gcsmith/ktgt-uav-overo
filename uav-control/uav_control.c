@@ -42,16 +42,17 @@ static gpio_event_t g_gpio_alt; // ultrasonic PWM
 static gpio_event_t g_gpio_aux; // auxiliary PWM
 static client_info_t g_client;
 
-static pthread_t g_aux_thrd;  // thread handle for auxiliary monitor
-static pthread_t g_batt_thrd; // thread handle for battery monitor
-static pthread_t g_track_thrd; // thread handle for battery monitor
+static pthread_t g_aux_thrd;    // thread handle for auxiliary monitor
+static pthread_t g_batt_thrd;   // thread handle for battery monitor
+static pthread_t g_track_thrd;  // thread handle for tracking monitor
+static pthread_t g_state_thrd;  // thread handle for state monitor
 static int g_muxsel = -1;
 
 // -----------------------------------------------------------------------------
 // Wake up on every gpio event and determine whether or not the auxiliary
 // override has been activated. When the auxiliary PWM signal is over 50%,
 // override is enabled, when less than 50%, override is disabled.
-static void *aux_monitor_thread(void *arg)
+static void *aux_mon_thread(void *arg)
 {
     uint32_t cmd_buffer[16];
     int pulse = 0, axes = 0, type = 0, last_type = 0;
@@ -98,16 +99,26 @@ static void *aux_monitor_thread(void *arg)
 // -----------------------------------------------------------------------------
 // Wake up every second and check the battery reading from the ADC. If the
 // battery drops below 5%, inform the flight control system to land.
-static void *batt_monitor_thread(void *arg)
+static void *batt_mon_thread(void *arg)
 {
     int battery;
+    int print_ticker = 0;
 
     for (;;) {
         battery = read_vbatt();
-        fprintf(stderr, "current battery voltage: %d %%\n", battery);
+        
+        // log the battery readout every now and then
+        if (++print_ticker > 5) {
+            syslog(LOG_INFO, "current battery voltage: %d%%", battery);
+            print_ticker = 0;
+        }
 
-        // TODO: if hovering, land
-        // TODO: send a warning packet maybe?
+        // force a landing when the battery is critical
+        if (battery < 55.0f) {
+            syslog(LOG_INFO, "battery almost empty. requesting to land...");
+            fc_request_landing();
+            break;
+        }
 
         // delay for a second between each battery reading
         sleep(1);
@@ -119,7 +130,7 @@ static void *batt_monitor_thread(void *arg)
 // -----------------------------------------------------------------------------
 // Wake up whenever the color tracking subsystem produces an updated tracking
 // state and bounding box. Transmit the tracking status back to the UI.
-static void *tracking_monitor_thread(void *arg)
+static void *track_mon_thread(void *arg)
 {
     uint32_t cmd_buffer[16];
     track_coords_t coords;
@@ -143,9 +154,11 @@ static void *tracking_monitor_thread(void *arg)
             cmd_buffer[PKT_CTS_YC]    = (uint32_t)coords.yc;
             send_packet(&g_client, cmd_buffer, PKT_CTS_LENGTH);
 
-            was_tracking = 1;
-            fprintf(stderr, "Bounding box: (%d,%d) (%d,%d)\n",
-                    coords.x1, coords.y1, coords.x2, coords.y2);
+            if (!was_tracking) {
+                was_tracking = 1;
+                syslog(LOG_INFO, "acquired target: (%d,%d) (%d,%d)\n",
+                        coords.x1, coords.y1, coords.x2, coords.y2);
+            }
         }
         else if (was_tracking) {
             // this means we were tracking, but lost our target. tell the client
@@ -156,11 +169,22 @@ static void *tracking_monitor_thread(void *arg)
             send_packet(&g_client, cmd_buffer, PKT_CTS_LENGTH);
 
             was_tracking = 0;
-            fprintf(stderr, "lost target...\n");
+            syslog(LOG_INFO, "lost tracking target\n");
         }
     }
 
     pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+// Wake up whenever the flight subsystem changes state, send update packet.
+static void *state_mon_thread(void *arg)
+{
+    int state;
+    for (;;) {
+        state = fc_get_state(ACCESS_SYNC);
+        syslog(LOG_INFO, "flight control set state: %d", state);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -710,6 +734,12 @@ int main(int argc, char *argv[])
             syslog(LOG_INFO, "enabling replay mode for flight control\n");
             fc_set_replay(opts.replay_path);
         }
+
+        // initialize the state monitor thread
+        if (0 != pthread_create(&g_state_thrd, NULL, state_mon_thread, 0)) {
+            syslog(LOG_ERR, "failed to create state monitor thread");
+            uav_shutdown(EXIT_FAILURE);
+        }
     } 
     else {
         if (opts.capture_path || opts.replay_path) {
@@ -754,7 +784,7 @@ int main(int argc, char *argv[])
         }
 
         // initialize the auxiliary override monitor thread
-        if (0 != pthread_create(&g_aux_thrd, NULL, aux_monitor_thread, 0)) {
+        if (0 != pthread_create(&g_aux_thrd, NULL, aux_mon_thread, 0)) {
             syslog(LOG_ERR, "failed to create aux monitor thread");
             uav_shutdown(EXIT_FAILURE);
         }
@@ -787,7 +817,7 @@ int main(int argc, char *argv[])
             tracking_set_fps(opts.track_fps);
 
             // initialize the battery monitor thread
-            if (0 != pthread_create(&g_track_thrd, NULL, tracking_monitor_thread, 0)) {
+            if (0 != pthread_create(&g_track_thrd, NULL, track_mon_thread, 0)) {
                 syslog(LOG_ERR, "failed to create tracking monitor thread");
                 uav_shutdown(EXIT_FAILURE);
             }
@@ -806,7 +836,7 @@ int main(int argc, char *argv[])
         }
 
         // initialize the battery monitor thread
-        if (0 != pthread_create(&g_batt_thrd, NULL, batt_monitor_thread, 0)) {
+        if (0 != pthread_create(&g_batt_thrd, NULL, batt_mon_thread, 0)) {
             syslog(LOG_ERR, "failed to create battery monitor thread");
             uav_shutdown(EXIT_FAILURE);
         }

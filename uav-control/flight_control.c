@@ -31,11 +31,6 @@
 #define YAW_DUTY_HI 0.0948f
 #define YAW_DUTY_IDLE 0.07f
 
-#define STATE_GROUNDED   0
-#define STATE_TAKEOFF    1
-#define STATE_HOVERING   2
-#define STATE_LANDING    3
-
 typedef struct fc_globals {
     pthread_t replay_thrd;
     pthread_t takeoff_thrd;
@@ -43,12 +38,15 @@ typedef struct fc_globals {
     pthread_t auto_alt_thrd;
     pthread_t auto_imu_thrd;
 
+    pthread_mutex_t state_lock;
     pthread_mutex_t takeoff_lock;
     pthread_mutex_t landing_lock;
     pthread_mutex_t vcm_lock;
     pthread_mutex_t pid_lock;
-    pthread_cond_t  takeoff_cond;
-    pthread_cond_t  landing_cond;
+
+    pthread_cond_t state_cond;
+    pthread_cond_t takeoff_cond;
+    pthread_cond_t landing_cond;
 
     pwm_channel_t channels[4];
     gpio_event_t *usrf;         // ultrasonic range finder pwm
@@ -144,6 +142,20 @@ static void record_write_buckets(void)
 }
 
 // -----------------------------------------------------------------------------
+static void fc_set_state(int state)
+{
+    pthread_mutex_lock(&globals.state_lock);
+
+    if (state != globals.state) {
+        // set the new state and signal the state transition
+        globals.state = state;
+        pthread_cond_broadcast(&globals.state_cond);
+    }
+
+    pthread_mutex_unlock(&globals.state_lock);
+}
+
+// -----------------------------------------------------------------------------
 static void assign_duty(pwm_channel_t *pwm, float duty)
 {
     duty = CLAMP(duty, pwm->duty_lo, pwm->duty_hi);
@@ -209,11 +221,11 @@ static void *auto_alt_thread(void *arg)
     pid_reset_error(&globals.pid_alt);
     
     // wait for the dr takeoff process to complete and signal pid altitude
-    fprintf(stderr, "auto_alt_thread waiting...\n");
+    syslog(LOG_INFO, "auto_alt_thread: waiting...");
     pthread_mutex_lock(&globals.takeoff_lock);
     pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_lock);
     pthread_mutex_unlock(&globals.takeoff_lock);
-    fprintf(stderr, "auto_alt_thread starting...\n");
+    syslog(LOG_INFO, "auto_alt_thread: starting...");
 
     while (STATE_HOVERING == globals.state || STATE_LANDING == globals.state) {
         // capture altitude and flight control's mode and vcm axes
@@ -254,7 +266,7 @@ static void *auto_alt_thread(void *arg)
     pthread_cond_broadcast(&globals.landing_cond);
     pthread_mutex_unlock(&globals.landing_lock);
 
-    fprintf(stderr, "auto_alt_thread thread exiting\n");
+    syslog(LOG_INFO, "auto_alt_thread: exiting");
     pthread_exit(NULL);
 }
 
@@ -329,7 +341,7 @@ static void *dr_takeoff_thread(void *arg)
     ctl_sigs_t control;
     int vcm_axes, vcm_type;
 
-    fprintf(stderr, "FLIGHT CONTROL: Helicopter, permission granted to take off\n");
+    syslog(LOG_INFO, "dr_takeoff_thread: starting...");
     memset(&control, 0, sizeof(control));
 
     control.alt = 0.0f;
@@ -343,18 +355,18 @@ static void *dr_takeoff_thread(void *arg)
             usleep(10000); // 10 ms (100 Hz)
         }
     }
-    printf("done ramping (abs) -- switching to pid autopilot thread\n");
+    syslog(LOG_INFO, "dr_takeoff_thread: done ramping -- switching to pid");
 
     // is the state still takeoff? -- if so, switch to hovering now
     if (STATE_TAKEOFF == globals.state)
-        globals.state = STATE_HOVERING;
+        fc_set_state(STATE_HOVERING);
 
     // signal to the blocked altitude and orientation threads to start
     pthread_mutex_lock(&globals.takeoff_lock);
     pthread_cond_broadcast(&globals.takeoff_cond);
     pthread_mutex_unlock(&globals.takeoff_lock);
 
-    fprintf(stderr, "takeoff thread exiting\n");
+    syslog(LOG_INFO, "dr_takeoff_thread: exiting\n");
     pthread_exit(NULL);
 }
 
@@ -364,11 +376,11 @@ static void *dr_landing_thread(void *arg)
     ctl_sigs_t control;
 
     // wait until the altitude hover thread signals us to continue
-    fprintf(stderr, "dr_landing_thread waiting...\n");
+    syslog(LOG_INFO, "dr_landing_thread: waiting...");
     pthread_mutex_lock(&globals.landing_lock);
     pthread_cond_wait(&globals.landing_cond, &globals.landing_lock);
     pthread_mutex_unlock(&globals.landing_lock);
-    fprintf(stderr, "dr_landing_thread starting...\n");
+    syslog(LOG_INFO, "dr_landing_thread: starting...");
 
     // start at the last throttle value asserted by the altitude hover thread
     control.alt = globals.carry_over;
@@ -383,16 +395,16 @@ static void *dr_landing_thread(void *arg)
         control.alt -= 0.0004f;
         fc_control(&control, VCM_AXIS_ALT);
     }
-    fprintf(stderr, "done dropping throttle\n");
+    syslog(LOG_INFO, "dr_landing_thread: done dropping throttle");
 
     // by this point the helicopter will hopefully be on the ground with 
     // minimal throttle so we can shut off motors completely
-    usleep(800);
+    usleep(700);
     control.alt = 0.0f;
     fc_control(&control, VCM_AXIS_ALT);
 
-    globals.state = STATE_GROUNDED;
-    fprintf(stderr, "helicopter landed\n");
+    fc_set_state(STATE_GROUNDED);
+    syslog(LOG_INFO, "dr_landing_thread: exiting");
     pthread_exit(NULL);
 }
 
@@ -403,7 +415,7 @@ static void *dr_replay_thread(void *arg)
     input_record_t *record;
     int i;
 
-    fprintf(stderr, "FLIGHT CONTROL: executing dr_replay_thread\n");
+    syslog(LOG_INFO, "dr_replay_thread: starting...");
 
     bucket = globals.record_head;
     while (NULL != bucket) {
@@ -417,12 +429,12 @@ static void *dr_replay_thread(void *arg)
         bucket = bucket->next;
     }
 
-    fprintf(stderr, "completed dr_replay_thread\n");
+    syslog(LOG_INFO, "dr_replay_thread: exiting");
     pthread_exit(NULL);
 }
 
 // -----------------------------------------------------------------------------
-static int init_channel(int index, int freq, float lo, float hi, float idle)
+static int init_channel(int index, float lo, float hi, float idle)
 {
     pwm_channel_t *pwm = &globals.channels[index];
     if (0 > (pwm->handle = pwm_open_device(PWM_DEV_FIRST + index))) {
@@ -436,10 +448,33 @@ static int init_channel(int index, int freq, float lo, float hi, float idle)
     pwm->duty_hi = hi;
 
     // keep throttle signal at the current value it is
-    pwm_set_freq_x100(pwm->handle, freq);
+    pwm_set_freq_x100(pwm->handle, 4582);
     pwm_get_range(pwm->handle, &pwm->rng_min, &pwm->rng_max);
     assign_duty(pwm, idle);
     return 1;
+}
+
+// -----------------------------------------------------------------------------
+static void fc_reset_internals(void)
+{
+    pwm_channel_t *ch = &globals.channels[0];
+    globals.curr_alt = 0.0f;
+    fc_set_state(STATE_GROUNDED);
+
+    // wake up any threads that may be blocked so that they can exit cleanly
+    pthread_mutex_lock(&globals.takeoff_lock);
+    pthread_cond_broadcast(&globals.takeoff_cond);
+    pthread_mutex_unlock(&globals.takeoff_lock);
+
+    pthread_mutex_lock(&globals.landing_lock);
+    pthread_cond_broadcast(&globals.landing_cond);
+    pthread_mutex_unlock(&globals.landing_lock);
+
+    // reset the pwm outputs to their idle values
+    assign_duty(&ch[PWM_ALT], ALT_DUTY_LO);
+    assign_duty(&ch[PWM_YAW], YAW_DUTY_IDLE);
+    assign_duty(&ch[PWM_PITCH], PITCH_DUTY_IDLE);
+    assign_duty(&ch[PWM_ROLL], ROLL_DUTY_IDLE);
 }
 
 // -----------------------------------------------------------------------------
@@ -458,32 +493,35 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     globals.imu  = ypr_imu;
 
     // initialize all of our thread synchronization primitives
-    pthread_mutex_init(&globals.vcm_lock, NULL);
-    pthread_mutex_init(&globals.pid_lock, NULL);
+    pthread_mutex_init(&globals.state_lock, NULL);
     pthread_mutex_init(&globals.takeoff_lock, NULL);
     pthread_mutex_init(&globals.landing_lock, NULL);
+    pthread_mutex_init(&globals.vcm_lock, NULL);
+    pthread_mutex_init(&globals.pid_lock, NULL);
+
+    pthread_cond_init(&globals.state_cond, NULL);
     pthread_cond_init(&globals.takeoff_cond, NULL);
     pthread_cond_init(&globals.landing_cond, NULL);
     
     // initialize the pwm channels for throttle, yaw, pitch, and roll
-    if (!init_channel(PWM_ALT, 4582, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
+    if (!init_channel(PWM_ALT, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
     syslog(LOG_INFO, "flight control: altitude channel opened\n");
 
-    if (!init_channel(PWM_PITCH, 4582, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
+    if (!init_channel(PWM_PITCH, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
         return 0; 
     syslog(LOG_INFO, "flight control: pitch channel opened\n");
 
-    if (!init_channel(PWM_ROLL, 4582, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
+    if (!init_channel(PWM_ROLL, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: roll channel opened\n");
 
-    if (!init_channel(PWM_YAW, 4582, YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE))
+    if (!init_channel(PWM_YAW, YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE))
         return 0;
     syslog(LOG_INFO, "flight control: yaw channel opened\n");
 
     globals.enabled = 1;
-    globals.state = STATE_GROUNDED;
+    fc_set_state(STATE_GROUNDED);
     fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
     syslog(LOG_INFO, "opened pwm device nodes\n");
     return 1;
@@ -504,10 +542,12 @@ void fc_shutdown(void)
 
     globals.usrf = NULL;
 
-    pthread_mutex_destroy(&globals.vcm_lock);
-    pthread_mutex_destroy(&globals.pid_lock);
     pthread_mutex_destroy(&globals.takeoff_lock);
     pthread_mutex_destroy(&globals.landing_lock);
+    pthread_mutex_destroy(&globals.vcm_lock);
+    pthread_mutex_destroy(&globals.pid_lock);
+
+    pthread_cond_destroy(&globals.state_cond);
     pthread_cond_destroy(&globals.takeoff_cond);
     pthread_cond_destroy(&globals.landing_cond);
 
@@ -608,19 +648,24 @@ int fc_request_takeoff(void)
         return 0;
     }
 
+    // only permit takeoff from the grounded state
+    if (STATE_GROUNDED != globals.state) {
+        syslog(LOG_ERR, "fc_request_takeoff: takeoff denied, not grounded\n");
+        return 0;
+    }
+
     if (globals.replay_path) {
+        syslog(LOG_INFO, "fc_request_takeoff: beginning replay execution\n");
+        fc_set_state(STATE_REPLAY);
         pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, NULL);
     }
-    else if (STATE_GROUNDED == globals.state) {
-        globals.state = STATE_TAKEOFF;
+    else {
+        syslog(LOG_INFO, "fc_request_takeoff: beginning takeoff process\n");
+        fc_set_state(STATE_TAKEOFF);
         pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
         pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
         pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
         pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
-    }
-    else {
-        syslog(LOG_ERR, "takeoff request denied, not grounded\n");
-        return 0;
     }
 
     return 1;
@@ -635,41 +680,15 @@ int fc_request_landing(void)
         return 0;
     }
 
-    if (STATE_HOVERING == globals.state) {
-        globals.state = STATE_LANDING;
-        pthread_create(&globals.landing_thrd, NULL, dr_landing_thread, NULL);
-    }
-    else {
-        syslog(LOG_ERR, "landing request denied, not hovering\n");
+    // only permit landing from the hovering state
+    if (STATE_HOVERING != globals.state) {
+        syslog(LOG_ERR, "fc_request_landing: landing denied, not hovering\n");
         return 0;
     }
 
+    syslog(LOG_INFO, "fc_request_landing: beginning landing process\n");
+    fc_set_state(STATE_LANDING);
     return 1;
-}
-
-// -----------------------------------------------------------------------------
-static void fc_reset_state(void)
-{
-    pwm_channel_t *ch = &globals.channels[0];
-    globals.curr_alt = 0.0f;
-    globals.state = STATE_GROUNDED;
-
-    // wake up any threads that may be blocked so that they can exit cleanly
-    pthread_mutex_lock(&globals.takeoff_lock);
-    pthread_cond_broadcast(&globals.takeoff_cond);
-    pthread_mutex_unlock(&globals.takeoff_lock);
-
-    pthread_mutex_lock(&globals.landing_lock);
-    pthread_cond_broadcast(&globals.landing_cond);
-    pthread_mutex_unlock(&globals.landing_lock);
-
-    // reset the pwm outputs to their idle values
-    assign_duty(&ch[PWM_ALT], ALT_DUTY_LO);
-    assign_duty(&ch[PWM_YAW], YAW_DUTY_IDLE);
-    assign_duty(&ch[PWM_PITCH], PITCH_DUTY_IDLE);
-    assign_duty(&ch[PWM_ROLL], ROLL_DUTY_IDLE);
-
-    fprintf(stderr, "called fc_reset_state\n");
 }
 
 // -----------------------------------------------------------------------------
@@ -707,7 +726,7 @@ int fc_set_vcm(int axes, int type)
     if (type != globals.vcm_type) {
         // reset the channels to their idle values every time we switch state
         globals.vcm_type = type;
-        fc_reset_state();
+        fc_reset_internals();
     }
 
     // save the last timer tick every time we switch state
@@ -723,6 +742,30 @@ void fc_get_vcm(int *axes, int *type)
     *axes = globals.vcm_axes;
     *type = globals.vcm_type;
     pthread_mutex_unlock(&globals.vcm_lock);
+}
+
+// -----------------------------------------------------------------------------
+int fc_get_state(access_mode_t mode)
+{
+    int state;
+    pthread_mutex_lock(&globals.state_lock);
+
+    switch (mode) {
+    case ACCESS_ASYNC:
+        // access in an asynchronous (non-blocking) fashion
+        break;
+    case ACCESS_SYNC:
+        // access in a synchronous (blocking) fashion
+        pthread_cond_wait(&globals.state_cond, &globals.state_lock);
+        break;
+    default:
+        syslog(LOG_ERR, "fc_get_state: invalid access mode\n");
+        break;
+    }
+
+    state = globals.state;
+    pthread_mutex_unlock(&globals.state_lock);
+    return state;
 }
 
 // -----------------------------------------------------------------------------

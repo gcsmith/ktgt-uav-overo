@@ -100,7 +100,7 @@ static void *tracking_thread(void *arg)
             // every time we hit the streaming fps, dump out the tracking rate
             clock_gettime(CLOCK_REALTIME, &t1);
             real_t delta = timespec_delta(&t0, &t1) / (real_t)1000000;
-            fprintf(stderr, "Tracking FPS = %f\n", streaming_fps / delta);
+            syslog(LOG_INFO, "tracking fps: %f\n", streaming_fps / delta);
             frames_computed = 0;
             t0 = t1;
         }
