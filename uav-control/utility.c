@@ -33,6 +33,13 @@ static int adc_fd = 0;
 #define VBATT_MAX       2.0f
 #define VBATT_RANGE     (VBATT_MAX - VBATT_MIN)
 
+#define VBATT_HISTORY_SHIFT  4
+#define VBATT_HISTORY_LENGTH (1 << VBATT_HISTORY_SHIFT)
+static int vbatt_history[VBATT_HISTORY_LENGTH];
+static int vbatt_index = 0;
+static int vbatt_moving_avg = 0;
+static int vbatt_firsttime = 1;
+
 #define CPU_HISTORY_SHIFT  4
 #define CPU_HISTORY_LENGTH (1 << CPU_HISTORY_SHIFT)
 static cpu_info_t cpu_history[CPU_HISTORY_LENGTH];
@@ -166,7 +173,20 @@ int read_vbatt(void)
     // always report 100% battery if feature not enabled
     if (!adc_fd)
         return 100;
-
+        
+    if(vbatt_firsttime)
+    {
+        int i = VBATT_HISTORY_LENGTH;
+        for(;i<VBATT_HISTORY_LENGTH; i++)
+        {
+            vbatt_history[i] = 100;
+        }
+        vbatt_moving_avg = VBATT_HISTORY_LENGTH * 100; 
+        vbatt_firsttime = 0;   
+    }
+    
+    vbatt_moving_avg -= vbatt_history[vbatt_index];
+    
     memset(&parms, 0, sizeof(parms));
     parms.channel = ADC_VBATT_PORT;
 
@@ -183,7 +203,15 @@ int read_vbatt(void)
     voltage = (voltage - VBATT_MIN) / VBATT_RANGE;
     voltage = (int)(voltage * 100);
     
-    return (int)voltage;
+    vbatt_history[vbatt_index] = voltage; 
+    
+    vbatt_moving_avg += vbatt_history[vbatt_index];
+     
+    if (++vbatt_index >= VBATT_HISTORY_LENGTH)
+       vbatt_index = 0;
+        
+    //return (int)voltage;
+    return (int)vbatt_moving_avg >> VBATT_HISTORY_SHIFT;
 }
 
 // -----------------------------------------------------------------------------
