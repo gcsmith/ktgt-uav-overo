@@ -24,7 +24,7 @@
 #include "twl4030-madc.h"
 
 struct twl4030_madc_user_parms parms;
-int adc_fd;
+static int adc_fd = 0;
 
 #define ADC_INPUT_RANGE 2.5f
 #define ADC_VBATT_PORT  4
@@ -155,12 +155,17 @@ int adc_open_channels(void)
 void adc_close_channels(void)
 {
     close(adc_fd);
+    adc_fd = 0;
 }
 
 // -----------------------------------------------------------------------------
 int read_vbatt(void)
 {
     float voltage;
+
+    // always report 100% battery if feature not enabled
+    if (!adc_fd)
+        return 100;
 
     memset(&parms, 0, sizeof(parms));
     parms.channel = ADC_VBATT_PORT;

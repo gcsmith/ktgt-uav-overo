@@ -53,6 +53,7 @@ typedef struct fc_globals {
     imu_data_t *imu;            // imu sensor
 
     int enabled;
+    int capture_enabled;
     int state;
     int vcm_axes;
     int vcm_type;
@@ -116,10 +117,10 @@ static void record_write_buckets(void)
     // attempt to open the output file for writing
     fout = fopen(globals.capture_path, "w");
     if (!fout) {
-        syslog(LOG_ERR, "failed to open %s\n", globals.capture_path);
+        syslog(LOG_ERR, "failed to open %s", globals.capture_path);
         return;
     }
-    syslog(LOG_INFO, "dumping capture to %s\n", globals.capture_path);
+    syslog(LOG_INFO, "dumping capture to %s", globals.capture_path);
 
     // iterate over and dump out each record bucket
     bucket = globals.record_head;
@@ -134,11 +135,25 @@ static void record_write_buckets(void)
                     record->signals.alt, record->signals.yaw,
                     record->signals.pitch, record->signals.roll);
         }
+        bucket = bucket->next;
+    }
+    fclose(fout);
+}
 
+// -----------------------------------------------------------------------------
+static void record_delete_buckets(void)
+{
+    record_bucket_t *bucket, *curr;
+
+    bucket = globals.record_head;
+    while (NULL != bucket) {
+        curr = bucket;
         bucket = bucket->next;
         free(curr);
     }
-    fclose(fout);
+
+    globals.record_head = NULL;
+    globals.record_tail = NULL;
 }
 
 // -----------------------------------------------------------------------------
@@ -246,15 +261,15 @@ static void *auto_alt_thread(void *arg)
         pthread_mutex_lock(&globals.pid_lock);
         if (!(vcm_axes & VCM_AXIS_ALT)) {
             // compensate for the pitch and roll angles (method 1)
-            altitude *= (cos(p_rad) * cos(r_rad));
+            // altitude *= (cos(p_rad) * cos(r_rad));
 
             pid_result = pid_update(&globals.pid_alt, altitude);
-            signal.alt = .585f + pid_result;
+            signal.alt = .58f + pid_result;
 
             // compensate for the pitch and roll angles (method 2)
-            float tpr = tan(p_rad);
-            float trr = tan(r_rad);
-            signal.alt /= (1.0f + atan(sqrt(tpr * tpr + trr * trr)));
+            // float tpr = tan(p_rad);
+            // float trr = tan(r_rad);
+            // signal.alt /= (1.0f + atan(sqrt(tpr * tpr + trr * trr)));
 
             fc_control(&signal, VCM_AXIS_ALT);
         }
@@ -292,11 +307,11 @@ void *auto_imu_thread(void *arg)
     memset(&signal, 0, sizeof(ctl_sigs_t));
 
     // wait for the takeoff process to complete
-    fprintf(stderr, "auto_imu_thread waiting...\n");
+    syslog(LOG_INFO, "auto_imu_thread waiting...");
     pthread_mutex_lock(&globals.takeoff_lock);
     pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_lock);
     pthread_mutex_unlock(&globals.takeoff_lock);
-    fprintf(stderr, "auto_imu_thread starting...\n");
+    syslog(LOG_INFO, "auto_imu_thread starting...");
 
     // reset controllers' error collections
     pid_reset_error(&globals.pid_pitch);
@@ -344,7 +359,7 @@ void *auto_imu_thread(void *arg)
         pthread_mutex_unlock(&globals.pid_lock);
     }
 
-    fprintf(stderr, "auto_imu_thread exiting\n");
+    syslog(LOG_INFO, "auto_imu_thread exiting");
     pthread_exit(NULL);
 }
 
@@ -379,7 +394,7 @@ static void *dr_takeoff_thread(void *arg)
     pthread_cond_broadcast(&globals.takeoff_cond);
     pthread_mutex_unlock(&globals.takeoff_lock);
 
-    syslog(LOG_INFO, "dr_takeoff_thread: exiting\n");
+    syslog(LOG_INFO, "dr_takeoff_thread: exiting");
     pthread_exit(NULL);
 }
 
@@ -417,6 +432,7 @@ static void *dr_landing_thread(void *arg)
     fc_control(&control, VCM_AXIS_ALT);
 
     fc_set_state(FCS_STATE_GROUNDED);
+    globals.capture_enabled = 1;
     syslog(LOG_INFO, "dr_landing_thread: exiting");
     pthread_exit(NULL);
 }
@@ -426,17 +442,21 @@ static void *dr_replay_thread(void *arg)
 {
     record_bucket_t *bucket;
     input_record_t *record;
-    int i;
+    int i, vcm_axes, vcm_type;
 
     syslog(LOG_INFO, "dr_replay_thread: starting...");
 
     bucket = globals.record_head;
     while (NULL != bucket) {
-
         for (i = 0; i < bucket->count; i++) {
+            // control all enabled autonomous axes, but never throttle
+            fc_get_vcm(&vcm_axes, &vcm_type);
+            vcm_axes = ~(vcm_axes | VCM_AXIS_ALT);
+
+            // inject the input then sleep for the specified period
             record = &bucket->records[i];
             clock_nanosleep(CLOCK_REALTIME, 0, &record->delta, 0);
-            fc_control(&record->signals, VCM_AXIS_ALL);
+            fc_control(&record->signals, vcm_axes);
         }
 
         bucket = bucket->next;
@@ -451,7 +471,7 @@ static int init_channel(int index, float lo, float hi, float idle)
 {
     pwm_channel_t *pwm = &globals.channels[index];
     if (0 > (pwm->handle = pwm_open_device(PWM_DEV_FIRST + index))) {
-        syslog(LOG_ERR, "error opening pwm %d device\n", index);
+        syslog(LOG_ERR, "error opening pwm %d device", index);
         return 0; 
     }
 
@@ -472,6 +492,7 @@ static void fc_reset_internals(void)
 {
     pwm_channel_t *ch = &globals.channels[0];
     globals.curr_alt = 0.0f;
+    globals.capture_enabled = 0;
     fc_set_state(FCS_STATE_GROUNDED);
 
     // wake up any threads that may be blocked so that they can exit cleanly
@@ -519,24 +540,24 @@ int fc_init(gpio_event_t *pwm_usrf, imu_data_t *ypr_imu)
     // initialize the pwm channels for throttle, yaw, pitch, and roll
     if (!init_channel(PWM_ALT, ALT_DUTY_LO, ALT_DUTY_HI, ALT_DUTY_LO))
         return 0;
-    syslog(LOG_INFO, "flight control: altitude channel opened\n");
+    syslog(LOG_INFO, "flight control: altitude channel opened");
 
     if (!init_channel(PWM_PITCH, PITCH_DUTY_LO, PITCH_DUTY_HI, PITCH_DUTY_IDLE))
         return 0; 
-    syslog(LOG_INFO, "flight control: pitch channel opened\n");
+    syslog(LOG_INFO, "flight control: pitch channel opened");
 
     if (!init_channel(PWM_ROLL, ROLL_DUTY_LO, ROLL_DUTY_HI, ROLL_DUTY_IDLE))
         return 0;
-    syslog(LOG_INFO, "flight control: roll channel opened\n");
+    syslog(LOG_INFO, "flight control: roll channel opened");
 
     if (!init_channel(PWM_YAW, YAW_DUTY_LO, YAW_DUTY_HI, YAW_DUTY_IDLE))
         return 0;
-    syslog(LOG_INFO, "flight control: yaw channel opened\n");
+    syslog(LOG_INFO, "flight control: yaw channel opened");
 
     globals.enabled = 1;
     fc_set_state(FCS_STATE_GROUNDED);
     fc_set_vcm(VCM_AXIS_ALL, VCM_TYPE_AUTO);
-    syslog(LOG_INFO, "opened pwm device nodes\n");
+    syslog(LOG_INFO, "opened pwm device nodes");
     return 1;
 }
 
@@ -567,6 +588,7 @@ void fc_shutdown(void)
     if (globals.capture_path) {
         // save and destroy the record buckets
         record_write_buckets();
+        record_delete_buckets();
     }
 }
 
@@ -622,7 +644,7 @@ int fc_set_replay(const char *path)
         if (6 != fscanf(fin, "%ld %ld %f %f %f %f\n", &delta.tv_sec,
                     &delta.tv_nsec, &alt, &yaw, &pitch, &roll)) {
             // skip this line and continue on if incorrectly formatted
-            syslog(LOG_ERR, "invalid line detected in replay file\n");
+            syslog(LOG_ERR, "invalid line detected in replay file");
             continue;
         }
 
@@ -646,7 +668,7 @@ int fc_set_replay(const char *path)
     }
     fclose(fin);
 
-    syslog(LOG_INFO, "successfully loaded %d input records into %d buckets\n",
+    syslog(LOG_INFO, "successfully loaded %d input records into %d buckets",
            entries_read, buckets_filled);
     globals.replay_path = path;
     return 1;
@@ -657,28 +679,35 @@ int fc_request_takeoff(void)
 {
     // don't do anything if this subsystem is disabled
     if (!globals.enabled) {
-        syslog(LOG_ERR, "fc_request_takeoff: flight control not enabled\n");
+        syslog(LOG_ERR, "fc_request_takeoff: flight control not enabled");
         return 0;
     }
 
     // only permit takeoff from the grounded state
     if (FCS_STATE_GROUNDED != globals.state) {
-        syslog(LOG_ERR, "fc_request_takeoff: takeoff denied, not grounded\n");
+        syslog(LOG_ERR, "fc_request_takeoff: takeoff denied, not grounded");
         return 0;
     }
 
+    fc_set_state(FCS_STATE_TAKEOFF);
+    pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
+    pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
+    pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
+
     if (globals.replay_path) {
-        syslog(LOG_INFO, "fc_request_takeoff: beginning replay execution\n");
-        fc_set_state(FCS_STATE_REPLAY);
-        pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, NULL);
+        syslog(LOG_INFO, "fc_request_takeoff: beginning replay execution");
+        pthread_create(&globals.replay_thrd, NULL, dr_replay_thread, 0);
     }
     else {
-        syslog(LOG_INFO, "fc_request_takeoff: beginning takeoff process\n");
-        fc_set_state(FCS_STATE_TAKEOFF);
-        pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
-        pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
-        pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
+        syslog(LOG_INFO, "fc_request_takeoff: beginning takeoff process");
         pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
+        
+        if (globals.capture_path) {
+            syslog(LOG_INFO, "fc_request_takeoff: record capture enabled");
+            record_delete_buckets();
+            globals.record_head = globals.record_tail = record_create_bucket();
+            globals.capture_enabled = 1;
+        }
     }
 
     return 1;
@@ -689,17 +718,17 @@ int fc_request_landing(void)
 {
     // don't do anything if this subsystem is disabled
     if (!globals.enabled) {
-        syslog(LOG_ERR, "fc_request_landing: flight control not enabled\n");
+        syslog(LOG_ERR, "fc_request_landing: flight control not enabled");
         return 0;
     }
 
     // only permit landing from the hovering state
     if (FCS_STATE_HOVERING != globals.state) {
-        syslog(LOG_ERR, "fc_request_landing: landing denied, not hovering\n");
+        syslog(LOG_ERR, "fc_request_landing: landing denied, not hovering");
         return 0;
     }
 
-    syslog(LOG_INFO, "fc_request_landing: beginning landing process\n");
+    syslog(LOG_INFO, "fc_request_landing: beginning landing process");
     fc_set_state(FCS_STATE_LANDING);
     return 1;
 }
@@ -712,7 +741,7 @@ int fc_set_vcm(int axes, int type)
     if (VCM_TYPE_KILL == globals.vcm_type) {
         // if we're killed, don't allow any more state transitions
         pthread_mutex_unlock(&globals.vcm_lock);
-        fprintf(stderr, "not alive. ignoring fc_set_vcm\n");
+        syslog(LOG_ERR, "not alive. ignoring fc_set_vcm");
         return 0;
     }
 
@@ -772,7 +801,7 @@ int fc_get_state(access_mode_t mode)
         pthread_cond_wait(&globals.state_cond, &globals.state_lock);
         break;
     default:
-        syslog(LOG_ERR, "fc_get_state: invalid access mode\n");
+        syslog(LOG_ERR, "fc_get_state: invalid access mode");
         break;
     }
 
@@ -800,7 +829,7 @@ void fc_set_ctl(ctl_sigs_t *sigs)
     fc_control(sigs, axes);
     pthread_mutex_unlock(&globals.vcm_lock);
 
-    if (globals.capture_path) {
+    if (globals.capture_enabled) {
         // if --capture is enabled, store this control signal
         record_insert_sigs(sigs);
     }
@@ -813,25 +842,25 @@ void fc_set_trims(int axes, int value)
         pwm_channel_t *alt = &globals.channels[PWM_ALT];
         alt->trim = value;
         pwm_set_compare(alt->handle, alt->cmp + alt->trim);
-        syslog(LOG_INFO, "setting ALT trim to %d\n", value);
+        syslog(LOG_INFO, "setting ALT trim to %d", value);
     }
     if (axes & VCM_AXIS_YAW) {
         pwm_channel_t *yaw = &globals.channels[PWM_YAW];
         yaw->trim = value;
         pwm_set_compare(yaw->handle, yaw->cmp + yaw->trim);
-        syslog(LOG_INFO, "setting YAW trim to %d\n", value);
+        syslog(LOG_INFO, "setting YAW trim to %d", value);
     }
     if (axes & VCM_AXIS_PITCH) {
         pwm_channel_t *pitch = &globals.channels[PWM_PITCH];
         pitch->trim = value;
         pwm_set_compare(pitch->handle, pitch->cmp + pitch->trim);
-        syslog(LOG_INFO, "setting PITCH trim to %d\n", value);
+        syslog(LOG_INFO, "setting PITCH trim to %d", value);
     }
     if (axes & VCM_AXIS_ROLL) {
         pwm_channel_t *roll = &globals.channels[PWM_ROLL];
         roll->trim = value;
         pwm_set_compare(roll->handle, roll->cmp + roll->trim);
-        syslog(LOG_INFO, "setting ROLL trim to %d\n", value);
+        syslog(LOG_INFO, "setting ROLL trim to %d", value);
     }
 }
 
@@ -873,7 +902,7 @@ int fc_set_pid_param(int axis, int param, float value)
         pid = &globals.pid_alt; break;
     default:
         pthread_mutex_unlock(&globals.pid_lock);
-        syslog(LOG_ERR, "invalid axis specified for fc_set_pid_param\n");
+        syslog(LOG_ERR, "invalid axis specified for fc_set_pid_param");
         return 0;
     }
 
@@ -892,7 +921,7 @@ int fc_set_pid_param(int axis, int param, float value)
         pid->setpoint = value; break;
     default:
         pthread_mutex_unlock(&globals.pid_lock);
-        syslog(LOG_ERR, "invalid parameter specified for fc_set_pid_param\n");
+        syslog(LOG_ERR, "invalid parameter specified for fc_set_pid_param");
         return 0;
     }
 
