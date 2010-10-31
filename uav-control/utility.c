@@ -176,7 +176,7 @@ int read_vbatt(void)
         
     if(vbatt_firsttime)
     {
-        int i = VBATT_HISTORY_LENGTH;
+        int i = 0;
         for(;i<VBATT_HISTORY_LENGTH; i++)
         {
             vbatt_history[i] = 100;
