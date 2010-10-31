@@ -20,10 +20,10 @@ typedef struct video_globals
     uint8_t *buf;               // pointer to current frame buffer
     pthread_mutex_t db;         // lock frame buffer
     pthread_cond_t  db_update;  // signal frame updates
-    struct vdIn *vd;
-    pthread_t camthrd;
-    int is_fresh;
-    int sync_access;
+    struct vdIn *vd;            // v4l2uvc internal data
+    pthread_t camthrd;          // video capture thread
+    int is_fresh;               // keep track of fresh frames for async access
+    int sync_access;            // keep track of fresh frames for sync access
 } video_globals_t;
 
 video_globals_t global = { 0 };

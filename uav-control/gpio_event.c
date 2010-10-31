@@ -19,10 +19,10 @@
 
 typedef struct gpio_globals
 {
-    int running;
-    int fd;
-    pthread_t thread;
-    gpio_event_t *gpio[GPIO_COUNT];
+    int running;                    // keep track of subsystem enabled state
+    int fd;                         // file descriptor for /dev/gpio-event
+    pthread_t thread;               // thread to monitor gpio-event activity 
+    gpio_event_t *gpio[GPIO_COUNT]; // descriptors for each gpio pin
 } gpio_globals_t;
 
 static gpio_globals_t globals = { 0 };
@@ -55,8 +55,8 @@ static void *gpio_thread(void *pargs)
                 break;
             }
             else {
-                printf(".");
-                fflush(stdout);
+                // we timed out - print out an indicator and move on
+                fprintf(stderr, ".");
             }
         }
 
@@ -136,7 +136,7 @@ static void *gpio_thread(void *pargs)
 }
 
 // -----------------------------------------------------------------------------
-int gpio_event_init()
+int gpio_event_init(void)
 {
     void *arg;
     int rc;
@@ -173,7 +173,7 @@ int gpio_event_init()
 }
 
 // -----------------------------------------------------------------------------
-void gpio_event_shutdown()
+void gpio_event_shutdown(void)
 {
     // don't allow shutdown if we didn't call gpio_event_init prior
     if (!globals.running) {

@@ -453,7 +453,6 @@ static void *dr_replay_thread(void *arg)
     bucket = globals.record_head;
     while (NULL != bucket) {
         for (i = 0; i < bucket->count; i++) {
-            fprintf(stderr, "inject\n");
             // control all enabled autonomous axes, but never throttle
             fc_get_vcm(&vcm_axes, &vcm_type);
             vcm_axes = ~(vcm_axes | VCM_AXIS_ALT);
@@ -463,12 +462,10 @@ static void *dr_replay_thread(void *arg)
             clock_nanosleep(CLOCK_REALTIME, 0, &record->delta, 0);
             fc_control(&record->signals, vcm_axes);
 
-            if (FCS_STATE_GROUNDED == globals.state) {
-                bucket = NULL;
-                break;
-            }
+            if (FCS_STATE_GROUNDED == globals.state) break;
         }
 
+        if (FCS_STATE_GROUNDED == globals.state) break;
         bucket = bucket->next;
     }
 

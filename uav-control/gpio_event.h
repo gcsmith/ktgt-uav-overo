@@ -32,10 +32,10 @@ typedef struct gpio_event
 } gpio_event_t;
 
 // initialize the gpio event subsystem
-int gpio_event_init();
+int gpio_event_init(void);
 
 // shutdown the gpio event subsystem
-void gpio_event_shutdown();
+void gpio_event_shutdown(void);
 
 // attach an event to the specified gpio device index
 int gpio_event_attach(gpio_event_t *event, int gpio);
