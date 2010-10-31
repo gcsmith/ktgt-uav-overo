@@ -30,6 +30,8 @@
 #define SERVER_UPDATE_COLOR     12   // send updated tracking state information
 #define SERVER_ACK_GPIDS        13   
 #define SERVER_UPDATE_STATE     14
+#define SERVER_ACK_TCE          15   // acknowledge track control enable
+#define SERVER_ACK_CTE          16   // acknowledge track control enable
 
 // Packet commands from client to server
 
@@ -50,6 +52,8 @@
 #define CLIENT_REQ_GFS          14  // request get filter samples
 #define CLIENT_REQ_SPIDS        15  // request set PID settings
 #define CLIENT_REQ_GPIDS        16  // request get PID settings
+#define CLIENT_REQ_TCE          17  // request Tracking Control Enable
+#define CLIENT_REQ_CTE          18  // request Color Tracking Enable
 
 // General packet offsets
 
@@ -140,6 +144,10 @@
 #define PKT_FCS_STATE       (PKT_BASE + 0)
 #define PKT_FCS_NUM         (PKT_BASE + 1)
 #define PKT_FCS_LENGTH      (sizeof(uint32_t) * (PKT_FCS_NUM))
+
+//Tracking Enable
+#define PKT_TE_STATUS       PKT_BASE + 0   // -1 Request 0 Disable 1 Enable
+#define PKT_TE_LENGTH       (sizeof(uint32_t) * (PKT_BASE + 1))
 
 // Set tracking color, format, and thresholds
 

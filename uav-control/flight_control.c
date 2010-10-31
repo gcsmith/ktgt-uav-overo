@@ -57,6 +57,8 @@ typedef struct fc_globals {
     int state;
     int vcm_axes;
     int vcm_type;
+    
+    int tracking_control_enabled;
 
     const char *capture_path;
     const char *replay_path;
@@ -974,5 +976,18 @@ void fc_get_pid_params(int axis, float *params)
         break;
     }
     pthread_mutex_unlock(&globals.pid_lock);
+}
+
+// -----------------------------------------------------------------------------
+void fc_set_tracking_control_enable(int enable)
+{
+    globals.tracking_control_enabled = enable;
+    syslog(LOG_INFO, "Tracking Control Enabled Set to:%d\n",enable);   
+}
+
+// -----------------------------------------------------------------------------
+int fc_get_tracking_control_enable()
+{
+    return globals.tracking_control_enabled;
 }
 

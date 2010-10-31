@@ -518,7 +518,7 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
             case CLIENT_REQ_CAM_TC:
                 // determine whether color tracking is enabled or disabled
-                tracking_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
+                //tracking_set_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
 
                 // update our color tracking parameters
                 tc.r = cmd_buffer[PKT_CAM_TC_CH0];
@@ -534,7 +534,7 @@ void run_server(imu_data_t *imu, const char *port)
                 break;
              case CLIENT_REQ_CAM_COLORS:
                 // determine whether color tracking is enabled or disabled
-                // tracking_enable(cmd_buffer[PKT_CAM_TC_ENABLE]);
+                cmd_buffer[PKT_CAM_TC_ENABLE]=tracking_get_enable();
                 tc = tracking_get_color();
                 cmd_buffer[PKT_COMMAND]  = SERVER_UPDATE_COLOR;
                 cmd_buffer[PKT_LENGTH]   = PKT_CAM_TC_LENGTH;
@@ -577,6 +577,32 @@ void run_server(imu_data_t *imu, const char *port)
                 cmd_buffer[PKT_GTS_ROLL]  = fc_get_trim(VCM_AXIS_ROLL);
                 cmd_buffer[PKT_GTS_ALT]   = fc_get_trim(VCM_AXIS_ALT);
                 send_packet(&g_client, cmd_buffer, PKT_GTS_LENGTH);
+                break;
+            case CLIENT_REQ_CTE:
+                if(cmd_buffer[PKT_TE_STATUS] != 2)
+                {
+                    tracking_set_enable(cmd_buffer[PKT_TE_STATUS]);
+                } 
+                // respond to client's request for Color Tracking Enable
+                cmd_buffer[PKT_COMMAND]     = SERVER_ACK_CTE;
+                cmd_buffer[PKT_LENGTH]      = PKT_TE_LENGTH;
+                cmd_buffer[PKT_TE_STATUS]   = tracking_get_enable();
+                send_packet(&g_client, cmd_buffer, PKT_TE_LENGTH);
+                syslog(LOG_INFO, "UAV CLIENT_REQ_CTE: %d",
+                    cmd_buffer[PKT_TE_STATUS]);
+                break;
+            case CLIENT_REQ_TCE:
+                if(cmd_buffer[PKT_TE_STATUS] != 2)
+                {
+                    fc_set_tracking_control_enable(cmd_buffer[PKT_TE_STATUS]);
+                } 
+                // respond to client's request for Tracking Control Enable
+                cmd_buffer[PKT_COMMAND]     = SERVER_ACK_TCE;
+                cmd_buffer[PKT_LENGTH]      = PKT_TE_LENGTH;
+                cmd_buffer[PKT_TE_STATUS]   = fc_get_tracking_control_enable();
+                send_packet(&g_client, cmd_buffer, PKT_TE_LENGTH);
+                syslog(LOG_INFO, "UAV CLIENT_REQ_TCE: %d",
+                    cmd_buffer[PKT_TE_STATUS]);
                 break;
             case CLIENT_REQ_SFS:
                 // respond to client's request to adjust filter settings

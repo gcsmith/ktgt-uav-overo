@@ -36,5 +36,11 @@ unsigned int tracking_get_fps(void);
 // TODO: describe me
 int tracking_read_state(track_coords_t *coords, access_mode_t mode);
 
+// set current tracking state
+void tracking_set_enable(int enabled);
+
+// return current tracking state
+int tracking_get_enable();
+
 #endif // _UAV_TRACKING__H_
 

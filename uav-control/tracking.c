@@ -34,7 +34,8 @@ static tracking_args_t globals;
 
 // -----------------------------------------------------------------------------
 static void *tracking_thread(void *arg)
-{
+{   
+    globals.tracking = 1;
     tracking_args_t *data = (tracking_args_t *)arg;
     track_coords_t coords;
     video_data_t vid_data;
@@ -52,7 +53,7 @@ static void *tracking_thread(void *arg)
         pthread_mutex_unlock(&data->lock);
         
         // if tracking is disable - sleep and check for a change every second
-        if (tracking_fps <= 0) {
+        if (tracking_fps <= 0 || globals.tracking == 0) {
             sleep(1);
             continue;
         }
@@ -122,7 +123,7 @@ int tracking_init(client_info_t *client)
     memset(&globals, 0, sizeof(globals));
 
     globals.running = 1;
-    globals.tracking = 0;
+    globals.tracking = 1;
     globals.client = client;
 
     // set initial color value to track
@@ -174,14 +175,17 @@ void tracking_shutdown(void)
 }
 
 // -----------------------------------------------------------------------------
-void tracking_enable(int enabled)
+void tracking_set_enable(int enabled)
 {
-    if (enabled)
-        syslog(LOG_INFO, "TODO: requested color tracking enable\n");
-    else
-        syslog(LOG_INFO, "TODO: requested color tracking disable\n");
+    globals.tracking = enabled;    
+    syslog(LOG_INFO, "Color Tracking Enabled Set to:%d\n",enabled);    
 }
 
+// -----------------------------------------------------------------------------
+int tracking_get_enable()
+{    
+    return globals.tracking;
+}
 // -----------------------------------------------------------------------------
 void tracking_set_color(track_color_t *color)
 {

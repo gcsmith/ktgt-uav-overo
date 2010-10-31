@@ -115,5 +115,11 @@ int fc_set_pid_param(int axis, int param, float value);
 // get PID parameters
 void fc_get_pid_params(int axis, float params[PID_PARAM_COUNT]);
 
+// Set Tracking Control Enable
+void fc_set_tracking_control_enable(int enable);
+
+// Get Tracking Control Enable
+int fc_get_tracking_control_enable();
+
 #endif // FLIGHT_CONTROL__H_
 
