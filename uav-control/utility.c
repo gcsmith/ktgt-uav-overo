@@ -35,16 +35,9 @@ static int adc_fd = 0;
 
 #define VBATT_HISTORY_SHIFT  4
 #define VBATT_HISTORY_LENGTH (1 << VBATT_HISTORY_SHIFT)
-static int vbatt_history[VBATT_HISTORY_LENGTH];
-static int vbatt_index = 0;
-static int vbatt_moving_avg = 0;
-static int vbatt_firsttime = 1;
 
 #define CPU_HISTORY_SHIFT  4
 #define CPU_HISTORY_LENGTH (1 << CPU_HISTORY_SHIFT)
-static cpu_info_t cpu_history[CPU_HISTORY_LENGTH];
-static int cpu_index = 0;
-static int cpu_moving_avg = 0;
 
 // -----------------------------------------------------------------------------
 void daemonize(void)
@@ -168,17 +161,20 @@ void adc_close_channels(void)
 // -----------------------------------------------------------------------------
 int read_vbatt(void)
 {
-    float voltage;
+    static int vbatt_history[VBATT_HISTORY_LENGTH];
+    static int vbatt_index = 0;
+    static int vbatt_moving_avg = 0;
+    static int vbatt_firsttime = 1;
+
+    int i;
+    float voltage = VBATT_MIN;
 
     // always report 100% battery if feature not enabled
     if (!adc_fd)
         return 100;
         
-    if(vbatt_firsttime)
-    {
-        int i = 0;
-        for(;i<VBATT_HISTORY_LENGTH; i++)
-        {
+    if (vbatt_firsttime) {
+        for (i = 0; i < VBATT_HISTORY_LENGTH; i++) {
             vbatt_history[i] = 100;
         }
         vbatt_moving_avg = VBATT_HISTORY_LENGTH * 100; 
@@ -192,25 +188,16 @@ int read_vbatt(void)
 
     if (ioctl(adc_fd, TWL4030_MADC_IOCX_ADC_RAW_READ, &parms) != -1)
         voltage = ((unsigned int)parms.result) / 1024.f * ADC_INPUT_RANGE;
-    else
-        voltage = VBATT_MIN;
 
-    if (voltage > VBATT_MAX)
-        voltage = VBATT_MAX;
-    if (voltage < VBATT_MIN)
-        voltage = VBATT_MIN;
-
-    voltage = (voltage - VBATT_MIN) / VBATT_RANGE;
-    voltage = (int)(voltage * 100);
+    voltage = CLAMP(voltage, VBATT_MIN, VBATT_MAX);
+    voltage = (int)(100 * (voltage - VBATT_MIN) / VBATT_RANGE);
     
     vbatt_history[vbatt_index] = voltage; 
-    
     vbatt_moving_avg += vbatt_history[vbatt_index];
      
     if (++vbatt_index >= VBATT_HISTORY_LENGTH)
        vbatt_index = 0;
         
-    //return (int)voltage;
     return (int)vbatt_moving_avg >> VBATT_HISTORY_SHIFT;
 }
 
@@ -291,7 +278,11 @@ void close_client(client_info_t *client)
 
 //-----------------------------------------------------------------------------
 int get_cpu_utilization(void)
-{        
+{
+    static cpu_info_t cpu_history[CPU_HISTORY_LENGTH];
+    static int cpu_index = 0;
+    static int cpu_moving_avg = 0;
+
     FILE *fp;
     char c[10];
     int user, system, nice, idle, iow, hint, sint;
