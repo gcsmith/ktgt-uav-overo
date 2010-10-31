@@ -85,11 +85,6 @@ static void *imu_rd_thread(void *thread_args)
                             calc_low_pass_filter(data, temp_data);
                         }
 
-                        //fprintf(stderr, "imu ( %f , %f , %f )\n",
-                        //        data->angles[0],
-                        //        data->angles[1],
-                        //        data->angles[2]);
-
                         data->sample++;
                         pthread_cond_broadcast(&data->cond);
                         pthread_mutex_unlock(&data->lock);
@@ -245,7 +240,7 @@ int imu_get_avg_filter(imu_data_t *data)
 // -----------------------------------------------------------------------------
 void imu_shutdown(imu_data_t *data)
 {
-    pthread_cancel(data->thread);
+    data->running = 0;
     pthread_mutex_destroy(&data->lock);
     pthread_cond_destroy(&data->cond);
     close(data->fd);
