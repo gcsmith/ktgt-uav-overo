@@ -332,7 +332,9 @@ void *auto_imu_thread(void *arg)
         pthread_mutex_lock(&globals.pid_lock);
         if (!(axes & VCM_AXIS_PITCH)) {
             // compute PID result for pitch
-            signal.pitch += pid_update(&globals.pid_pitch, angles[IMU_PITCH]);
+            signal.pitch = -pid_update(&globals.pid_pitch, angles[IMU_PITCH]);
+            signal.pitch = CLAMP(signal.pitch, -1.0f, 1.0f);
+            fprintf(stderr, "signal.pitch = %f\n", signal.pitch);
             fc_control(&signal, VCM_AXIS_PITCH);
         }
         
@@ -420,7 +422,7 @@ static void *dr_landing_thread(void *arg)
         if (altitude < 10.0f)
             break;
 
-        control.alt -= 0.0008f;
+        control.alt -= 0.0004f;
         fc_control(&control, VCM_AXIS_ALT);
     }
     syslog(LOG_INFO, "dr_landing_thread: done dropping throttle");
@@ -449,6 +451,7 @@ static void *dr_replay_thread(void *arg)
     bucket = globals.record_head;
     while (NULL != bucket) {
         for (i = 0; i < bucket->count; i++) {
+            fprintf(stderr, "inject\n");
             // control all enabled autonomous axes, but never throttle
             fc_get_vcm(&vcm_axes, &vcm_type);
             vcm_axes = ~(vcm_axes | VCM_AXIS_ALT);
@@ -457,6 +460,11 @@ static void *dr_replay_thread(void *arg)
             record = &bucket->records[i];
             clock_nanosleep(CLOCK_REALTIME, 0, &record->delta, 0);
             fc_control(&record->signals, vcm_axes);
+
+            if (FCS_STATE_GROUNDED == globals.state) {
+                bucket = NULL;
+                break;
+            }
         }
 
         bucket = bucket->next;
@@ -705,6 +713,7 @@ int fc_request_takeoff(void)
         if (globals.capture_path) {
             syslog(LOG_INFO, "fc_request_takeoff: record capture enabled");
             record_delete_buckets();
+            clock_gettime(CLOCK_REALTIME, &globals.last_time);
             globals.record_head = globals.record_tail = record_create_bucket();
             globals.capture_enabled = 1;
         }
