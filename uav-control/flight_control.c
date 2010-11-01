@@ -392,7 +392,10 @@ static void *auto_yaw_thread(void *arg)
             pthread_mutex_lock(&globals.pid_lock);
             signal.yaw = 0.0f;
             if (tc.detected) {
-                signal.yaw = (tc.yc < 120) ? -0.6f : 0.3f;
+                if (tc.yc < 120)
+                    signal.yaw = (tc.yc - 120) * 0.0060f;
+                else
+                    signal.yaw = (tc.yc - 120) * 0.0030f;
                 fprintf(stderr, "detected: move %f\n", signal.yaw);
             }
             fc_control(&signal, VCM_AXIS_YAW);
