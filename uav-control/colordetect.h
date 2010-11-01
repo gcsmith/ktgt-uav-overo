@@ -40,28 +40,40 @@ void colordetect_rgb_dist(const uint8_t *rgb_in, real_t threshold,
 void colordetect_hsl(uint8_t *rgb_in, 
         const track_color_t *color, track_coords_t *box);
         
+// TODO: describe me
 void colordetect_hsl_fp32(uint8_t *rgb_in, 
         const track_color_t *color, track_coords_t *box);
 
+// TODO: describe me
 void run_color_detection_file(const char *infile, const char *outfile,
         track_color_t *color, track_coords_t *box);
 
+// TODO: describe me
 void run_color_detection_memory(const uint8_t *stream_in, unsigned long *length,
         track_color_t *color, track_coords_t *box);
 
+// TODO: describe me
 void find_color_rgb(const uint8_t *rgb_in,
         const track_color_t *color, track_coords_t *box);
 
+// TODO: describe me
 void find_color_rgb_dist(const uint8_t *rgb_in, int threshold,
         const track_color_t *color, track_coords_t *box);
 
+// TODO: describe me
 void find_color_hsl(const uint8_t *hsl_in, 
         track_color_t *color, track_coords_t *box);
 
+// TODO: describe me
 void color_image_rgb_to_hsl( uint8_t *rgb_in, int width, int height);
+
+// TODO: describe me
 void color_image_rgb_to_hsl_fixed( uint8_t *rgb_in, int width, int height);
 
+// TODO: describe me
 void rgb_to_hsl(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
+
+// TODO: describe me
 void rgb_to_hsl_fp32(uint8_t * r_h, uint8_t * g_s, uint8_t * b_l);
 
 #endif // _UAV_COLORDETECT__H_

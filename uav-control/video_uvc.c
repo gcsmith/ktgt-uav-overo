@@ -273,7 +273,7 @@ int video_lock(video_data_t *data, access_mode_t mode)
 }
 
 // -----------------------------------------------------------------------------
-void video_unlock()
+void video_unlock(void)
 {
     // allow others to access the global buffer again
     pthread_mutex_unlock(&global.db);
@@ -310,7 +310,7 @@ int video_get_devctrl(int id)
 }
 
 // -----------------------------------------------------------------------------
-int video_get_fps()
+int video_get_fps(void)
 {
     return global.fps;
 }

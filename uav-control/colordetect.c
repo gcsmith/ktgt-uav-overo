@@ -21,7 +21,7 @@ void colordetect_rgb(const uint8_t *rgb_in,
 }
 
 // -----------------------------------------------------------------------------
-void colordetect_rgb_dist (const uint8_t *rgb_in, real_t threshold,
+void colordetect_rgb_dist(const uint8_t *rgb_in, real_t threshold,
         const track_color_t *color, track_coords_t *box)
 {
     find_color_rgb_dist(rgb_in, threshold, color, box);

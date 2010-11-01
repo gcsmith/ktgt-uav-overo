@@ -36,7 +36,7 @@ void video_shutdown(void);
 int video_lock(video_data_t *data, access_mode_t mode);
 
 // release our lock on the current frame's resources
-void video_unlock();
+void video_unlock(void);
 
 // override the current video mode (resolution, framerate, etc)
 int video_set_mode(video_mode_t *mode);
@@ -50,7 +50,8 @@ int video_set_devctrl(int id, int value);
 // get the specified device control value
 int video_get_devctrl(int id);
 
-int video_get_fps();
+// TODO: describe me
+int video_get_fps(void);
 
 #endif // _UAV_VIDEO_UVC__H_
 

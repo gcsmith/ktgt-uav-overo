@@ -37,6 +37,7 @@ typedef struct fc_globals {
     pthread_t landing_thrd;
     pthread_t auto_alt_thrd;
     pthread_t auto_imu_thrd;
+    pthread_t auto_yaw_thrd;
 
     pthread_mutex_t state_lock;
     pthread_mutex_t takeoff_lock;
@@ -298,12 +299,11 @@ static void *auto_alt_thread(void *arg)
 // -----------------------------------------------------------------------------
 // Thread for autonomous orientation/servo control. Control rate is locked to
 // the sampling razor of the 9DOF Razor IMU.
-void *auto_imu_thread(void *arg)
+static void *auto_imu_thread(void *arg)
 {
     int axes, vcm_type;
     float angles[3] = { 0 };
     ctl_sigs_t signal;
-    track_coords_t tc;
 
     // flight control's signal structure
     memset(&signal, 0, sizeof(ctl_sigs_t));
@@ -348,22 +348,60 @@ void *auto_imu_thread(void *arg)
             fc_control(&signal, VCM_AXIS_ROLL);
         }
         
-        if (!(axes & VCM_AXIS_YAW) && tracking_read_state(&tc, ACCESS_ASYNC)) {
-            signal.yaw = 0.0f;
-            if (tc.detected) {
-                signal.yaw = (tc.yc < 120) ? -0.4f : 0.2f;
-                fprintf(stderr, "detected: move %f\n", signal.yaw);
-            }
-            fc_control(&signal, VCM_AXIS_YAW);
-            // compute PID result for yaw -- disabled for now due to EMF
-            //float pid_result = pid_update(&globals.pid_yaw, angles[IMU_YAW]);
-            //signal.yaw = pid_result;
-            //fc_control(&signal, VCM_AXIS_YAW);
-        }
         pthread_mutex_unlock(&globals.pid_lock);
     }
 
     syslog(LOG_INFO, "auto_imu_thread exiting");
+    pthread_exit(NULL);
+}
+
+// -----------------------------------------------------------------------------
+static void *auto_yaw_thread(void *arg)
+{
+    int axes, vcm_type;
+    ctl_sigs_t signal;
+    track_coords_t tc;
+
+    // flight control's signal structure
+    memset(&signal, 0, sizeof(ctl_sigs_t));
+
+    // wait for the takeoff process to complete
+    syslog(LOG_INFO, "auto_yaw_thread waiting...");
+    pthread_mutex_lock(&globals.takeoff_lock);
+    pthread_cond_wait(&globals.takeoff_cond, &globals.takeoff_lock);
+    pthread_mutex_unlock(&globals.takeoff_lock);
+    syslog(LOG_INFO, "auto_yaw_thread starting...");
+
+    while (FCS_STATE_HOVERING == globals.state) {
+        // block until a new bounding box is available
+        if (!tracking_read_state(&tc, ACCESS_SYNC)) {
+            sleep(1);
+            continue;
+        }
+        fprintf(stderr, "read track state\n");
+
+        // if tracking is disabled, poll periodically until enabled
+        if (!globals.tracking_control_enabled) {
+            sleep(1);
+            continue;
+        }
+
+        // capture axes and type
+        fc_get_vcm(&axes, &vcm_type);
+
+        if (!(axes & VCM_AXIS_YAW)) {
+            pthread_mutex_lock(&globals.pid_lock);
+            signal.yaw = 0.0f;
+            if (tc.detected) {
+                signal.yaw = (tc.yc < 120) ? -0.6f : 0.3f;
+                fprintf(stderr, "detected: move %f\n", signal.yaw);
+            }
+            fc_control(&signal, VCM_AXIS_YAW);
+            pthread_mutex_unlock(&globals.pid_lock);
+        }
+    }
+
+    syslog(LOG_INFO, "auto_yaw_thread exiting");
     pthread_exit(NULL);
 }
 
@@ -436,7 +474,7 @@ static void *dr_landing_thread(void *arg)
     fc_control(&control, VCM_AXIS_ALT);
 
     fc_set_state(FCS_STATE_GROUNDED);
-    globals.capture_enabled = 1;
+    globals.capture_enabled = 0;
     syslog(LOG_INFO, "dr_landing_thread: exiting");
     pthread_exit(NULL);
 }
@@ -699,7 +737,7 @@ int fc_request_takeoff(void)
     fc_set_state(FCS_STATE_TAKEOFF);
     pthread_create(&globals.takeoff_thrd,  NULL, dr_takeoff_thread, 0);
     pthread_create(&globals.landing_thrd,  NULL, dr_landing_thread, 0);
-    pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread, 0);
+    pthread_create(&globals.auto_alt_thrd, NULL, auto_alt_thread,   0);
 
     if (globals.replay_path) {
         syslog(LOG_INFO, "fc_request_takeoff: beginning replay execution");
@@ -708,13 +746,14 @@ int fc_request_takeoff(void)
     else {
         syslog(LOG_INFO, "fc_request_takeoff: beginning takeoff process");
         pthread_create(&globals.auto_imu_thrd, NULL, auto_imu_thread, 0);
+        pthread_create(&globals.auto_yaw_thrd, NULL, auto_yaw_thread, 0);
         
         if (globals.capture_path) {
             syslog(LOG_INFO, "fc_request_takeoff: record capture enabled");
             record_delete_buckets();
-            clock_gettime(CLOCK_REALTIME, &globals.last_time);
             globals.record_head = globals.record_tail = record_create_bucket();
             globals.capture_enabled = 1;
+            clock_gettime(CLOCK_REALTIME, &globals.last_time);
         }
     }
 
