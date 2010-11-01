@@ -21,29 +21,29 @@
 #define DEFAULT_GPIO_USS    171
 #define DEFAULT_GPIO_OVR    172
 
-#define DEFAULT_YAW_TRIM    710.0f
-#define DEFAULT_YAW_KP      0.00300f
-#define DEFAULT_YAW_KI      0.00010f
-#define DEFAULT_YAW_KD      0.04000f
-#define DEFAULT_YAW_SP      0.0f
-
-#define DEFAULT_PITCH_TRIM  -2676.0f
-#define DEFAULT_PITCH_KP    0.01000f
-#define DEFAULT_PITCH_KI    0.00000f
-#define DEFAULT_PITCH_KD    0.35000f
-#define DEFAULT_PITCH_SP    40.0f
-
-#define DEFAULT_ROLL_TRIM   1033.0f
-#define DEFAULT_ROLL_KP     0.00300f
-#define DEFAULT_ROLL_KI     0.00000f
-#define DEFAULT_ROLL_KD     0.04000f
-#define DEFAULT_ROLL_SP     5.0f
-
 #define DEFAULT_ALT_TRIM    0.0f
 #define DEFAULT_ALT_KP      0.00300f
 #define DEFAULT_ALT_KI      0.00010f
 #define DEFAULT_ALT_KD      0.04000f
 #define DEFAULT_ALT_SP      42.0f
+
+#define DEFAULT_YAW_TRIM    1878.0f
+#define DEFAULT_YAW_KP      0.00300f
+#define DEFAULT_YAW_KI      0.00010f
+#define DEFAULT_YAW_KD      0.04000f
+#define DEFAULT_YAW_SP      0.0f
+
+#define DEFAULT_PITCH_TRIM  -1992.0f
+#define DEFAULT_PITCH_KP    0.01000f
+#define DEFAULT_PITCH_KI    0.00000f
+#define DEFAULT_PITCH_KD    0.35000f
+#define DEFAULT_PITCH_SP    40.0f
+
+#define DEFAULT_ROLL_TRIM   845.0f
+#define DEFAULT_ROLL_KP     0.00300f
+#define DEFAULT_ROLL_KI     0.00000f
+#define DEFAULT_ROLL_KD     0.04000f
+#define DEFAULT_ROLL_SP     5.0f
 
 // identifiers for long options without short equivalents
 

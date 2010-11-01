@@ -18,7 +18,7 @@
 #define PI ((real_t)3.141592653589793)
 #endif
 
-#define BATTERY_MIN         55.0f
+#define BATTERY_MIN         60.0f
 #define BATTERY_CHECK_TICKS 15
 #define BATTERY_PRINT_TICKS 5
 

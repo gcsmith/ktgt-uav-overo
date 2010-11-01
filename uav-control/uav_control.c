@@ -422,7 +422,7 @@ void run_server(imu_data_t *imu, const char *port)
                 memcpy(&cmd_buffer[PKT_VTI_ROLL],  &angles[IMU_ROLL],  4);
                 
                 cmd_buffer[PKT_VTI_RSSI] = read_wlan_rssi(g_client.fd);
-                cmd_buffer[PKT_VTI_BATT] = read_vbatt();
+                cmd_buffer[PKT_VTI_BATT] = MAX(0, (read_vbatt() - 50) << 1);
 
                 // taken from maxbotix spec: 147 us == 1 inch
                 curr_alt = gpio_event_read(&g_gpio_alt, ACCESS_ASYNC) / 147.0f;

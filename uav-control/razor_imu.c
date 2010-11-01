@@ -81,8 +81,8 @@ static void *imu_rd_thread(void *thread_args)
                         }
                         else {
                             // calculate a moving average of the samples
-                            ///calc_moving_avg(data, temp_data);
-                            calc_low_pass_filter(data, temp_data);
+                            calc_moving_avg(data, temp_data);
+                            // calc_low_pass_filter(data, temp_data);
                         }
 
                         data->sample++;
