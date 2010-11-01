@@ -393,7 +393,7 @@ static void *auto_yaw_thread(void *arg)
             signal.yaw = 0.0f;
             if (tc.detected) {
                 if (tc.yc < 120)
-                    signal.yaw = (tc.yc - 120) * 0.0060f;
+                    signal.yaw = (tc.yc - 120) * 0.0080f;
                 else
                     signal.yaw = (tc.yc - 120) * 0.0030f;
                 fprintf(stderr, "detected: move %f\n", signal.yaw);

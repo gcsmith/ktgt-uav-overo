@@ -22,12 +22,12 @@
 #define DEFAULT_GPIO_OVR    172
 
 #define DEFAULT_ALT_TRIM    0.0f
-#define DEFAULT_ALT_KP      0.00300f
-#define DEFAULT_ALT_KI      0.00010f
+#define DEFAULT_ALT_KP      0.00500f
+#define DEFAULT_ALT_KI      0.00000f
 #define DEFAULT_ALT_KD      0.04000f
 #define DEFAULT_ALT_SP      42.0f
 
-#define DEFAULT_YAW_TRIM    1878.0f
+#define DEFAULT_YAW_TRIM    400.0f
 #define DEFAULT_YAW_KP      0.00300f
 #define DEFAULT_YAW_KI      0.00010f
 #define DEFAULT_YAW_KD      0.04000f
