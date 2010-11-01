@@ -378,7 +378,6 @@ static void *auto_yaw_thread(void *arg)
             sleep(1);
             continue;
         }
-        fprintf(stderr, "read track state\n");
 
         // if tracking is disabled, poll periodically until enabled
         if (!globals.tracking_control_enabled) {
